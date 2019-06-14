@@ -93,8 +93,19 @@ impl ParseBuffer {
     }
 
     fn remaining(&self) -> usize {
-        assert!(self.valid >= self.ofs);
+        assert!(self.ofs <= self.valid);
         self.valid - self.ofs
+    }
+
+    // Cursor management: get and set the parsing cursor; to allow
+    // parsing to backtrack or rewind after an unsuccessful complex
+    // parse.
+    pub fn get_cursor(&self) -> usize {
+        self.ofs
+    }
+    pub fn set_cursor(&mut self, ofs: usize) {
+        assert!(ofs <= self.valid);
+        self.ofs = ofs
     }
 
     // Parsing a single element of the Parsley primitive type P; it
