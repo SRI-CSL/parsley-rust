@@ -31,6 +31,9 @@ pub trait ParsleyPrim {
     // The name of the primitive type, used for logging/error-messages.
     fn prim_name() -> &'static str;
 
+    // The size of the primitive type.
+    fn prim_size_bytes() -> usize;
+
     // Parses a single fixed-size value from the provided buffer, and
     // returns the value and the number of bytes consumed from the
     // buffer.
@@ -84,6 +87,7 @@ impl ParseBuffer {
         Result<P::T, ErrorKind>
     {
         let (t, consumed) = P::parse_one(&self.buf[self.ofs..])?;
+        assert_eq!(consumed, P::prim_size_bytes());
         self.ofs += consumed;
         Ok(t)
     }
@@ -100,6 +104,7 @@ impl ParseBuffer {
         if !guard(&t) {
             return Err(ErrorKind::GuardError(P::prim_name()));
         };
+        assert_eq!(consumed, P::prim_size_bytes());
         self.ofs += consumed;
         Ok(t)
     }
