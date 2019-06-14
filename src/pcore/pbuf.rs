@@ -76,6 +76,15 @@ impl<'a> From<ParseError<'a>> for ErrorKind<'a> {
     }
 }
 
+// Parsing mode: either peek-ahead or consume.
+#[derive(Debug,PartialEq,Eq)]
+pub enum ParseMode {
+    // Does not advance buffer cursor on success
+    Peek,
+    // Advances buffer cursor after a primitive parse
+    Consume,
+}
+
 impl ParseBuffer {
     pub fn new(buf: Vec<u8>) -> ParseBuffer {
         ParseBuffer { buf, ofs : 0 }
@@ -83,12 +92,12 @@ impl ParseBuffer {
 
     // Parsing a single element of the Parsley primitive type P; it
     // returns a value of the Rust representation type P::T when successful.
-    pub fn parse_prim<P : ParsleyPrim>(&mut self) ->
+    pub fn parse_prim<P : ParsleyPrim>(&mut self, mode: ParseMode) ->
         Result<P::T, ErrorKind>
     {
         let (t, consumed) = P::parse_one(&self.buf[self.ofs..])?;
         assert_eq!(consumed, P::prim_size_bytes());
-        self.ofs += consumed;
+        if mode == ParseMode::Consume { self.ofs += consumed; }
         Ok(t)
     }
 
@@ -97,7 +106,8 @@ impl ParseBuffer {
     // the Rust representation type P::T when successful.  The 'guard'
     // is specified in terms of the values of the representation type
     // P::T.
-    pub fn parse_guarded<P : ParsleyPrim>(&mut self, mut guard: Box<FnMut(&P::T) -> bool>) ->
+    pub fn parse_guarded<P : ParsleyPrim>(&mut self, mode: ParseMode,
+                                          mut guard: Box<FnMut(&P::T) -> bool>) ->
         Result<P::T, ErrorKind>
     {
         let (t, consumed) = P::parse_one(&self.buf[self.ofs..])?;
@@ -105,7 +115,7 @@ impl ParseBuffer {
             return Err(ErrorKind::GuardError(P::prim_name()));
         };
         assert_eq!(consumed, P::prim_size_bytes());
-        self.ofs += consumed;
+        if mode == ParseMode::Consume { self.ofs += consumed; }
         Ok(t)
     }
 }
