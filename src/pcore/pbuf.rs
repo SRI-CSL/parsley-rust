@@ -9,12 +9,12 @@ pub struct PBuf {
 }
 
 #[derive(Debug)]
-pub struct ParseError {
-    msg: &'static str
+pub struct ParseError<'a> {
+    msg: &'a str
 }
 
-impl ParseError {
-    pub fn new(msg: &'static str) -> ParseError {
+impl<'a> ParseError<'a> {
+    pub fn new(msg: &'a str) -> ParseError {
         ParseError{msg}
     }
 }
@@ -26,12 +26,12 @@ pub trait ParsleyPrim {
 }
 
 #[derive(Debug)]
-pub enum ErrorKind {
-    GuardError(&'static str),
-    PrimError(ParseError),
+pub enum ErrorKind<'a> {
+    GuardError(&'a str),
+    PrimError(ParseError<'a>),
 }
 
-impl fmt::Display for ErrorKind {
+impl<'a> fmt::Display for ErrorKind<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ErrorKind::GuardError(prim) => write!(f, "primitive guard error on {}", prim),
@@ -40,7 +40,7 @@ impl fmt::Display for ErrorKind {
     }
 }
 
-impl Error for ErrorKind {
+impl<'a> Error for ErrorKind<'a> {
     fn description(&self) -> &str {
         match self {
             ErrorKind::GuardError(_prim) => "primitive guard error",
@@ -49,7 +49,7 @@ impl Error for ErrorKind {
     }
 }
 
-impl From<ParseError> for ErrorKind {
+impl<'a> From<ParseError<'a>> for ErrorKind<'a> {
     fn from(err: ParseError) -> ErrorKind {
         ErrorKind::PrimError(err)
     }
