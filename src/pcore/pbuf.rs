@@ -119,10 +119,8 @@ impl ParseBuffer {
         Result<P::T, ErrorKind>
     {
         let (t, consumed) = P::parse_one(&self.buf[self.ofs..])?;
-        if !guard(&t) {
-            return Err(ErrorKind::GuardError(P::prim_name()));
-        };
         assert_eq!(consumed, P::prim_size_bytes());
+        if !guard(&t) { return Err(ErrorKind::GuardError(P::prim_name())); };
         if mode == ParseMode::Consume { self.ofs += consumed; }
         Ok(t)
     }
