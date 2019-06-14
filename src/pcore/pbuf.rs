@@ -93,7 +93,7 @@ impl ParseBuffer {
     // the Rust representation type P::T when successful.  The 'guard'
     // is specified in terms of the values of the representation type
     // P::T.
-    pub fn parse_guarded<P : ParsleyPrim>(&mut self, guard: Box<Fn(&P::T) -> bool>) ->
+    pub fn parse_guarded<P : ParsleyPrim>(&mut self, mut guard: Box<FnMut(&P::T) -> bool>) ->
         Result<P::T, ErrorKind>
     {
         let (t, consumed) = P::parse_one(&self.buf[self.ofs..])?;
