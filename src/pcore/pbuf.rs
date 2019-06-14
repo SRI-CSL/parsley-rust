@@ -102,7 +102,7 @@ impl ParseBuffer {
     pub fn parse_prim<P : ParsleyPrim>(&mut self, mode: ParseMode) ->
         Result<P::T, ErrorKind>
     {
-        if self.remaining() < P::prim_size_bytes() { return Err(ErrorKind::EndOfBuffer); }
+        if self.remaining() < P::prim_size_bytes() { return Err(ErrorKind::EndOfBuffer) }
         let (t, consumed) = P::parse_one(&self.buf[self.ofs..])?;
         assert_eq!(consumed, P::prim_size_bytes());
         if mode == ParseMode::Consume { self.ofs += consumed; }
@@ -120,7 +120,7 @@ impl ParseBuffer {
     {
         let (t, consumed) = P::parse_one(&self.buf[self.ofs..])?;
         assert_eq!(consumed, P::prim_size_bytes());
-        if !guard(&t) { return Err(ErrorKind::GuardError(P::prim_name())); };
+        if !guard(&t) { return Err(ErrorKind::GuardError(P::prim_name())) };
         if mode == ParseMode::Consume { self.ofs += consumed; }
         Ok(t)
     }
