@@ -11,7 +11,9 @@ impl AsciiChar {
 
 impl pbuf::ParsleyPrim for AsciiChar {
     type T = char;
+
     fn prim_name() -> &'static str { "ascii" }
+
     fn parse_one(buf: &[u8]) -> Result<(Self::T, usize), pbuf::ParseError> {
         if buf.len() == 0 { return Err(pbuf::ParseError::new("ascii: end-of-buffer")) };
         let c = char::try_from(buf[0]);
