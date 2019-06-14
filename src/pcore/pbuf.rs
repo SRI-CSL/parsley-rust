@@ -3,7 +3,7 @@ use std::error::Error;
 use std::fmt;
 
 #[derive(Debug)]
-pub struct PBuf {
+pub struct ParseBuffer {
     buf: Vec<u8>,
     ofs: usize
 }
@@ -55,9 +55,9 @@ impl<'a> From<ParseError<'a>> for ErrorKind<'a> {
     }
 }
 
-impl PBuf {
-    pub fn new(buf: Vec<u8>) -> PBuf {
-        PBuf { buf, ofs : 0 }
+impl ParseBuffer {
+    pub fn new(buf: Vec<u8>) -> ParseBuffer {
+        ParseBuffer { buf, ofs : 0 }
     }
 
     pub fn parse_prim<T : ParsleyPrim>(&mut self) ->
