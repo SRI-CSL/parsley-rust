@@ -1,8 +1,8 @@
 /// Basic combinators (sequence, alternation, and Kleene/star closure), and
 /// the parsing trait expected by the combinators.
 
-use super::pbuf;
 use std::result::Result;
+use super::parsebuffer::ParseBuffer;
 
 #[derive(Debug)]
 pub enum ErrorKind {
@@ -10,10 +10,10 @@ pub enum ErrorKind {
 }
 
 pub trait ParsleyParser<O> {
-    fn parse(&mut self, buf: &mut pbuf::ParseBuffer) -> Result<O, ErrorKind>;
+    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<O, ErrorKind>;
 }
 
-pub fn sequence<O1, O2, F, G>(buf: &mut pbuf::ParseBuffer, f: &mut F, g: &mut G) ->
+pub fn sequence<O1, O2, F, G>(buf: &mut ParseBuffer, f: &mut F, g: &mut G) ->
     Result <(O1, O2), ErrorKind>
 where
     F : ParsleyParser<O1>,
@@ -40,7 +40,7 @@ pub enum Alt<O1, O2> {
     Right(O2),
 }
 
-pub fn alternate<O1, O2, F, G>(buf: &mut pbuf::ParseBuffer, f: &mut F, g: &mut G) ->
+pub fn alternate<O1, O2, F, G>(buf: &mut ParseBuffer, f: &mut F, g: &mut G) ->
     Result <Alt<O1, O2>, ErrorKind>
 where
     F : ParsleyParser<O1>,
@@ -61,7 +61,7 @@ where
     Ok(Alt::Right(o2))
 }
 
-pub fn star<O>(buf: &mut pbuf::ParseBuffer, p: &mut ParsleyParser<O>) ->
+pub fn star<O>(buf: &mut ParseBuffer, p: &mut ParsleyParser<O>) ->
     Result <Vec<O>, ErrorKind>
 {
     let mut v = Vec::new();
