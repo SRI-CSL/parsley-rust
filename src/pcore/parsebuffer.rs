@@ -8,7 +8,6 @@ use std::fmt;
 #[derive(Debug)]
 pub struct ParseBuffer {
     buf: Vec<u8>,
-    valid: usize,
     ofs: usize,
 }
 
@@ -80,12 +79,12 @@ impl<'a> From<ParseError<'a>> for ErrorKind<'a> {
 
 impl ParseBuffer {
     pub fn new(buf: Vec<u8>) -> ParseBuffer {
-        ParseBuffer { buf, valid : 0, ofs : 0 }
+        ParseBuffer { buf, ofs : 0 }
     }
 
     fn remaining(&self) -> usize {
-        assert!(self.ofs <= self.valid);
-        self.valid - self.ofs
+        assert!(self.ofs <= self.buf.len());
+        self.buf.len() - self.ofs
     }
 
     // Cursor management: get and set the parsing cursor; to allow
@@ -95,7 +94,7 @@ impl ParseBuffer {
         self.ofs
     }
     pub fn set_cursor(&mut self, ofs: usize) {
-        assert!(ofs <= self.valid);
+        assert!(ofs <= self.buf.len());
         self.ofs = ofs
     }
 
