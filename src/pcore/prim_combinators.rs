@@ -64,11 +64,14 @@ where
 pub fn star<O>(buf: &mut ParseBuffer, p: &mut ParsleyParser<O>) ->
     Result <Vec<O>, ErrorKind>
 {
+    let mut c = buf.get_cursor();
     let mut v = Vec::new();
     let mut r = p.parse(buf);
     while let Ok(o) = r {
         v.push(o);
+        c = buf.get_cursor();
         r = p.parse(buf)
     }
+    buf.set_cursor(c);
     Ok(v)
 }
