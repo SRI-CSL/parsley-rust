@@ -18,10 +18,9 @@ impl ParsleyPrim for AsciiChar {
 
     fn parse_one(buf: &[u8]) -> Result<(Self::T, usize), ParseError> {
         let c = char::try_from(buf[0]);
-        if c.is_err() { return Err(ParseError::new("ascii: invalid character")) };
+        if c.is_err() { return Err(ParseError::new("ascii: invalid character")) }
         let c = c.unwrap();
-        if !c.is_ascii() { return Err(ParseError::new("ascii: invalid ascii character")) };
-        // ascii consumes a single byte
+        if !c.is_ascii() { return Err(ParseError::new("ascii: invalid ascii character")) }
         Ok((c, 1))
     }
 }
