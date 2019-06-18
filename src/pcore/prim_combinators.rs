@@ -4,8 +4,8 @@
 use std::result::Result;
 use super::parsebuffer::{ParseBuffer, ParsleyParser, ErrorKind};
 
-pub fn sequence<'a, O1: ParsleyParser<'a>, O2: ParsleyParser<'a>>(buf: &mut ParseBuffer, f: &mut O1, g: &mut O2) ->
-    Result <(O1::T, O2::T), ErrorKind<'a>>
+pub fn sequence<O1: ParsleyParser, O2: ParsleyParser>(buf: &mut ParseBuffer, f: &mut O1, g: &mut O2) ->
+    Result <(O1::T, O2::T), ErrorKind>
 {
     let cursor = buf.get_cursor();
     let o1 = f.parse(buf);
@@ -28,8 +28,8 @@ pub enum Alt<T1, T2> {
     Right(T2),
 }
 
-pub fn alternate<'a, O1: ParsleyParser<'a>, O2: ParsleyParser<'a>>(buf: &mut ParseBuffer, f: &mut O1, g: &mut O2) ->
-    Result <Alt<O1::T, O2::T>, ErrorKind<'a>>
+pub fn alternate<O1: ParsleyParser, O2: ParsleyParser>(buf: &mut ParseBuffer, f: &mut O1, g: &mut O2) ->
+    Result <Alt<O1::T, O2::T>, ErrorKind>
 {
     let cursor = buf.get_cursor();
     let o1 = f.parse(buf);
@@ -46,8 +46,8 @@ pub fn alternate<'a, O1: ParsleyParser<'a>, O2: ParsleyParser<'a>>(buf: &mut Par
     Ok(Alt::Right(o2))
 }
 
-pub fn star<'a, O: ParsleyParser<'a>>(buf: &mut ParseBuffer, p: &mut O) ->
-    Result <Vec<O::T>, ErrorKind<'a>>
+pub fn star<O: ParsleyParser>(buf: &mut ParseBuffer, p: &mut O) ->
+    Result <Vec<O::T>, ErrorKind>
 {
     let mut c = buf.get_cursor();
     let mut v = Vec::new();

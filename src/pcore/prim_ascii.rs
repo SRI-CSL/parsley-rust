@@ -1,18 +1,12 @@
 use std::convert::TryFrom;
-use super::parsebuffer::{ParsleyPrim, ParseError};
+use super::parsebuffer::{ParsleyPrim, ParsleyParser, ParseBuffer, ParseError, ErrorKind};
 
-pub struct AsciiChar {
-    c : char
-}
-
-impl AsciiChar {
-    pub fn value(&self) -> char { self.c }
-}
+pub struct AsciiChar {}
 
 impl ParsleyPrim for AsciiChar {
     type T = char;
 
-    fn name() -> &'static str { "ascii" }
+    fn name() -> &'static str { "ascii-prim" }
 
     fn size_bytes() -> usize { 1 }
 
@@ -21,15 +15,28 @@ impl ParsleyPrim for AsciiChar {
         let c = char::try_from(buf[0]);
         // check this: we should never get the below error from
         // non-empty buffers, as all u8 should be convertible to char.
-        if c.is_err() { return Err(ParseError::new("ascii: invalid character")) }
+        if c.is_err() { return Err(ParseError::new("ascii-prim: invalid character")) }
         let c = c.unwrap();
-        if !c.is_ascii() { return Err(ParseError::new("ascii: invalid ascii character")) }
+        if !c.is_ascii() { return Err(ParseError::new("ascii-prim: invalid ascii character")) }
         Ok((c, 1))
     }
 }
 
+// A convenience wrapper around the primitive interface, that allows
+// use with the primitive combinators.
+impl ParsleyParser for AsciiChar {
+    type T = char;
+
+    fn name() -> &'static str { "ascii" }
+
+    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+        buf.parse_prim::<AsciiChar>()
+    }
+}
+
+// test the primitive parser
 #[cfg(test)]
-mod tests {
+mod test_prim_ascii {
     use super::AsciiChar;
     use super::super::parsebuffer::{ParseBuffer, ParsleyPrim, ErrorKind, ParseError};
 
@@ -40,7 +47,7 @@ mod tests {
         let mut v = Vec::new();
         v.push(255);
         let r = <AsciiChar as ParsleyPrim>::parse(&v);
-        let pe = ParseError::new("ascii: invalid ascii character");
+        let pe = ParseError::new("ascii-prim: invalid ascii character");
         assert_eq!(r, Err(pe));
 
         let mut w = Vec::new();
@@ -71,7 +78,7 @@ mod tests {
         assert_eq!(pb.get_cursor(), 1);
 
         let r = pb.parse_prim::<AsciiChar>();
-        let pe = ParseError::new("ascii: invalid ascii character");
+        let pe = ParseError::new("ascii-prim: invalid ascii character");
         let e = Err(ErrorKind::PrimError(pe));
         assert_eq!(r, e);
         // the cursor should not advance over the invalid char.
@@ -103,5 +110,50 @@ mod tests {
         assert_eq!(r, e);
         // the cursor should not advance if the guard fails
         assert_eq!(pb.get_cursor(), 1);
+    }
+}
+
+// test the convenience wrapper
+#[cfg(test)]
+mod test_ascii {
+    use super::AsciiChar;
+    use super::super::parsebuffer::{ParseBuffer, ParsleyParser, ParseError, ErrorKind};
+
+    #[test]
+    fn test_empty() {
+        let mut ascii_parser = AsciiChar {};
+        let mut pb = ParseBuffer::new(Vec::new());
+        assert_eq!(pb.get_cursor(), 0);
+        assert_eq!(ascii_parser.parse(&mut pb), Err(ErrorKind::EndOfBuffer));
+        assert_eq!(pb.get_cursor(), 0);
+    }
+
+    #[test]
+    fn test_ascii() {
+        let mut ascii_parser = AsciiChar {};
+        let mut v : Vec<u8> = Vec::new();
+        v.push(65);   // 'A'
+        v.push(128);  // non-ascii
+        v.push(0);    // nul; ascii
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(pb.get_cursor(), 0);
+
+        let r = ascii_parser.parse(&mut pb);
+        assert_eq!(r, Ok('A'));
+        assert_eq!(pb.get_cursor(), 1);
+
+        let r = ascii_parser.parse(&mut pb);
+        let pe = ParseError::new("ascii-prim: invalid ascii character");
+        let e = Err(ErrorKind::PrimError(pe));
+        assert_eq!(r, e);
+        // the cursor should not advance over the invalid char.
+        assert_eq!(pb.get_cursor(), 1);
+
+        // forcibly advance
+        pb.set_cursor(2);
+        let r = ascii_parser.parse(&mut pb);
+        assert_eq!(r, Ok('\u{0}'));
+        assert_eq!(pb.get_cursor(), 3);
+        assert_eq!(ascii_parser.parse(&mut pb), Err(ErrorKind::EndOfBuffer))
     }
 }
