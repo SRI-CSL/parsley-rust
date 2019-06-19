@@ -118,8 +118,8 @@ impl<'a, P: ParsleyParser> ParsleyParser for Star<'a, P> {
 
 #[cfg(test)]
 mod test_sequence {
-    use super::super::parsebuffer::{ParseBuffer, ParsleyPrim, ParsleyParser, ErrorKind};
-    use super::super::prim_ascii::{AsciiChar, AsciiCharPrim};
+    use super::super::parsebuffer::{ParseBuffer, ParsleyPrimitive, ParsleyParser, ErrorKind};
+    use super::super::prim_ascii::{AsciiChar, AsciiCharPrimitive};
     use super::{Sequence};
 
     #[test]
@@ -140,7 +140,7 @@ mod test_sequence {
         v.push(67);  // 'C'
         let mut pb  = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
-        let e = Err(ErrorKind::GuardError(<AsciiCharPrim as ParsleyPrim>::name()));
+        let e = Err(ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name()));
         assert_eq!(r, e);
         assert_eq!(pb.get_cursor(), 0);
 
@@ -150,7 +150,7 @@ mod test_sequence {
         v.push(67);  // 'C'
         let mut pb  = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
-        let e = Err(ErrorKind::GuardError(<AsciiCharPrim as ParsleyPrim>::name()));
+        let e = Err(ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name()));
         assert_eq!(r, e);
         // the cursor should not advance for partial matches
         assert_eq!(pb.get_cursor(), 0);
@@ -170,8 +170,8 @@ mod test_sequence {
 
 #[cfg(test)]
 mod test_alternate {
-    use super::super::parsebuffer::{ParseBuffer, ParsleyPrim, ParsleyParser, ErrorKind};
-    use super::super::prim_ascii::{AsciiChar, AsciiCharPrim};
+    use super::super::parsebuffer::{ParseBuffer, ParsleyPrimitive, ParsleyParser, ErrorKind};
+    use super::super::prim_ascii::{AsciiChar, AsciiCharPrimitive};
     use super::{Alternate, Alt};
 
     #[test]
@@ -193,7 +193,7 @@ mod test_alternate {
         v.push(65);  // 'A'
         let mut pb  = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
-        let e = Err(ErrorKind::GuardError(<AsciiCharPrim as ParsleyPrim>::name()));
+        let e = Err(ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name()));
         assert_eq!(r, e);
         assert_eq!(pb.get_cursor(), 0);
 

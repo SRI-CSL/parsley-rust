@@ -24,7 +24,7 @@ impl ParseError {
 
 // The trait defining the interface for parsing a primitive
 // *fixed-size* type.
-pub trait ParsleyPrim {
+pub trait ParsleyPrimitive {
     // The Rust type for the parsed value
     type T;
 
@@ -41,8 +41,8 @@ pub trait ParsleyPrim {
 }
 
 // TODO: this should be unified to the extent possible with
-// ParsleyPrim. The main difference is that this type, unlike
-// ParsleyPrim, does not consume a fixed size from the buffer.
+// ParsleyPrimitive. The main difference is that this type, unlike
+// ParsleyPrimitive, does not consume a fixed size from the buffer.
 
 pub trait ParsleyParser {
     // The Rust type for the parsed value
@@ -57,7 +57,7 @@ pub enum ErrorKind {
     // Insufficient data
     EndOfBuffer,
     // Errors during unguarded primitive parsing.
-    PrimError(ParseError),
+    PrimitiveError(ParseError),
     // Errors during guarded primitive parsing.
     GuardError(&'static str),
 }
@@ -66,7 +66,7 @@ impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ErrorKind::EndOfBuffer => write!(f, "end of buffer"),
-            ErrorKind::PrimError(ParseError{msg}) => write!(f, "primitive parse failure: {}", msg),
+            ErrorKind::PrimitiveError(ParseError{msg}) => write!(f, "primitive parse failure: {}", msg),
             ErrorKind::GuardError(prim) => write!(f, "primitive guard error on {}", prim),
         }
     }
@@ -76,7 +76,7 @@ impl Error for ErrorKind {
     fn description(&self) -> &str {
         match self {
             ErrorKind::EndOfBuffer => "end of buffer",
-            ErrorKind::PrimError(ParseError{msg}) => msg,
+            ErrorKind::PrimitiveError(ParseError{msg}) => msg,
             ErrorKind::GuardError(_prim) => "primitive guard error",
         }
     }
@@ -84,7 +84,7 @@ impl Error for ErrorKind {
 
 impl From<ParseError> for ErrorKind {
     fn from(err: ParseError) -> ErrorKind {
-        ErrorKind::PrimError(err)
+        ErrorKind::PrimitiveError(err)
     }
 }
 
@@ -111,7 +111,7 @@ impl ParseBuffer {
 
     // Parsing a single element of the Parsley primitive type P; it
     // returns a value of the Rust representation type P::T when successful.
-    pub fn parse_prim<P : ParsleyPrim>(&mut self) ->
+    pub fn parse_prim<P : ParsleyPrimitive>(&mut self) ->
         Result<P::T, ErrorKind>
     {
         if self.remaining() < P::size_bytes() { return Err(ErrorKind::EndOfBuffer) }
@@ -126,7 +126,7 @@ impl ParseBuffer {
     // the Rust representation type P::T when successful.  The 'guard'
     // is specified in terms of the values of the representation type
     // P::T.
-    pub fn parse_guarded<P : ParsleyPrim>(&mut self, guard: &mut dyn FnMut(&P::T) -> bool) ->
+    pub fn parse_guarded<P : ParsleyPrimitive>(&mut self, guard: &mut dyn FnMut(&P::T) -> bool) ->
         Result<P::T, ErrorKind>
     {
         if self.remaining() < P::size_bytes() { return Err(ErrorKind::EndOfBuffer) }
