@@ -40,10 +40,12 @@ pub trait ParsleyPrimitive {
     fn parse(buf: &[u8]) -> Result<(Self::T,usize), ParseError>;
 }
 
-// TODO: this should be unified to the extent possible with
-// ParsleyPrimitive. The main difference is that this type, unlike
-// ParsleyPrimitive, does not consume a fixed size from the buffer.
-
+// The trait defining a general Parsley parser.  This trait is
+// intended to be compatible with the various parser combinators.
+//
+// The main difference between this trait and the Primitive trait
+// above is that the general parsers do not consume a fixed size from
+// the buffer.
 pub trait ParsleyParser {
     // The Rust type for the parsed value
     type T;

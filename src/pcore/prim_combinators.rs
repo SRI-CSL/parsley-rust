@@ -1,5 +1,4 @@
-/// Basic combinators (sequence, alternation, and Kleene/star closure), and
-/// the parsing trait expected by the combinators.
+/// Basic combinators (sequence, alternation, and Kleene/star closure).
 
 use std::result::Result;
 use super::parsebuffer::{ParseBuffer, ParsleyParser, ErrorKind};
