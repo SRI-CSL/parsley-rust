@@ -48,9 +48,6 @@ pub trait ParsleyParser {
     // The Rust type for the parsed value
     type T;
 
-    // The name of the type, used for logging/error-messages
-    fn name() -> &'static str;
-
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind>;
 }
 

@@ -21,9 +21,6 @@ where P1: ParsleyParser,
 impl<'a, P1: ParsleyParser, P2: ParsleyParser> ParsleyParser for Sequence<'a, P1, P2> {
     type T = (P1::T, P2::T);
 
-    // TODO: fix the name api
-    fn name() -> &'static str { "sequence" }
-
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
         let cursor = buf.get_cursor();
         let o1 = self.p1.parse(buf);
@@ -67,9 +64,6 @@ where P1: ParsleyParser,
 impl<'a, P1: ParsleyParser, P2: ParsleyParser> ParsleyParser for Alternate<'a, P1, P2> {
     type T = Alt<P1::T, P2::T>;
 
-    // TODO: fix the name api
-    fn name() -> &'static str { "alternate" }
-
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
         let cursor = buf.get_cursor();
         let o1 = self.p1.parse(buf);
@@ -103,9 +97,6 @@ where P: ParsleyParser
 
 impl<'a, P: ParsleyParser> ParsleyParser for Star<'a, P> {
     type T = Vec<P::T>;
-
-    // TODO: fix the name api
-    fn name() -> &'static str { "star" }
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
         let mut c = buf.get_cursor();

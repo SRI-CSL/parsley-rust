@@ -41,8 +41,6 @@ impl AsciiChar {
 impl ParsleyParser for AsciiChar {
     type T = char;
 
-    fn name() -> &'static str { "ascii" }
-
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
         match &mut self.guard {
             None    => buf.parse_prim::<AsciiCharPrim>(),
