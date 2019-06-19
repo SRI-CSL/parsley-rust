@@ -1,7 +1,7 @@
 use std::convert::TryFrom;
 use super::parsebuffer::{ParsleyPrim, ParsleyParser, ParseBuffer, ParseError, ErrorKind};
 
-pub struct AsciiCharPrim {}
+pub struct AsciiCharPrim;
 
 impl ParsleyPrim for AsciiCharPrim {
     type T = char;
@@ -24,8 +24,7 @@ impl ParsleyPrim for AsciiCharPrim {
 
 // A convenience wrapper around the primitive interface, that allows
 // use with the primitive combinators.
-pub struct AsciiChar
-{
+pub struct AsciiChar {
     guard: Option<Box<FnMut(&char) -> bool>>
 }
 
@@ -61,7 +60,7 @@ mod test_prim_ascii {
     // this raw interface would not normally be used; we would be
     // going via the ParseBuffer as in the remaining tests.
     #[test]
-    fn test_prim() {
+    fn raw() {
         let mut v = Vec::new();
         v.push(255);
         let r = <AsciiCharPrim as ParsleyPrim>::parse(&v);
@@ -75,7 +74,7 @@ mod test_prim_ascii {
     }
 
     #[test]
-    fn test_empty() {
+    fn empty() {
         let mut pb = ParseBuffer::new(Vec::new());
         assert_eq!(pb.get_cursor(), 0);
         assert_eq!(pb.parse_prim::<AsciiCharPrim>(), Err(ErrorKind::EndOfBuffer));
@@ -83,7 +82,7 @@ mod test_prim_ascii {
     }
 
     #[test]
-    fn test_ascii() {
+    fn ascii() {
         let mut v : Vec<u8> = Vec::new();
         v.push(65);   // 'A'
         v.push(128);  // non-ascii
@@ -111,7 +110,7 @@ mod test_prim_ascii {
     }
 
     #[test]
-    fn test_guard() {
+    fn guard() {
         let mut v : Vec<u8> = Vec::new();
         v.push(65);  // 'A'
         v.push(66);  // 'B'
@@ -138,7 +137,7 @@ mod test_ascii {
     use super::super::parsebuffer::{ParseBuffer, ParsleyPrim, ParsleyParser, ParseError, ErrorKind};
 
     #[test]
-    fn test_empty() {
+    fn empty() {
         let mut ascii_parser = AsciiChar::new();
         let mut pb = ParseBuffer::new(Vec::new());
         assert_eq!(pb.get_cursor(), 0);
@@ -147,7 +146,7 @@ mod test_ascii {
     }
 
     #[test]
-    fn test_ascii() {
+    fn ascii() {
         let mut ascii_parser = AsciiChar::new_guarded(Box::new(|c: &char| *c == 'A'));
         let mut v : Vec<u8> = Vec::new();
         v.push(65);   // 'A'
