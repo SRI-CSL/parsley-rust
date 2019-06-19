@@ -129,7 +129,7 @@ impl ParseBuffer {
     // the Rust representation type P::T when successful.  The 'guard'
     // is specified in terms of the values of the representation type
     // P::T.
-    pub fn parse_guarded<P : ParsleyPrim>(&mut self, mut guard: Box<FnMut(&P::T) -> bool>) ->
+    pub fn parse_guarded<P : ParsleyPrim>(&mut self, guard: &mut dyn FnMut(&P::T) -> bool) ->
         Result<P::T, ErrorKind>
     {
         if self.remaining() < P::size_bytes() { return Err(ErrorKind::EndOfBuffer) }
