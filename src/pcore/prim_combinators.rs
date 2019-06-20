@@ -278,8 +278,8 @@ mod test_star {
 
 #[cfg(test)]
 mod test_combined {
-    use super::super::parsebuffer::{ParseBuffer, ParsleyParser};
-    use super::super::prim_ascii::{AsciiChar};
+    use super::super::parsebuffer::{ParseBuffer, ParsleyParser, ParsleyPrimitive, ErrorKind};
+    use super::super::prim_ascii::{AsciiChar, AsciiCharPrimitive};
     use super::{Star, Sequence, Alternate, Alt};
 
     #[test] // a*b*
@@ -453,6 +453,10 @@ mod test_combined {
         let v : Alt<(char,char), (char, char)> = Alt::Left(('A', 'B'));
         assert_eq!(r, Ok(v));
         assert_eq!(pb.get_cursor(), 2);
+        let r = p.parse(&mut pb);
+        let v : Alt<(char,char), (char, char)> = Alt::Left(('A', 'B'));
+        assert_eq!(r, Ok(v));
+        assert_eq!(pb.get_cursor(), 4);
 
         // match
         let mut v   = Vec::new();
@@ -467,6 +471,10 @@ mod test_combined {
         let v : Alt<(char,char), (char, char)> = Alt::Right(('B', 'A'));
         assert_eq!(r, Ok(v));
         assert_eq!(pb.get_cursor(), 2);
+        let r = p.parse(&mut pb);
+        let v : Alt<(char,char), (char, char)> = Alt::Right(('B', 'A'));
+        assert_eq!(r, Ok(v));
+        assert_eq!(pb.get_cursor(), 4);
     }
 
     #[test] // (a|b)(b|a)
@@ -492,13 +500,21 @@ mod test_combined {
         let v : (Alt<char,char>, Alt<char,char>) = (Alt::Left('A'), Alt::Left('B'));
         assert_eq!(r, Ok(v));
         assert_eq!(pb.get_cursor(), 2);
+        let r = p.parse(&mut pb);
+        let v : (Alt<char,char>, Alt<char,char>) = (Alt::Left('A'), Alt::Left('B'));
+        assert_eq!(r, Ok(v));
+        assert_eq!(pb.get_cursor(), 4);
+        let r = p.parse(&mut pb);
+        let e = Err(ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name()));
+        assert_eq!(r, e);
+        assert_eq!(pb.get_cursor(), 4);
 
         // match
         let mut v   = Vec::new();
         v.push(66);  // 'B'
         v.push(65);  // 'A'
-        v.push(66);  // 'B'
         v.push(65);  // 'A'
+        v.push(66);  // 'B'
         v.push(67);  // 'C'
 
         let mut pb  = ParseBuffer::new(v);
@@ -506,5 +522,14 @@ mod test_combined {
         let v : (Alt<char,char>, Alt<char,char>) = (Alt::Right('B'), Alt::Right('A'));
         assert_eq!(r, Ok(v));
         assert_eq!(pb.get_cursor(), 2);
+        let r = p.parse(&mut pb);
+        let v : (Alt<char,char>, Alt<char,char>) = (Alt::Left('A'), Alt::Left('B'));
+        assert_eq!(r, Ok(v));
+        assert_eq!(pb.get_cursor(), 4);
+        let r = p.parse(&mut pb);
+        let e = Err(ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name()));
+        assert_eq!(r, e);
+        assert_eq!(pb.get_cursor(), 4);
+
     }
 }
