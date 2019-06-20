@@ -1,5 +1,4 @@
-/// Basic parsing buffer manager, currently integrated with the
-/// interface to parse primitive types.
+/// Basic parsing buffer manager, and the traits defining the parsing interface.
 
 use std::result::Result;
 use std::error::Error;
