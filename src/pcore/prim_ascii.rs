@@ -1,4 +1,5 @@
 use std::convert::TryFrom;
+use std::fmt;
 use super::parsebuffer::{ParsleyPrimitive, ParsleyParser, ParseBuffer, ParseError, ErrorKind};
 
 pub struct AsciiCharPrimitive;

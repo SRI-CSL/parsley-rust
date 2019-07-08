@@ -4,4 +4,8 @@ version = "0.1.0"
 authors = ["Prashanth Mundkur <prashanth.mundkur@gmail.com>"]
 edition = "2018"
 
+[[bin]]
+name = "parsley-bin"
+path = "src/parsley.rs"
+
 [dependencies]
