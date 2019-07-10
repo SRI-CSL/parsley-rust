@@ -137,4 +137,21 @@ impl ParseBuffer {
         self.ofs += consumed;
         Ok(t)
     }
+
+    // Scanning for a constant tag.  The cursor is set to the *start*
+    // of the tag when successful, and the number of bytes skipped
+    // over is returned.  If the tag is not found, the cursor is not
+    // moved.  This is a primitive since low-level access to the parse
+    // buffer is needed.
+    pub fn scan(&mut self, tag: &[u8]) -> Result<usize, ErrorKind> {
+        let mut skip = 0;
+        for w in self.buf[self.ofs..].windows(tag.len()) {
+            if w.starts_with(tag) {
+                self.ofs = self.ofs + skip;
+                return Ok(skip)
+            }
+            skip = skip + 1;
+        }
+        Err(ErrorKind::EndOfBuffer)
+    }
 }
