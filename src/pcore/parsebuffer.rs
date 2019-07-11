@@ -138,11 +138,11 @@ impl ParseBuffer {
         Ok(t)
     }
 
-    // Scanning for a constant tag.  The cursor is set to the *start*
-    // of the tag when successful, and the number of bytes skipped
-    // over is returned.  If the tag is not found, the cursor is not
-    // moved.  This is a primitive since low-level access to the parse
-    // buffer is needed.
+    // Scanning for a tag.  The cursor is set to the *start* of the
+    // tag when successful, and the number of bytes skipped over is
+    // returned.  If the tag is not found, the cursor is not moved.
+    // This is a primitive since low-level access to the parse buffer
+    // is needed.
     pub fn scan(&mut self, tag: &[u8]) -> Result<usize, ErrorKind> {
         let mut skip = 0;
         for w in self.buf[self.ofs..].windows(tag.len()) {
@@ -153,5 +153,28 @@ impl ParseBuffer {
             skip = skip + 1;
         }
         Err(ErrorKind::EndOfBuffer)
+    }
+
+    // Exact match on a tag at the current cursor location.  On
+    // success, cursor is advanced past the exact match, but not moved
+    // on failure.
+    pub fn exact(&mut self, tag: &[u8]) -> Result<usize, ErrorKind> {
+        if self.buf[self.ofs..].starts_with(tag) {
+            self.ofs = self.ofs + tag.len();
+            Ok(tag.len())
+        } else {
+            Err(ErrorKind::GuardError("match"))
+        }
+    }
+
+    // Extract binary stream of specified length.
+    pub fn extract<'a>(&'a mut self, len: usize) -> Result<&'a [u8], ErrorKind> {
+        if self.buf[self.ofs..].len() < len {
+            Err(ErrorKind::EndOfBuffer)
+        } else {
+            let ret = &self.buf[self.ofs..];
+            self.ofs = self.ofs + len;
+            Ok(ret)
+        }
     }
 }

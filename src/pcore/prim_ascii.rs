@@ -70,6 +70,26 @@ impl ParsleyParser for AsciiScanner {
     }
 }
 
+pub struct AsciiMatcher {
+    tag: Vec<u8>
+}
+
+impl AsciiMatcher {
+    pub fn new(tag: &str) -> AsciiMatcher {
+        let mut t = Vec::new();
+        for c in tag.as_bytes().iter() { t.push(*c); }
+        AsciiMatcher { tag: t }
+    }
+}
+
+impl ParsleyParser for AsciiMatcher {
+    type T = usize;
+
+    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+        buf.exact(&self.tag)
+    }
+}
+
 // test the primitive parser
 #[cfg(test)]
 mod test_prim_ascii {
@@ -152,7 +172,7 @@ mod test_prim_ascii {
 // test the convenience wrapper
 #[cfg(test)]
 mod test_ascii {
-    use super::{AsciiCharPrimitive, AsciiChar, AsciiScanner};
+    use super::{AsciiCharPrimitive, AsciiChar, AsciiScanner, AsciiMatcher};
     use super::super::parsebuffer::{ParseBuffer, ParsleyPrimitive, ParsleyParser, ParseError, ErrorKind};
 
     #[test]
@@ -201,15 +221,39 @@ mod test_ascii {
 
     #[test]
     fn scan() {
+        // The fact that this has to be mutable is a defect in the current API.
         let mut s = AsciiScanner::new("%PDF-");
+
         let mut pb = ParseBuffer::new(Vec::from("%PDF-".as_bytes()));
         assert_eq!(s.parse(&mut pb), Ok(0));
         assert_eq!(pb.get_cursor(), 0);
 
-        let mut s = AsciiScanner::new("%PDF-");
         let mut pb = ParseBuffer::new(Vec::from("garbage %PDF-".as_bytes()));
         assert_eq!(s.parse(&mut pb), Ok(8));
         assert_eq!(pb.get_cursor(), 8);
         assert_eq!(s.parse(&mut pb), Ok(0));
+        assert_eq!(pb.get_cursor(), 8);
+
+        let mut pb = ParseBuffer::new(Vec::from("".as_bytes()));
+        assert_eq!(s.parse(&mut pb), Err(ErrorKind::EndOfBuffer));
+        assert_eq!(pb.get_cursor(), 0);
+    }
+
+    #[test]
+    fn exact() {
+        // The fact that this has to be mutable is a defect in the current API.
+        let mut s = AsciiMatcher::new("%PDF-");
+
+        let mut pb = ParseBuffer::new(Vec::from("".as_bytes()));
+        assert_eq!(s.parse(&mut pb), Err(ErrorKind::GuardError("match")));
+        assert_eq!(pb.get_cursor(), 0);
+
+        let mut pb = ParseBuffer::new(Vec::from("%PDF-".as_bytes()));
+        assert_eq!(s.parse(&mut pb), Ok(5));
+        assert_eq!(pb.get_cursor(), 5);
+
+        let mut pb = ParseBuffer::new(Vec::from(" %PDF-".as_bytes()));
+        assert_eq!(s.parse(&mut pb), Err(ErrorKind::GuardError("match")));
+        assert_eq!(pb.get_cursor(), 0);
     }
 }
