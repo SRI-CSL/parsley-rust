@@ -67,7 +67,7 @@ mod test_prim_ascii {
         assert_eq!(r, Err(pe));
 
         let mut w = Vec::new();
-        w.push(65); // 'A'
+        w.extend_from_slice("A".as_bytes());
         let r = <AsciiCharPrimitive as ParsleyPrimitive>::parse(&w);
         assert_eq!(r, Ok(('A', 1)));
     }
@@ -83,7 +83,7 @@ mod test_prim_ascii {
     #[test]
     fn ascii() {
         let mut v : Vec<u8> = Vec::new();
-        v.push(65);   // 'A'
+        v.extend_from_slice("A".as_bytes());
         v.push(128);  // non-ascii
         v.push(0);    // nul; ascii
         let mut pb = ParseBuffer::new(v);
@@ -111,8 +111,7 @@ mod test_prim_ascii {
     #[test]
     fn guard() {
         let mut v : Vec<u8> = Vec::new();
-        v.push(65);  // 'A'
-        v.push(66);  // 'B'
+        v.extend_from_slice("AB".as_bytes());
         v.push(128); // non-ascii
         let mut pb = ParseBuffer::new(v);
         assert_eq!(pb.get_cursor(), 0);
@@ -148,7 +147,7 @@ mod test_ascii {
     fn ascii() {
         let mut ascii_parser = AsciiChar::new_guarded(Box::new(|c: &char| *c == 'A'));
         let mut v : Vec<u8> = Vec::new();
-        v.push(65);   // 'A'
+        v.extend_from_slice("A".as_bytes());
         v.push(128);  // non-ascii
         v.push(0);    // nul; ascii
         let mut pb = ParseBuffer::new(v);
