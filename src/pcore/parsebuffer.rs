@@ -172,7 +172,7 @@ impl ParseBuffer {
         if self.buf[self.ofs..].len() < len {
             Err(ErrorKind::EndOfBuffer)
         } else {
-            let ret = &self.buf[self.ofs..];
+            let ret = &self.buf[self.ofs..(self.ofs+len)];
             self.ofs = self.ofs + len;
             Ok(ret)
         }
