@@ -21,8 +21,10 @@ impl ParseError {
     }
 }
 
-// The trait defining the interface for parsing a primitive
-// *fixed-size* type.
+// The trait defining the interface for parsing a primitive type of
+// unknown size.  The parsers implementing this trait are usually
+// associated with a specific primitive type, specified by name().
+// They cannot be the output of combinators.
 pub trait ParsleyPrimitive {
     // The Rust type for the parsed value
     type T;
@@ -30,21 +32,18 @@ pub trait ParsleyPrimitive {
     // The name of the type, used for logging/error-messages
     fn name() -> &'static str;
 
-    // The fixed-size this type consumes from the parsing buffer.
-    fn size_bytes() -> usize;
-
-    // Parses a single fixed-size value from the provided buffer, and
-    // returns the value and the number of bytes consumed from the
-    // buffer.  There may not be size_bytes() in the buffer.
-    fn parse(buf: &[u8]) -> Result<(Self::T,usize), ParseError>;
+    // Parses a single value from the provided buffer, and returns the
+    // value and the number of bytes consumed from the buffer.
+    fn parse(buf: &[u8]) -> Result<(Self::T,usize), ErrorKind>;
 }
 
 // The trait defining a general Parsley parser.  This trait is
 // intended to be compatible with the various parser combinators.
+// That is, parsers implementing this trait can be input into parser
+// combinators, and are output from parser combinators.
 //
-// The main difference between this trait and the Primitive trait
-// above is that the general parsers do not consume a fixed size from
-// the buffer.
+// Unlike parsers implementing the Primitive trait above, these
+// general parsers do not have a defined name.
 pub trait ParsleyParser {
     // The Rust type for the parsed value
     type T;
@@ -94,7 +93,7 @@ impl ParseBuffer {
         ParseBuffer { buf, ofs : 0 }
     }
 
-    fn remaining(&self) -> usize {
+    pub fn remaining(&self) -> usize {
         assert!(self.ofs <= self.buf.len());
         self.buf.len() - self.ofs
     }
@@ -115,9 +114,7 @@ impl ParseBuffer {
     pub fn parse_prim<P : ParsleyPrimitive>(&mut self) ->
         Result<P::T, ErrorKind>
     {
-        if self.remaining() < P::size_bytes() { return Err(ErrorKind::EndOfBuffer) }
         let (t, consumed) = P::parse(&self.buf[self.ofs..])?;
-        assert_eq!(consumed, P::size_bytes());
         self.ofs += consumed;
         Ok(t)
     }
@@ -130,9 +127,7 @@ impl ParseBuffer {
     pub fn parse_guarded<P : ParsleyPrimitive>(&mut self, guard: &mut dyn FnMut(&P::T) -> bool) ->
         Result<P::T, ErrorKind>
     {
-        if self.remaining() < P::size_bytes() { return Err(ErrorKind::EndOfBuffer) }
         let (t, consumed) = P::parse(&self.buf[self.ofs..])?;
-        assert_eq!(consumed, P::size_bytes());
         if !guard(&t) { return Err(ErrorKind::GuardError(P::name())) };
         self.ofs += consumed;
         Ok(t)
