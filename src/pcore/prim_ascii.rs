@@ -9,22 +9,21 @@ impl ParsleyPrimitive for AsciiCharPrimitive {
 
     fn name() -> &'static str { "ascii-prim" }
 
-    fn size_bytes() -> usize { 1 }
-
-    fn parse(buf: &[u8]) -> Result<(Self::T, usize), ParseError> {
-        // bounds check is done by  ParseBuffer, so we don't need to do it here.
+    fn parse(buf: &[u8]) -> Result<(Self::T, usize), ErrorKind> {
+        if buf.len() < 1 { return Err(ErrorKind::EndOfBuffer) }
         let c = char::try_from(buf[0]);
         // check this: we should never get the below error from
         // non-empty buffers, as all u8 should be convertible to char.
-        if c.is_err() { return Err(ParseError::new("ascii-prim: invalid character")) }
+        if c.is_err() { return Err(ErrorKind::PrimitiveError(ParseError::new("ascii-prim: invalid character"))) }
         let c = c.unwrap();
-        if !c.is_ascii() { return Err(ParseError::new("ascii-prim: invalid ascii character")) }
+        if !c.is_ascii() { return Err(ErrorKind::PrimitiveError(ParseError::new("ascii-prim: invalid ascii character"))) }
         Ok((c, 1))
     }
 }
 
-// A convenience wrapper around the primitive interface, that allows
+// Convenience wrappers around the primitive interfaces, that allow
 // use with the primitive combinators.
+
 pub struct AsciiChar {
     guard: Option<Box<FnMut(&char) -> bool>>
 }
@@ -63,11 +62,11 @@ mod test_prim_ascii {
         let mut v = Vec::new();
         v.push(255);
         let r = <AsciiCharPrimitive as ParsleyPrimitive>::parse(&v);
-        let pe = ParseError::new("ascii-prim: invalid ascii character");
+        let pe = ErrorKind::PrimitiveError(ParseError::new("ascii-prim: invalid ascii character"));
         assert_eq!(r, Err(pe));
 
         let mut w = Vec::new();
-        w.push(65); // 'A'
+        w.extend_from_slice("A".as_bytes());
         let r = <AsciiCharPrimitive as ParsleyPrimitive>::parse(&w);
         assert_eq!(r, Ok(('A', 1)));
     }
@@ -83,7 +82,7 @@ mod test_prim_ascii {
     #[test]
     fn ascii() {
         let mut v : Vec<u8> = Vec::new();
-        v.push(65);   // 'A'
+        v.extend_from_slice("A".as_bytes());
         v.push(128);  // non-ascii
         v.push(0);    // nul; ascii
         let mut pb = ParseBuffer::new(v);
@@ -111,8 +110,7 @@ mod test_prim_ascii {
     #[test]
     fn guard() {
         let mut v : Vec<u8> = Vec::new();
-        v.push(65);  // 'A'
-        v.push(66);  // 'B'
+        v.extend_from_slice("AB".as_bytes());
         v.push(128); // non-ascii
         let mut pb = ParseBuffer::new(v);
         assert_eq!(pb.get_cursor(), 0);
@@ -148,7 +146,7 @@ mod test_ascii {
     fn ascii() {
         let mut ascii_parser = AsciiChar::new_guarded(Box::new(|c: &char| *c == 'A'));
         let mut v : Vec<u8> = Vec::new();
-        v.push(65);   // 'A'
+        v.extend_from_slice("A".as_bytes());
         v.push(128);  // non-ascii
         v.push(0);    // nul; ascii
         let mut pb = ParseBuffer::new(v);

@@ -136,7 +136,7 @@ mod test_sequence {
 
         // pre invalid
         let mut v   = Vec::new();
-        v.push(67);  // 'C'
+        v.extend_from_slice("C".as_bytes());
         let mut pb  = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
         let e = Err(ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name()));
@@ -145,8 +145,7 @@ mod test_sequence {
 
         // mid invalid
         let mut v   = Vec::new();
-        v.push(65);  // 'A'
-        v.push(67);  // 'C'
+        v.extend_from_slice("AC".as_bytes());
         let mut pb  = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
         let e = Err(ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name()));
@@ -156,8 +155,7 @@ mod test_sequence {
 
         // valid
         let mut v   = Vec::new();
-        v.push(65);  // 'A'
-        v.push(66);  // 'B'
+        v.extend_from_slice("AB".as_bytes());
 
         let mut pb  = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
@@ -188,8 +186,7 @@ mod test_alternate {
 
         // pre invalid
         let mut v   = Vec::new();
-        v.push(67);  // 'C'
-        v.push(65);  // 'A'
+        v.extend_from_slice("CA".as_bytes());
         let mut pb  = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
         let e = Err(ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name()));
@@ -198,7 +195,7 @@ mod test_alternate {
 
         // left valid
         let mut v   = Vec::new();
-        v.push(65);  // 'A'
+        v.extend_from_slice("A".as_bytes());
         let mut pb  = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
         assert_eq!(r, Ok(Alt::Left('A')));
@@ -206,7 +203,7 @@ mod test_alternate {
 
         // right valid
         let mut v   = Vec::new();
-        v.push(66);  // 'B'
+        v.extend_from_slice("B".as_bytes());
         let mut pb  = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
         assert_eq!(r, Ok(Alt::Right('B')));
@@ -235,9 +232,7 @@ mod test_star {
 
         // valid
         let mut v   = Vec::new();
-        v.push(65);  // 'A'
-        v.push(65);  // 'A'
-        v.push(65);  // 'A'
+        v.extend_from_slice("AAA".as_bytes());
         let mut pb  = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
         let e : Vec<char> = vec!['A', 'A', 'A'];
@@ -246,10 +241,7 @@ mod test_star {
 
         // valid with trailer
         let mut v   = Vec::new();
-        v.push(65);  // 'A'
-        v.push(65);  // 'A'
-        v.push(65);  // 'A'
-        v.push(66);  // 'B'
+        v.extend_from_slice("AAAB".as_bytes());
         let mut pb  = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
         let e : Vec<char> = vec!['A', 'A', 'A'];
@@ -263,10 +255,7 @@ mod test_star {
         let mut seq = Star::new(&mut p);
 
         let mut v   = Vec::new();
-        v.push(65);  // 'A'
-        v.push(65);  // 'A'
-        v.push(65);  // 'A'
-        v.push(66);  // 'B'
+        v.extend_from_slice("AAAB".as_bytes());
 
         let mut pb  = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
@@ -301,9 +290,7 @@ mod test_combined {
 
         // only a
         let mut v   = Vec::new();
-        v.push(65);  // 'A'
-        v.push(65);  // 'A'
-        v.push(65);  // 'A'
+        v.extend_from_slice("AAA".as_bytes());
         let mut pb  = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
         let a : Vec<char> = vec!['A', 'A', 'A'];
@@ -313,10 +300,7 @@ mod test_combined {
 
         // only b
         let mut v   = Vec::new();
-        v.push(66);  // 'B'
-        v.push(66);  // 'B'
-        v.push(66);  // 'B'
-        v.push(65);  // 'A'
+        v.extend_from_slice("BBBA".as_bytes());
         let mut pb  = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
         let a : Vec<char> = vec![];
@@ -326,12 +310,7 @@ mod test_combined {
 
         // a then b
         let mut v   = Vec::new();
-        v.push(65);  // 'A'
-        v.push(65);  // 'A'
-        v.push(65);  // 'A'
-        v.push(66);  // 'B'
-        v.push(66);  // 'B'
-        v.push(66);  // 'B'
+        v.extend_from_slice("AAABBB".as_bytes());
 
         let mut pb  = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
@@ -358,11 +337,7 @@ mod test_combined {
 
         // match
         let mut v   = Vec::new();
-        v.push(66);  // 'B'
-        v.push(65);  // 'A'
-        v.push(65);  // 'A'
-        v.push(66);  // 'B'
-        v.push(67);  // 'C'
+        v.extend_from_slice("BAABC".as_bytes());
 
         let mut pb  = ParseBuffer::new(v);
         let r = star.parse(&mut pb);
@@ -380,11 +355,7 @@ mod test_combined {
 
         // match
         let mut v   = Vec::new();
-        v.push(65);  // 'A'
-        v.push(66);  // 'B'
-        v.push(65);  // 'A'
-        v.push(66);  // 'B'
-        v.push(67);  // 'C'
+        v.extend_from_slice("ABABC".as_bytes());
 
         let mut pb  = ParseBuffer::new(v);
         let r = star.parse(&mut pb);
@@ -403,11 +374,7 @@ mod test_combined {
 
         // match
         let mut v   = Vec::new();
-        v.push(65);  // 'A'
-        v.push(65);  // 'A'
-        v.push(66);  // 'B'
-        v.push(66);  // 'B'
-        v.push(67);  // 'C'
+        v.extend_from_slice("AABBC".as_bytes());
 
         let mut pb  = ParseBuffer::new(v);
         let r = abs.parse(&mut pb);
@@ -417,11 +384,7 @@ mod test_combined {
 
         // match
         let mut v   = Vec::new();
-        v.push(66);  // 'B'
-        v.push(66);  // 'B'
-        v.push(65);  // 'A'
-        v.push(65);  // 'A'
-        v.push(67);  // 'C'
+        v.extend_from_slice("BBAAC".as_bytes());
 
         let mut pb  = ParseBuffer::new(v);
         let r = abs.parse(&mut pb);
@@ -442,11 +405,7 @@ mod test_combined {
 
         // match
         let mut v   = Vec::new();
-        v.push(65);  // 'A'
-        v.push(66);  // 'B'
-        v.push(65);  // 'A'
-        v.push(66);  // 'B'
-        v.push(67);  // 'C'
+        v.extend_from_slice("ABABC".as_bytes());
 
         let mut pb  = ParseBuffer::new(v);
         let r = p.parse(&mut pb);
@@ -460,11 +419,7 @@ mod test_combined {
 
         // match
         let mut v   = Vec::new();
-        v.push(66);  // 'B'
-        v.push(65);  // 'A'
-        v.push(66);  // 'B'
-        v.push(65);  // 'A'
-        v.push(67);  // 'C'
+        v.extend_from_slice("BABAC".as_bytes());
 
         let mut pb  = ParseBuffer::new(v);
         let r = p.parse(&mut pb);
@@ -489,11 +444,7 @@ mod test_combined {
 
         // match
         let mut v   = Vec::new();
-        v.push(65);  // 'A'
-        v.push(66);  // 'B'
-        v.push(65);  // 'A'
-        v.push(66);  // 'B'
-        v.push(67);  // 'C'
+        v.extend_from_slice("ABABC".as_bytes());
 
         let mut pb  = ParseBuffer::new(v);
         let r = p.parse(&mut pb);
@@ -511,11 +462,7 @@ mod test_combined {
 
         // match
         let mut v   = Vec::new();
-        v.push(66);  // 'B'
-        v.push(65);  // 'A'
-        v.push(65);  // 'A'
-        v.push(66);  // 'B'
-        v.push(67);  // 'C'
+        v.extend_from_slice("BAABC".as_bytes());
 
         let mut pb  = ParseBuffer::new(v);
         let r = p.parse(&mut pb);
