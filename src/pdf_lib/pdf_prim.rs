@@ -226,11 +226,67 @@ impl ParsleyParser for RawName {
     }
 }
 
+// Stream object content
+pub struct StreamContent {
+    len: usize
+}
+
+impl StreamContent {
+    pub fn new(len: usize) -> StreamContent {
+        StreamContent { len }
+    }
+}
+
+impl ParsleyParser for StreamContent {
+    // This involves a copy from the parsebuffer, which is
+    // inefficient.  We should add an interface that returns a
+    // reference, but this runs into the same issues as the
+    // BinaryBuffer parser: viz, parameterizing lifetimes on
+    // associated types.
+    type T = Vec<u8>;
+
+    // This assumes that the whitespace before the 'stream' keyword
+    // has been consumed.
+    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+        let cursor = buf.get_cursor();
+        if !buf.skip_prefix("stream".as_bytes()).unwrap() {
+            return Err(ErrorKind::GuardError("not at stream content"))
+        }
+        if buf.peek() == Some(13) { // '\r'
+            buf.incr_cursor();
+        }
+        if buf.peek() == Some(10) { // '\n'
+            buf.incr_cursor();
+        } else {
+            // TODO: check if the '\n' is a requirement.
+            buf.set_cursor(cursor);
+            return Err(ErrorKind::GuardError("not a valid stream marker"))
+        }
+        let content_res = buf.extract(self.len);
+        if let Err(e) = content_res {
+            buf.set_cursor(cursor);
+            return Err(e)
+        }
+        let v = Vec::from(content_res.unwrap());
+        if buf.peek() == Some(13) { // '\r'
+            buf.incr_cursor();
+        }
+        if buf.peek() == Some(10) { // '\n'
+            buf.incr_cursor();
+        }
+        if !buf.skip_prefix("endstream".as_bytes()).unwrap() {
+            buf.set_cursor(cursor);
+            return Err(ErrorKind::GuardError("invalid endstream"))
+        }
+        Ok(v)
+    }
+}
+
 #[cfg(test)]
 mod test_pdf_prim {
     use super::super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, ErrorKind};
     use super::{WhitespaceNoEOL, WhitespaceEOL, Comment, Boolean, Null, Integer, Real};
-    use super::{HexString, RawLiteralString, RawName};
+    use super::{HexString, RawLiteralString, RawName, StreamContent};
 
     #[test]
     fn noeol() {
@@ -524,5 +580,76 @@ mod test_pdf_prim {
         let mut pb = ParseBuffer::new(v);
         assert_eq!(name.parse(&mut pb).unwrap(), Vec::from("".as_bytes()));
         assert_eq!(pb.get_cursor(), 1);
+    }
+
+    #[test]
+    fn stream_content() {
+        let mut sc = StreamContent::new(2);
+        let v = Vec::new();
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(sc.parse(&mut pb), Err(ErrorKind::GuardError("not at stream content")));
+        assert_eq!(pb.get_cursor(), 0);
+
+        let mut sc = StreamContent::new(2);
+        let v = Vec::from(" ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(sc.parse(&mut pb), Err(ErrorKind::GuardError("not at stream content")));
+        assert_eq!(pb.get_cursor(), 0);
+
+        let mut sc = StreamContent::new(2);
+        let v = Vec::from("strea ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(sc.parse(&mut pb), Err(ErrorKind::GuardError("not at stream content")));
+        assert_eq!(pb.get_cursor(), 0);
+
+        let mut sc = StreamContent::new(2);
+        let v = Vec::from("stream\n  endstream ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(sc.parse(&mut pb).unwrap(), Vec::from("  "));
+        assert_eq!(pb.get_cursor(), 18);
+
+        let mut sc = StreamContent::new(2);
+        let v = Vec::from("stream\r\n  endstream".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(sc.parse(&mut pb).unwrap(), Vec::from("  "));
+        assert_eq!(pb.get_cursor(), 19);
+        let mut sc = StreamContent::new(2);
+        let v = Vec::from("stream\r\n  endstream ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(sc.parse(&mut pb).unwrap(), Vec::from("  "));
+        assert_eq!(pb.get_cursor(), 19);
+
+        let mut sc = StreamContent::new(2);
+        let v = Vec::from("stream\r\n  \nendstream ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(sc.parse(&mut pb).unwrap(), Vec::from("  "));
+        assert_eq!(pb.get_cursor(), 20);
+
+        let mut sc = StreamContent::new(2);
+        let v = Vec::from("stream\r\n  \r\nendstream ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(sc.parse(&mut pb).unwrap(), Vec::from("  "));
+        assert_eq!(pb.get_cursor(), 21);
+
+        // wrong length
+        let mut sc = StreamContent::new(2);
+        let v = Vec::from("stream\r\n   \r\nendstream ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(sc.parse(&mut pb), Err(ErrorKind::GuardError("invalid endstream")));
+        assert_eq!(pb.get_cursor(), 0);
+
+        // wrong eol
+        let mut sc = StreamContent::new(2);
+        let v = Vec::from("stream\r  \r\nendstream ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(sc.parse(&mut pb), Err(ErrorKind::GuardError("not a valid stream marker")));
+        assert_eq!(pb.get_cursor(), 0);
+        let mut sc = StreamContent::new(2);
+
+        // flexible endstream eol
+        let v = Vec::from("stream\r\n  \rendstream ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(sc.parse(&mut pb).unwrap(), Vec::from("  "));
+        assert_eq!(pb.get_cursor(), 20);
     }
 }
