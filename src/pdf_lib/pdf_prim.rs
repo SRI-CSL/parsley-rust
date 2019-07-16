@@ -134,6 +134,7 @@ impl ParsleyParser for Real {
     }
 }
 
+// Representation does not include the demarcating brackets.
 pub struct HexString;
 impl ParsleyParser for HexString {
     type T = String;
@@ -141,13 +142,13 @@ impl ParsleyParser for HexString {
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
         let cursor = buf.get_cursor();
         if buf.peek() != Some(60) {
-            return Err(ErrorKind::GuardError("not at hex string"));
+            return Err(ErrorKind::GuardError("not at hex string"))
         };
         buf.incr_cursor();
         let bytes = buf.parse_allowed_bytes("0123456789abcdefABCDEF".as_bytes())?;
         if buf.peek() != Some(62) {
             buf.set_cursor(cursor);
-            return Err(ErrorKind::GuardError("not at valid hex string"));
+            return Err(ErrorKind::GuardError("not at valid hex string"))
         }
         buf.incr_cursor();
 
@@ -158,10 +159,78 @@ impl ParsleyParser for HexString {
     }
 }
 
+// Raw: does not perform any backslash processing, normalization or validation.
+// The representation does not include the demarcating parentheses.
+pub struct RawLiteralString;
+impl ParsleyParser for RawLiteralString {
+    // since the literal could contain arbitrary bytes, the raw
+    // version is represented as a byte vector.
+    type T = Vec<u8>;
+
+    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+        let cursor = buf.get_cursor();
+        if buf.peek() != Some(40) {
+            return Err(ErrorKind::GuardError("not at literal string"))
+        };
+
+        let mut v = Vec::new();
+        let mut depth = 1;
+        buf.incr_cursor();
+
+        loop {
+            let bytes = buf.parse_bytes_until("()".as_bytes())?;
+            v.extend_from_slice(&bytes);
+
+            match buf.peek() {
+                Some(40) => {
+                    buf.incr_cursor();
+                    depth += 1;
+                    v.extend_from_slice("(".as_bytes());
+                },
+                Some(41) => {
+                    buf.incr_cursor();
+                    depth -= 1;
+                    if depth == 0 { break; }
+                    v.extend_from_slice(")".as_bytes());
+                },
+                Some(_) => {
+                    // can never happen
+                    panic!("unexpected lit string");
+                }
+                None => {
+                    buf.set_cursor(cursor);
+                    return Err(ErrorKind::EndOfBuffer)
+                }
+            }
+        }
+        Ok(v)
+    }
+}
+
+// Raw names: does not perform normalization or UTF decoding, and
+// the representation does not include the leading '/'.
+pub struct RawName;
+impl ParsleyParser for RawName {
+    type T = Vec<u8>;
+
+    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+        if buf.peek() != Some(47) {
+            return Err(ErrorKind::GuardError("not at name object"))
+        }
+        buf.incr_cursor();
+
+        // terminated by whitespace or delimiter characters.  empty
+        // names are considered valid.
+        let v = buf.parse_bytes_until(" \0\t\r\n\x0c()<>[]{}/%".as_bytes())?;
+        Ok(v)
+    }
+}
+
 #[cfg(test)]
 mod test_pdf_prim {
     use super::super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, ErrorKind};
-    use super::{WhitespaceNoEOL, WhitespaceEOL, Comment, Boolean, Null, Integer, Real, HexString};
+    use super::{WhitespaceNoEOL, WhitespaceEOL, Comment, Boolean, Null, Integer, Real};
+    use super::{HexString, RawLiteralString, RawName};
 
     #[test]
     fn noeol() {
@@ -172,14 +241,12 @@ mod test_pdf_prim {
         assert_eq!(ws.parse(&mut pb), Ok(()));
         assert_eq!(pb.get_cursor(), 0);
 
-        let mut v = Vec::new();
-        v.extend_from_slice(" \r ".as_bytes());
+        let v = Vec::from(" \r ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(ws.parse(&mut pb), Ok(()));
         assert_eq!(pb.get_cursor(), 3);
 
-        let mut v = Vec::new();
-        v.extend_from_slice(" \r\n".as_bytes());
+        let v = Vec::from(" \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(ws.parse(&mut pb), Ok(()));
         assert_eq!(pb.get_cursor(), 1);
@@ -194,14 +261,12 @@ mod test_pdf_prim {
         assert_eq!(ws.parse(&mut pb), Ok(()));
         assert_eq!(pb.get_cursor(), 0);
 
-        let mut v = Vec::new();
-        v.extend_from_slice(" \r ".as_bytes());
+        let v = Vec::from(" \r ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(ws.parse(&mut pb), Ok(()));
         assert_eq!(pb.get_cursor(), 3);
 
-        let mut v = Vec::new();
-        v.extend_from_slice(" \r\n".as_bytes());
+        let v = Vec::from(" \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(ws.parse(&mut pb), Ok(()));
         assert_eq!(pb.get_cursor(), 3);
@@ -216,14 +281,12 @@ mod test_pdf_prim {
         assert_eq!(com.parse(&mut pb), Err(ErrorKind::GuardError("not at comment")));
         assert_eq!(pb.get_cursor(), 0);
 
-        let mut v = Vec::new();
-        v.extend_from_slice("% ".as_bytes());
+        let v = Vec::from("% ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(com.parse(&mut pb), Ok(()));
         assert_eq!(pb.get_cursor(), 2);
 
-        let mut v = Vec::new();
-        v.extend_from_slice("% \r\n".as_bytes());
+        let v = Vec::from("% \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(com.parse(&mut pb), Ok(()));
         assert_eq!(pb.get_cursor(), 4);
@@ -238,20 +301,17 @@ mod test_pdf_prim {
         assert_eq!(bl.parse(&mut pb), Err(ErrorKind::GuardError("not at boolean")));
         assert_eq!(pb.get_cursor(), 0);
 
-        let mut v = Vec::new();
-        v.extend_from_slice(" ".as_bytes());
+        let v = Vec::from(" ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(bl.parse(&mut pb), Err(ErrorKind::GuardError("not at boolean")));
         assert_eq!(pb.get_cursor(), 0);
 
-        let mut v = Vec::new();
-        v.extend_from_slice("true".as_bytes());
+        let v = Vec::from("true".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(bl.parse(&mut pb), Ok(true));
         assert_eq!(pb.get_cursor(), 4);
 
-        let mut v = Vec::new();
-        v.extend_from_slice("false ".as_bytes());
+        let v = Vec::from("false ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(bl.parse(&mut pb), Ok(false));
         assert_eq!(pb.get_cursor(), 5);
@@ -266,20 +326,17 @@ mod test_pdf_prim {
         assert_eq!(null.parse(&mut pb), Err(ErrorKind::GuardError("not at null")));
         assert_eq!(pb.get_cursor(), 0);
 
-        let mut v = Vec::new();
-        v.extend_from_slice(" ".as_bytes());
+        let v = Vec::from(" ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(null.parse(&mut pb), Err(ErrorKind::GuardError("not at null")));
         assert_eq!(pb.get_cursor(), 0);
 
-        let mut v = Vec::new();
-        v.extend_from_slice("null".as_bytes());
+        let v = Vec::from("null".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(null.parse(&mut pb), Ok(()));
         assert_eq!(pb.get_cursor(), 4);
 
-        let mut v = Vec::new();
-        v.extend_from_slice("null ".as_bytes());
+        let v = Vec::from("null ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(null.parse(&mut pb), Ok(()));
         assert_eq!(pb.get_cursor(), 4);
@@ -293,32 +350,27 @@ mod test_pdf_prim {
         assert_eq!(int.parse(&mut pb), Err(ErrorKind::GuardError("not at integer")));
         assert_eq!(pb.get_cursor(), 0);
 
-        let mut v = Vec::new();
-        v.extend_from_slice(" 1".as_bytes());
+        let v = Vec::from(" 1".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(int.parse(&mut pb), Err(ErrorKind::GuardError("not at integer")));
         assert_eq!(pb.get_cursor(), 0);
 
-        let mut v = Vec::new();
-        v.extend_from_slice("-".as_bytes());
+        let v = Vec::from("-".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(int.parse(&mut pb), Err(ErrorKind::GuardError("not at integer")));
         assert_eq!(pb.get_cursor(), 0);
 
-        let mut v = Vec::new();
-        v.extend_from_slice("1".as_bytes());
+        let v = Vec::from("1".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(int.parse(&mut pb), Ok(1));
         assert_eq!(pb.get_cursor(), 1);
 
-        let mut v = Vec::new();
-        v.extend_from_slice("23 ".as_bytes());
+        let v = Vec::from("23 ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(int.parse(&mut pb), Ok(23));
         assert_eq!(pb.get_cursor(), 2);
 
-        let mut v = Vec::new();
-        v.extend_from_slice("-23 ".as_bytes());
+        let v = Vec::from("-23 ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(int.parse(&mut pb), Ok(-23));
         assert_eq!(pb.get_cursor(), 3);
@@ -333,32 +385,27 @@ mod test_pdf_prim {
         assert_eq!(real.parse(&mut pb), Err(ErrorKind::GuardError("not at real")));
         assert_eq!(pb.get_cursor(), 0);
 
-        let mut v = Vec::new();
-        v.extend_from_slice(" 1".as_bytes());
+        let v = Vec::from(" 1".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(real.parse(&mut pb), Err(ErrorKind::GuardError("not at real")));
         assert_eq!(pb.get_cursor(), 0);
 
-        let mut v = Vec::new();
-        v.extend_from_slice("-".as_bytes());
+        let v = Vec::from("-".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(real.parse(&mut pb), Err(ErrorKind::GuardError("not at real")));
         assert_eq!(pb.get_cursor(), 0);
 
-        let mut v = Vec::new();
-        v.extend_from_slice("1".as_bytes());
+        let v = Vec::from("1".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(real.parse(&mut pb), Ok((false, 1, 1)));
         assert_eq!(pb.get_cursor(), 1);
 
-        let mut v = Vec::new();
-        v.extend_from_slice("23.01 ".as_bytes());
+        let v = Vec::from("23.01 ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(real.parse(&mut pb), Ok((false, 2301, 100)));
         assert_eq!(pb.get_cursor(), 5);
 
-        let mut v = Vec::new();
-        v.extend_from_slice("-23.10 ".as_bytes());
+        let v = Vec::from("-23.10 ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(real.parse(&mut pb), Ok((true, 2310, 100)));
         assert_eq!(pb.get_cursor(), 6);
@@ -373,34 +420,109 @@ mod test_pdf_prim {
         assert_eq!(hex.parse(&mut pb), Err(ErrorKind::GuardError("not at hex string")));
         assert_eq!(pb.get_cursor(), 0);
 
-        let mut v = Vec::new();
-        v.extend_from_slice(" ".as_bytes());
+        let v = Vec::from(" ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(hex.parse(&mut pb), Err(ErrorKind::GuardError("not at hex string")));
         assert_eq!(pb.get_cursor(), 0);
 
-        let mut v = Vec::new();
-        v.extend_from_slice("< ".as_bytes());
+        let v = Vec::from("< ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(hex.parse(&mut pb), Err(ErrorKind::GuardError("not at valid hex string")));
         assert_eq!(pb.get_cursor(), 0);
 
-        let mut v = Vec::new();
-        v.extend_from_slice("<> ".as_bytes());
+        let v = Vec::from("<> ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(hex.parse(&mut pb).unwrap().len(), 0);
         assert_eq!(pb.get_cursor(), 2);
 
-        let mut v = Vec::new();
-        v.extend_from_slice("<1a9> ".as_bytes());
+        let v = Vec::from("<1a9> ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(hex.parse(&mut pb).unwrap(), String::from("1a90"));
         assert_eq!(pb.get_cursor(), 5);
 
-        let mut v = Vec::new();
-        v.extend_from_slice("<1a90> ".as_bytes());
+        let v = Vec::from("<1a90> ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(hex.parse(&mut pb).unwrap(), String::from("1a90"));
         assert_eq!(pb.get_cursor(), 6);
+    }
+
+    #[test]
+    fn raw_lit_string() {
+        let mut lit = RawLiteralString;
+
+        let v = Vec::new();
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(lit.parse(&mut pb), Err(ErrorKind::GuardError("not at literal string")));
+        assert_eq!(pb.get_cursor(), 0);
+
+        let v = Vec::from(" ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(lit.parse(&mut pb), Err(ErrorKind::GuardError("not at literal string")));
+        assert_eq!(pb.get_cursor(), 0);
+
+        let v = Vec::from("( ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(lit.parse(&mut pb), Err(ErrorKind::EndOfBuffer));
+        assert_eq!(pb.get_cursor(), 0);
+
+        let v = Vec::from("() ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(lit.parse(&mut pb).unwrap().len(), 0);
+        assert_eq!(pb.get_cursor(), 2);
+
+        let v = Vec::from("(1a9) ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(lit.parse(&mut pb).unwrap(), Vec::from("1a9".as_bytes()));
+        assert_eq!(pb.get_cursor(), 5);
+
+        let v = Vec::from("(1a(9)0) ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(lit.parse(&mut pb).unwrap(), Vec::from("1a(9)0".as_bytes()));
+        assert_eq!(pb.get_cursor(), 8);
+
+        let v = Vec::from("(1a(90) ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(lit.parse(&mut pb), Err(ErrorKind::EndOfBuffer));
+        assert_eq!(pb.get_cursor(), 0);
+
+        let v = Vec::from("(1a9)0) ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(lit.parse(&mut pb), Ok(Vec::from("1a9".as_bytes())));
+        assert_eq!(pb.get_cursor(), 5);
+    }
+
+    #[test]
+    fn raw_name() {
+        let mut name = RawName;
+
+        let v = Vec::new();
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(name.parse(&mut pb), Err(ErrorKind::GuardError("not at name object")));
+        assert_eq!(pb.get_cursor(), 0);
+
+        let v = Vec::from(" ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(name.parse(&mut pb), Err(ErrorKind::GuardError("not at name object")));
+        assert_eq!(pb.get_cursor(), 0);
+
+        let v = Vec::from("/ ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(name.parse(&mut pb).unwrap().len(), 0);
+        assert_eq!(pb.get_cursor(), 1);
+
+        let v = Vec::from("/{ ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(name.parse(&mut pb).unwrap().len(), 0);
+        assert_eq!(pb.get_cursor(), 1);
+
+        let v = Vec::from("/1a9) ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(name.parse(&mut pb).unwrap(), Vec::from("1a9".as_bytes()));
+        assert_eq!(pb.get_cursor(), 4);
+
+        let v = Vec::from("/(1a(9)0) ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(name.parse(&mut pb).unwrap(), Vec::from("".as_bytes()));
+        assert_eq!(pb.get_cursor(), 1);
     }
 }
