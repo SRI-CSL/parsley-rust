@@ -98,6 +98,22 @@ impl ParseBuffer {
         self.buf.len() - self.ofs
     }
 
+    pub fn peek(&self) -> Option<u8> {
+        if self.ofs < self.buf.len() {
+            Some(self.buf[self.ofs])
+        } else {
+            None
+        }
+    }
+
+    // to be used only for low-level primitives.
+    pub fn incr_cursor(&mut self) -> () {
+        self.ofs += 1;
+    }
+    pub fn decr_cursor(&mut self) -> () {
+        self.ofs -= 1;
+    }
+
     // Cursor management: get and set the parsing cursor; to allow
     // parsing to backtrack or rewind after an unsuccessful complex
     // parse.
@@ -133,6 +149,60 @@ impl ParseBuffer {
         Ok(t)
     }
 
+    // A specialized form of guarded to avoid creation of boxed FnMut
+    // closures, which seem to require 'static lifetimes.  The match
+    // stops at the first disallowed byte.
+    pub fn parse_allowed_bytes(&mut self, allow: &[u8]) ->
+        Result<Vec<u8>, ErrorKind>
+    {
+        let mut consumed = 0;
+        let mut r = Vec::new();
+        for b in self.buf[self.ofs..].iter() {
+            if !allow.contains(b) { break; }
+            r.push(*b);
+            consumed += 1;
+        }
+        self.ofs += consumed;
+        Ok(r)
+    }
+
+    // A specialized form of guarded to avoid creation of boxed FnMut
+    // closures, which seem to require 'static lifetimes.  The match
+    // stops at the first disallowed byte.
+    //
+    // TODO: a version that returns ErrorKind::EndOfBuffer if the
+    // terminator is not found.
+    pub fn parse_bytes_until(&mut self, terminators: &[u8]) ->
+        Result<Vec<u8>, ErrorKind>
+    {
+        let mut consumed = 0;
+        let mut r = Vec::new();
+        for b in self.buf[self.ofs..].iter() {
+            if terminators.contains(b) { break; }
+            r.push(*b);
+            consumed += 1;
+        }
+        self.ofs += consumed;
+        Ok(r)
+    }
+
+    // Checks for a tag at the current location without moving the cursor.
+    pub fn check_prefix(&mut self, prefix: &[u8]) -> Result<bool, ErrorKind>
+    {
+        Ok(self.buf[self.ofs..].starts_with(prefix))
+    }
+
+    // Passes over a tag at the current location, returns false if tag doesn't match.
+    pub fn skip_prefix(&mut self, prefix: &[u8]) -> Result<bool, ErrorKind>
+    {
+        if self.buf[self.ofs..].starts_with(prefix) {
+            self.ofs += prefix.len();
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
     // Scanning for a tag.  The cursor is set to the *start* of the
     // tag when successful, and the number of bytes skipped over is
     // returned.  If the tag is not found, the cursor is not moved.
@@ -145,7 +215,7 @@ impl ParseBuffer {
                 self.ofs = self.ofs + skip;
                 return Ok(skip)
             }
-            skip = skip + 1;
+            skip += 1;
         }
         Err(ErrorKind::EndOfBuffer)
     }
@@ -168,7 +238,7 @@ impl ParseBuffer {
             Err(ErrorKind::EndOfBuffer)
         } else {
             let ret = &self.buf[self.ofs..(self.ofs+len)];
-            self.ofs = self.ofs + len;
+            self.ofs += len;
             Ok(ret)
         }
     }
