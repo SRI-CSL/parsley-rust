@@ -2,12 +2,16 @@
 
 use super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, ErrorKind};
 
+// The whitespace parsers require at least one whitespace character
+// for a successful parse.
+
 pub struct WhitespaceEOL;
 impl ParsleyParser for WhitespaceEOL {
     type T = ();
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
-        buf.parse_allowed_bytes(" \0\t\r\n\x0c".as_bytes())?;
+        let v = buf.parse_allowed_bytes(" \0\t\r\n\x0c".as_bytes())?;
+        if v.len() == 0 { return Err(ErrorKind::GuardError("not at whitespace-eol")) };
         Ok(())
     }
 }
@@ -18,6 +22,7 @@ impl ParsleyParser for WhitespaceNoEOL {
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
         let ws = buf.parse_allowed_bytes(" \0\t\r\x0c".as_bytes())?;
+        if ws.len() == 0 { return Err(ErrorKind::GuardError("not at whitespace-noeol")) };
         // If the last character is '\r' (13), check if the next one
         // is '\n' (10).  If so, rewind by one character.
         if (ws.last() == Some(&13)) & (buf.peek() == Some(10)) {
@@ -294,7 +299,7 @@ mod test_pdf_prim {
 
         let v = Vec::new();
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(ws.parse(&mut pb), Ok(()));
+        assert_eq!(ws.parse(&mut pb), Err(ErrorKind::GuardError("not at whitespace-noeol")));
         assert_eq!(pb.get_cursor(), 0);
 
         let v = Vec::from(" \r ".as_bytes());
@@ -314,7 +319,7 @@ mod test_pdf_prim {
 
         let v = Vec::new();
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(ws.parse(&mut pb), Ok(()));
+        assert_eq!(ws.parse(&mut pb), Err(ErrorKind::GuardError("not at whitespace-eol")));
         assert_eq!(pb.get_cursor(), 0);
 
         let v = Vec::from(" \r ".as_bytes());
