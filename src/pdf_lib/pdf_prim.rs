@@ -1,6 +1,7 @@
 // Basic primitive (non-compound or non-recursive) PDF objects.
 
 use super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, ErrorKind};
+use super::super::pcore::prim_binary::{BinaryMatcher};
 
 // The whitespace parsers require at least one whitespace character
 // for a successful parse.
@@ -47,6 +48,29 @@ impl ParsleyParser for Comment {
         Ok(())
     }
 }
+
+// Keyword matcher
+
+pub struct Keyword {
+    matcher: BinaryMatcher
+}
+impl Keyword {
+    pub fn new(word: &[u8]) -> Keyword {
+        Keyword { matcher: BinaryMatcher::new(word) }
+    }
+}
+impl ParsleyParser for Keyword {
+    type T = ();
+
+    // The buffer should be positioned at the start of the keyword for a successful match.
+    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+        &self.matcher.parse(buf)?;
+        Ok(())
+    }
+}
+
+// Booleans are almost keywords, except that they have a semantic
+// value.  Include Null here since it is an explicit PDF object.
 
 pub struct Boolean;
 impl ParsleyParser for Boolean {
@@ -334,6 +358,7 @@ mod test_pdf_prim {
     use super::{WhitespaceNoEOL, WhitespaceEOL, Comment, Boolean, Null};
     use super::{Number, NumberT};
     use super::{HexString, RawLiteralString, RawName, StreamContent};
+    use super::{Keyword};
 
     #[test]
     fn noeol() {
@@ -809,5 +834,18 @@ mod test_pdf_prim {
         let mut pb = ParseBuffer::new(v);
         assert_eq!(sc.parse(&mut pb), Ok(Vec::from("  ")));
         assert_eq!(pb.get_cursor(), 20);
+    }
+
+    #[test]
+    fn keyword() {
+        let mut k = Keyword::new("obj".as_bytes());
+
+        let v = Vec::from("obj".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(k.parse(&mut pb), Ok(()));
+
+        let v = Vec::from(" obj".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_ne!(k.parse(&mut pb), Ok(()));
     }
 }
