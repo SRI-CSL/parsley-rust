@@ -58,15 +58,15 @@ impl ParsleyParser for WhitespaceNoEOL {
 
 pub struct Comment;
 impl ParsleyParser for Comment {
-    type T = ();
+    type T = Vec<u8>;
 
     // The buffer should be positioned at the '%'; it consumes upto
     // and including end-of-line or upto end-of-buffer.
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
         if !(buf.peek() == Some(37)) { return Err(ErrorKind::GuardError("not at comment")) }
-        let _ = buf.parse_bytes_until("\n".as_bytes())?;
+        let c = buf.parse_bytes_until("\n".as_bytes())?;
         if buf.peek() == Some(10) { buf.incr_cursor(); }
-        Ok(())
+        Ok(c)
     }
 }
 
@@ -508,12 +508,12 @@ mod test_pdf_prim {
 
         let v = Vec::from("% ".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(com.parse(&mut pb), Ok(()));
+        assert_eq!(com.parse(&mut pb), Ok(vec![37, 32]));
         assert_eq!(pb.get_cursor(), 2);
 
         let v = Vec::from("% \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(com.parse(&mut pb), Ok(()));
+        assert_eq!(com.parse(&mut pb), Ok(vec![37, 32, 13]));
         assert_eq!(pb.get_cursor(), 4);
     }
 

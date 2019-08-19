@@ -258,7 +258,7 @@ pub enum PDFObjT {
     Name(Vec<u8>),
     Stream(StreamT),
     Null(()),
-    Comment(()),
+    Comment(Vec<u8>),
     Number(NumberT)
 }
 
