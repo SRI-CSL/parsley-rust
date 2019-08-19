@@ -1,5 +1,6 @@
 // Basic primitive (non-compound or non-recursive) PDF objects.
 
+use std::collections::{HashSet};
 use super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, ErrorKind};
 use super::super::pcore::prim_binary::{BinaryMatcher};
 
@@ -213,8 +214,19 @@ impl ParsleyParser for Number {
 
 // Representation does not include the demarcating brackets.
 pub struct HexString;
+// assumes input is hex
+fn int_of_hex(b: u8) -> u8 {
+    assert!(b.is_ascii_hexdigit());
+    if b'0' <= b && b <= b'9' {
+        b - b'0'
+    } else if b'a' <= b && b <= b'f' {
+        b - b'a' + 10
+    } else {
+        b - b'A' + 10
+    }
+}
 impl ParsleyParser for HexString {
-    type T = String;
+    type T = Vec<u8>;
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
         let cursor = buf.get_cursor();
@@ -222,17 +234,28 @@ impl ParsleyParser for HexString {
             return Err(ErrorKind::GuardError("not at hex string"))
         };
         buf.incr_cursor();
-        let bytes = buf.parse_allowed_bytes("0123456789abcdefABCDEF".as_bytes())?;
+        let bytes = buf.parse_allowed_bytes("0123456789abcdefABCDEF \n\r\t\0\x0c".as_bytes())?;
         if buf.peek() != Some(62) {
             buf.set_cursor(cursor);
             return Err(ErrorKind::GuardError("not at valid hex string"))
         }
         buf.incr_cursor();
 
-        let mut s = String::new();
-        for b in bytes.iter() { s.push(char::from(*b)); }
-        if s.len() % 2 != 0 { s.push('0'); }
-        Ok(s)
+        let mut hx = Vec::new();
+        let mut ws = HashSet::new();
+        for c in [b' ', b'\r', b'\n', b'\t', b'\0', b'\x0c'].iter() { ws.insert(c); }
+        for b in bytes.iter() {
+            // skip over whitespace
+            if !ws.contains(b) { hx.push(*b) }
+        }
+        if hx.len() % 2 != 0 { hx.push(b'0'); }
+        // Convert hex pairs to bytes
+        let mut v = Vec::new();
+        for i in 0 .. hx.len() / 2 {
+            let b = 16 * int_of_hex(hx[2*i]) + int_of_hex(hx[2*i + 1]);
+            v.push(b)
+        }
+        Ok(v)
     }
 }
 
@@ -709,18 +732,23 @@ mod test_pdf_prim {
 
         let v = Vec::from("<1a9> ".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(hex.parse(&mut pb), Ok(String::from("1a90")));
+        assert_eq!(hex.parse(&mut pb), Ok(vec![26, 144]));
         assert_eq!(pb.get_cursor(), 5);
 
         let v = Vec::from("<1a90> ".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(hex.parse(&mut pb), Ok(String::from("1a90")));
+        assert_eq!(hex.parse(&mut pb), Ok(vec![26, 144]));
         assert_eq!(pb.get_cursor(), 6);
 
         let v = Vec::from("<1a9q> ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(hex.parse(&mut pb), Err(ErrorKind::GuardError("not at valid hex string")));
         assert_eq!(pb.get_cursor(), 0);
+
+        let v = Vec::from("< 1\na\r9\t1\r> ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(hex.parse(&mut pb), Ok(vec![26, 145]));
+        assert_eq!(pb.get_cursor(), 11);
     }
 
     #[test]
