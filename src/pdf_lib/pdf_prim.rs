@@ -6,24 +6,44 @@ use super::super::pcore::prim_binary::{BinaryMatcher};
 // The whitespace parsers require at least one whitespace character
 // for a successful parse.
 
-pub struct WhitespaceEOL;
+pub struct WhitespaceEOL {
+    empty_ok: bool
+}
+impl WhitespaceEOL {
+    pub fn new(empty_ok: bool) -> WhitespaceEOL {
+        WhitespaceEOL { empty_ok }
+    }
+}
+
 impl ParsleyParser for WhitespaceEOL {
     type T = ();
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
         let v = buf.parse_allowed_bytes(" \0\t\r\n\x0c".as_bytes())?;
-        if v.len() == 0 { return Err(ErrorKind::GuardError("not at whitespace-eol")) };
+        if v.len() == 0 && !self.empty_ok {
+            return Err(ErrorKind::GuardError("not at whitespace-eol"))
+        };
         Ok(())
     }
 }
 
-pub struct WhitespaceNoEOL;
+pub struct WhitespaceNoEOL {
+    empty_ok: bool
+}
+impl WhitespaceNoEOL {
+    pub fn new(empty_ok: bool) -> WhitespaceNoEOL {
+        WhitespaceNoEOL { empty_ok }
+    }
+}
+
 impl ParsleyParser for WhitespaceNoEOL {
     type T = ();
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
         let ws = buf.parse_allowed_bytes(" \0\t\r\x0c".as_bytes())?;
-        if ws.len() == 0 { return Err(ErrorKind::GuardError("not at whitespace-noeol")) };
+        if ws.len() == 0 && !self.empty_ok {
+            return Err(ErrorKind::GuardError("not at whitespace-noeol"))
+        };
         // If the last character is '\r' (13), check if the next one
         // is '\n' (10).  If so, rewind by one character.
         if (ws.last() == Some(&13)) & (buf.peek() == Some(10)) {
@@ -129,14 +149,20 @@ impl NumberT {
     }
     pub fn is_positive(&self) -> bool {
         match &self {
-            NumberT::Integer(i) => i >= &0,
+            NumberT::Integer(i)  => i >= &0,
             NumberT::Real(n, _d) => n >= &0
         }
     }
     pub fn is_zero(&self) -> bool {
         match &self {
-            NumberT::Integer(i) => i == &0,
+            NumberT::Integer(i)  => i == &0,
             NumberT::Real(n, _d) => n == &0
+        }
+    }
+    pub fn int_val(&self) -> i64 {
+        match &self {
+            NumberT::Integer(i) => *i,
+            NumberT::Real(_, _) => panic!("Called `NumberT::int_val` on a real value")
         }
     }
 }
@@ -362,7 +388,7 @@ mod test_pdf_prim {
 
     #[test]
     fn noeol() {
-        let mut ws = WhitespaceNoEOL;
+        let mut ws = WhitespaceNoEOL::new(false);
 
         let v = Vec::new();
         let mut pb = ParseBuffer::new(v);
@@ -382,11 +408,51 @@ mod test_pdf_prim {
 
     #[test]
     fn eol() {
-        let mut ws = WhitespaceEOL;
+        let mut ws = WhitespaceEOL::new(false);
 
         let v = Vec::new();
         let mut pb = ParseBuffer::new(v);
         assert_eq!(ws.parse(&mut pb), Err(ErrorKind::GuardError("not at whitespace-eol")));
+        assert_eq!(pb.get_cursor(), 0);
+
+        let v = Vec::from(" \r ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(ws.parse(&mut pb), Ok(()));
+        assert_eq!(pb.get_cursor(), 3);
+
+        let v = Vec::from(" \r\n".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(ws.parse(&mut pb), Ok(()));
+        assert_eq!(pb.get_cursor(), 3);
+    }
+
+    #[test]
+    fn noeol_empty() {
+        let mut ws = WhitespaceNoEOL::new(true);
+
+        let v = Vec::new();
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(ws.parse(&mut pb), Ok(()));
+        assert_eq!(pb.get_cursor(), 0);
+
+        let v = Vec::from(" \r ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(ws.parse(&mut pb), Ok(()));
+        assert_eq!(pb.get_cursor(), 3);
+
+        let v = Vec::from(" \r\n".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(ws.parse(&mut pb), Ok(()));
+        assert_eq!(pb.get_cursor(), 1);
+    }
+
+    #[test]
+    fn eol_empty() {
+        let mut ws = WhitespaceEOL::new(true);
+
+        let v = Vec::new();
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(ws.parse(&mut pb), Ok(()));
         assert_eq!(pb.get_cursor(), 0);
 
         let v = Vec::from(" \r ".as_bytes());
