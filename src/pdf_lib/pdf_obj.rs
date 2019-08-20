@@ -38,7 +38,7 @@ impl ArrayP {
             // for now in the handwritten case, just be close enough.
             let mut ws = WhitespaceEOL::new(true);
             ws.parse(buf)?;
-            if let Err(_) = buf.skip_prefix("]".as_bytes()) {
+            if let Err(_) = buf.exact("]".as_bytes()) {
                 let mut p = PDFObjP::new();
                 let o = p.parse(buf)?;
                 self.val.push(o);
@@ -84,7 +84,7 @@ impl DictP {
             let mut ws = WhitespaceEOL::new(true); // allow empty whitespace for now
             ws.parse(buf)?;
 
-            if let Err(_) = buf.skip_prefix(">>".as_bytes()) {
+            if let Err(_) = buf.exact(">>".as_bytes()) {
                 let mut p = RawName;
                 let n = p.parse(buf)?;
                 if self.names.contains(&n) {
@@ -179,7 +179,7 @@ impl IndirectP {
             return Err(ErrorKind::GuardError("invalid object generation"))
         }
         ws.parse(buf)?;
-        if let Err(_) = buf.skip_prefix("obj".as_bytes()) {
+        if let Err(_) = buf.exact("obj".as_bytes()) {
             return Err(ErrorKind::GuardError("invalid object tag"))
         }
         ws.parse(buf)?;
@@ -205,7 +205,7 @@ impl IndirectP {
             };
 
         ws.parse(buf)?;
-        if let Err(_) = buf.skip_prefix("endobj".as_bytes()) {
+        if let Err(_) = buf.exact("endobj".as_bytes()) {
             return Err(ErrorKind::GuardError("invalid endobject tag"))
         }
 
@@ -261,7 +261,7 @@ impl ReferenceP {
             return Err(ErrorKind::GuardError("invalid ref-object generation"))
         }
         ws.parse(buf)?;
-        if let Err(_) = buf.skip_prefix("R".as_bytes()) {
+        if let Err(_) = buf.exact("R".as_bytes()) {
             return Err(ErrorKind::GuardError("invalid reference tag"))
         }
 

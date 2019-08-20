@@ -98,9 +98,9 @@ impl ParsleyParser for Boolean {
     type T = bool;
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
-        let mut b = buf.skip_prefix("true".as_bytes());
+        let mut b = buf.exact("true".as_bytes());
         if let Err(_) = b {
-            b = buf.skip_prefix("false".as_bytes());
+            b = buf.exact("false".as_bytes());
             if let Err(_) = b {
                 Err(ErrorKind::GuardError("not at boolean"))
             } else {
@@ -117,7 +117,7 @@ impl ParsleyParser for Null {
     type T = ();
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
-        let null = buf.skip_prefix("null".as_bytes());
+        let null = buf.exact("null".as_bytes());
         if let Err(_) = null {
             Err(ErrorKind::GuardError("not at null"))
         } else {
@@ -368,7 +368,7 @@ impl ParsleyParser for StreamContent {
     // has been consumed.
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
         let cursor = buf.get_cursor();
-        let is_stream = buf.skip_prefix("stream".as_bytes());
+        let is_stream = buf.exact("stream".as_bytes());
         if let Err(_) = is_stream {
             return Err(ErrorKind::GuardError("not at stream content"))
         }
@@ -410,7 +410,7 @@ impl ParsleyParser for StreamContent {
 
         // Go back to the end of the content
         buf.set_cursor(stream_end_cursor);
-        if let Err(_) = buf.skip_prefix("endstream".as_bytes()) {
+        if let Err(_) = buf.exact("endstream".as_bytes()) {
             buf.set_cursor(cursor);
             return Err(ErrorKind::GuardError("invalid endstream"))
         }

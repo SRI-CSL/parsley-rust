@@ -192,17 +192,6 @@ impl ParseBuffer {
         Ok(self.buf[self.ofs..].starts_with(prefix))
     }
 
-    // Passes over a tag at the current location, returns false if tag doesn't match.
-    pub fn skip_prefix(&mut self, prefix: &[u8]) -> Result<bool, ErrorKind>
-    {
-        if self.buf[self.ofs..].starts_with(prefix) {
-            self.ofs += prefix.len();
-            Ok(true)
-        } else {
-            Err(ErrorKind::GuardError("no matching tag to skip"))
-        }
-    }
-
     // Scanning for a tag.  The cursor is set to the *start* of the
     // tag when successful, and the number of bytes skipped over is
     // returned.  If the tag is not found, the cursor is not moved.
@@ -223,10 +212,10 @@ impl ParseBuffer {
     // Exact match on a tag at the current cursor location.  On
     // success, cursor is advanced past the exact match, but not moved
     // on failure.
-    pub fn exact(&mut self, tag: &[u8]) -> Result<usize, ErrorKind> {
+    pub fn exact(&mut self, tag: &[u8]) -> Result<bool, ErrorKind> {
         if self.buf[self.ofs..].starts_with(tag) {
             self.ofs = self.ofs + tag.len();
-            Ok(tag.len())
+            Ok(true)
         } else {
             Err(ErrorKind::GuardError("match"))
         }

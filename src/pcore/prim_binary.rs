@@ -34,7 +34,7 @@ impl BinaryMatcher {
 }
 
 impl ParsleyParser for BinaryMatcher {
-    type T = usize;
+    type T = bool;
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
         buf.exact(&self.tag)
@@ -129,7 +129,7 @@ mod test_binary {
         assert_eq!(pb.get_cursor(), 0);
 
         let mut pb = ParseBuffer::new(Vec::from("%PDF-".as_bytes()));
-        assert_eq!(s.parse(&mut pb), Ok(5));
+        assert_eq!(s.parse(&mut pb), Ok(true));
         assert_eq!(pb.get_cursor(), 5);
 
         let mut pb = ParseBuffer::new(Vec::from(" %PDF-".as_bytes()));
