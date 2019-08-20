@@ -518,6 +518,18 @@ mod test_pdf_obj {
         assert_eq!(p.parse(&mut pb), Ok(PDFObjT::Dict(DictT { val: hm })));
         assert_eq!(pb.get_cursor(), vlen);
 
+        // version with minimal whitespace
+        let v = Vec::from("<</Entry [1 0 R]>>");
+        let vlen = v.len();
+        let mut pb = ParseBuffer::new(v);
+        let mut aval = Vec::new();
+        aval.push(PDFObjT::Reference(ReferenceT::new(1, 0)));
+        let entval = PDFObjT::Array(ArrayT::new(aval));
+        let mut hm = HashMap::new();
+        hm.insert(Vec::from("Entry".as_bytes()), entval);
+        assert_eq!(p.parse(&mut pb), Ok(PDFObjT::Dict(DictT { val: hm })));
+        assert_eq!(pb.get_cursor(), vlen);
+
         let v = Vec::from("<< /Entry [ 1 0 R ] /Entry \r\n >>");
         let mut pb = ParseBuffer::new(v);
         assert_eq!(p.parse(&mut pb), Err(ErrorKind::GuardError("non-unique dictionary key")));
