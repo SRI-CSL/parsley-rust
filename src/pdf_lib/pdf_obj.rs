@@ -38,7 +38,7 @@ impl ArrayP {
             ws.parse(buf)?;
             end = buf.skip_prefix("]".as_bytes())?;
             if !end {
-                let p = PDFObjP::new();
+                let mut p = PDFObjP::new();
                 let o = p.parse(buf)?;
                 self.val.push(o);
             }
@@ -78,7 +78,7 @@ impl DictP {
             // differentiate between legal and illegal empty
             // whitespace.  This will be easier when auto-generated;
             // for now in the handwritten case, just be close enough.
-            let mut ws = WhitespaceEOL::new(true);
+            let mut ws = WhitespaceEOL::new(true); // allow empty whitespace for now
             ws.parse(buf)?;
 
             end = buf.skip_prefix(">>".as_bytes())?;
@@ -94,7 +94,7 @@ impl DictP {
                 let mut ws = WhitespaceEOL::new(false);
                 ws.parse(buf)?;
 
-                let p = PDFObjP::new();
+                let mut p = PDFObjP::new();
                 let o = p.parse(buf)?;
                 // Note: reuse of n requires a clonable type
                 self.names.insert(n.clone());
@@ -137,6 +137,11 @@ pub struct StreamT {
     dict: DictT,
     stream: Vec<u8>,
 }
+impl StreamT {
+    pub fn new(dict: DictT, stream: Vec<u8>) -> StreamT {
+        StreamT { dict, stream }
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub struct IndirectT {
@@ -156,20 +161,24 @@ impl IndirectP {
         let mut int = Number;
         let mut ws = WhitespaceEOL::new(true);
 
+        let mut cursor = buf.get_cursor();
         let num = int.parse(buf)?;
-        if ! (num.is_integer() && num.is_positive()) {
+        if !(num.is_integer() && num.is_positive()) {
+            buf.set_cursor(cursor);
             return Err(ErrorKind::GuardError("invalid object id"))
         }
         ws.parse(buf)?;
+        cursor = buf.get_cursor();
         let gen = int.parse(buf)?;
         if ! (gen.is_integer() && (gen.is_zero() || gen.is_positive())) {
+            buf.set_cursor(cursor);
             return Err(ErrorKind::GuardError("invalid object generation"))
         }
         ws.parse(buf)?;
         buf.skip_prefix("obj".as_bytes())?;
         ws.parse(buf)?;
 
-        let p = PDFObjP::new();
+        let mut p = PDFObjP::new();
         let o = p.parse(buf)?;
 
         // If we parsed a dictionary, check whether this could be a
@@ -228,13 +237,18 @@ impl ReferenceP {
         let mut int = Number;
         let mut ws = WhitespaceEOL::new(true);
 
+        let mut cursor = buf.get_cursor();
         let num = int.parse(buf)?;
         if ! (num.is_integer() && num.is_positive()) {
+            buf.set_cursor(cursor);
             return Err(ErrorKind::GuardError("invalid object id"))
         }
         ws.parse(buf)?;
+
+        cursor = buf.get_cursor();
         let gen = int.parse(buf)?;
         if ! (gen.is_integer() && (gen.is_zero() || gen.is_positive())) {
+            buf.set_cursor(cursor);
             return Err(ErrorKind::GuardError("invalid object generation"))
         }
         ws.parse(buf)?;
@@ -251,12 +265,12 @@ impl ReferenceP {
 pub enum PDFObjT {
     Array(ArrayT),
     Dict(DictT),
+    Stream(StreamT),
     Indirect(IndirectT),
     Reference(ReferenceT),
     Boolean(bool),
     String(Vec<u8>),
     Name(Vec<u8>),
-    Stream(StreamT),
     Null(()),
     Comment(Vec<u8>),
     Number(NumberT)
@@ -269,7 +283,7 @@ impl PDFObjP {
     }
 
     // The top-level object parser.
-    pub fn parse(self, buf: &mut ParseBuffer) -> Result<PDFObjT, ErrorKind> {
+    pub fn parse(&mut self, buf: &mut ParseBuffer) -> Result<PDFObjT, ErrorKind> {
         // First, consume possibly empty whitespace.
         // TODO: what about EOL?
         let mut ws = WhitespaceEOL::new(true);
@@ -323,7 +337,7 @@ impl PDFObjP {
                 }
             },
             Some(b)   => {
-                if !b.is_ascii_digit() {
+                if !b.is_ascii_digit() && b != 45 { // '-' to handle negative numbers
                     return Err(ErrorKind::GuardError("not at PDF object"))
                 }
                 let cursor = buf.get_cursor();
@@ -405,5 +419,133 @@ impl PDFObjP {
                 return Ok(PDFObjT::Number(n1))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test_pdf_obj {
+    use std::collections::{HashMap};
+    use super::super::super::pcore::parsebuffer::{ParseBuffer, ErrorKind};
+    use super::{PDFObjP, PDFObjT, ReferenceT, ArrayT, DictT, IndirectT, StreamT};
+
+    #[test]
+    fn empty() {
+        let mut p = PDFObjP::new();
+
+        let v = Vec::from("");
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(p.parse(&mut pb), Err(ErrorKind::EndOfBuffer));
+        assert_eq!(pb.get_cursor(), 0);
+    }
+
+    #[test]
+    fn comment() {
+        let mut p = PDFObjP::new();
+
+        let v = Vec::from("\r\n %PDF-1.0 \r\n");
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(p.parse(&mut pb), Ok(PDFObjT::Comment(Vec::from("%PDF-1.0 \r".as_bytes()))));
+        assert_eq!(pb.get_cursor(), 14);
+    }
+
+    #[test]
+    fn reference() {
+        let mut p = PDFObjP::new();
+
+        let v = Vec::from("\r\n 1 0 R \r\n");
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(p.parse(&mut pb), Ok(PDFObjT::Reference(ReferenceT::new(1, 0))));
+        assert_eq!(pb.get_cursor(), 8);
+
+        let v = Vec::from("\r\n -1 0 R \r\n");
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(p.parse(&mut pb), Err(ErrorKind::GuardError("invalid object id")));
+        assert_eq!(pb.get_cursor(), 3);
+
+        let v = Vec::from("\r\n 1 -1 R \r\n");
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(p.parse(&mut pb), Err(ErrorKind::GuardError("invalid object generation")));
+        assert_eq!(pb.get_cursor(), 5);
+    }
+
+    #[test]
+    fn array() {
+        let mut p = PDFObjP::new();
+
+        let v = Vec::from("[ 1 0 R ] \r\n");
+        let mut pb = ParseBuffer::new(v);
+        let mut aval = Vec::new();
+        aval.push(PDFObjT::Reference(ReferenceT::new(1, 0)));
+        assert_eq!(p.parse(&mut pb), Ok(PDFObjT::Array(ArrayT::new(aval))));
+        assert_eq!(pb.get_cursor(), 9);
+
+        let v = Vec::from("[ 1 \r 0 \n R ] \r\n");
+        let mut pb = ParseBuffer::new(v);
+        let mut aval = Vec::new();
+        aval.push(PDFObjT::Reference(ReferenceT::new(1, 0)));
+        assert_eq!(p.parse(&mut pb), Ok(PDFObjT::Array(ArrayT::new(aval))));
+        assert_eq!(pb.get_cursor(), 13);
+
+        let v = Vec::from("[ -1 0 R ] \r\n");
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(p.parse(&mut pb), Err(ErrorKind::GuardError("invalid object id")));
+        assert_eq!(pb.get_cursor(), 2);
+    }
+
+    #[test]
+    fn dict() {
+        let mut p = PDFObjP::new();
+
+        let v = Vec::from("<< /Entry [ 1 0 R ] \r\n >>");
+        let vlen = v.len();
+        let mut pb = ParseBuffer::new(v);
+        let mut aval = Vec::new();
+        aval.push(PDFObjT::Reference(ReferenceT::new(1, 0)));
+        let entval = PDFObjT::Array(ArrayT::new(aval));
+        let mut hm = HashMap::new();
+        hm.insert(Vec::from("Entry".as_bytes()), entval);
+        assert_eq!(p.parse(&mut pb), Ok(PDFObjT::Dict(DictT { val: hm })));
+        assert_eq!(pb.get_cursor(), vlen);
+
+        let v = Vec::from("<< /Entry [ 1 0 R ] /Entry \r\n >>");
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(p.parse(&mut pb), Err(ErrorKind::GuardError("non-unique dictionary key")));
+    }
+
+    #[test]
+    fn indirect() {
+        let mut p = PDFObjP::new();
+
+        let v = Vec::from("1 0 obj << /Entry [ 1 0 R ] \r\n >> endobj");
+        let vlen = v.len();
+        let mut pb = ParseBuffer::new(v);
+        let mut aval = Vec::new();
+        aval.push(PDFObjT::Reference(ReferenceT::new(1, 0)));
+        let entval = PDFObjT::Array(ArrayT::new(aval));
+        let mut hm = HashMap::new();
+        hm.insert(Vec::from("Entry".as_bytes()), entval);
+        let dict = PDFObjT::Dict(DictT::new(hm));
+        let obj = PDFObjT::Indirect(IndirectT::new(1, 0, Box::new(dict)));
+        assert_eq!(p.parse(&mut pb), Ok(obj));
+        assert_eq!(pb.get_cursor(), vlen);
+    }
+
+    #[test]
+    fn stream() {
+        let mut p = PDFObjP::new();
+
+        let v = Vec::from("1 0 obj << /Entry [ 1 0 R ] >> stream\n junk \nendstream\nendobj");
+        let vlen = v.len();
+        let mut pb = ParseBuffer::new(v);
+        let mut aval = Vec::new();
+        aval.push(PDFObjT::Reference(ReferenceT::new(1, 0)));
+        let entval = PDFObjT::Array(ArrayT::new(aval));
+        let mut hm = HashMap::new();
+        hm.insert(Vec::from("Entry".as_bytes()), entval);
+        let dict = DictT::new(hm);
+        let stream = PDFObjT::Stream(StreamT::new(dict, Vec::from(" junk ".as_bytes())));
+        let obj = PDFObjT::Indirect(IndirectT::new(1, 0, Box::new(stream)));
+        assert_eq!(p.parse(&mut pb), Ok(obj));
+        assert_eq!(pb.get_cursor(), vlen);
     }
 }
