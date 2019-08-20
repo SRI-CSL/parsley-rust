@@ -27,7 +27,9 @@ impl ArrayP {
         ArrayP { val: Vec::new() }
     }
     pub fn parse(mut self, buf: &mut ParseBuffer) -> Result<ArrayT, ErrorKind> {
-        buf.exact("[".as_bytes())?;
+        if let Err(_) = buf.exact("[".as_bytes()) {
+            return Err(ErrorKind::GuardError("not at array object"))
+        }
         let mut end = false;
         while !end {
             // Need more precise handling of whitespace to
@@ -36,11 +38,12 @@ impl ArrayP {
             // for now in the handwritten case, just be close enough.
             let mut ws = WhitespaceEOL::new(true);
             ws.parse(buf)?;
-            end = buf.skip_prefix("]".as_bytes())?;
-            if !end {
+            if let Err(_) = buf.skip_prefix("]".as_bytes()) {
                 let mut p = PDFObjP::new();
                 let o = p.parse(buf)?;
                 self.val.push(o);
+            } else {
+                end = true;
             }
         }
         Ok(ArrayT::new(self.val))
@@ -81,8 +84,7 @@ impl DictP {
             let mut ws = WhitespaceEOL::new(true); // allow empty whitespace for now
             ws.parse(buf)?;
 
-            end = buf.skip_prefix(">>".as_bytes())?;
-            if !end {
+            if let Err(_) = buf.skip_prefix(">>".as_bytes()) {
                 let mut p = RawName;
                 let n = p.parse(buf)?;
                 if self.names.contains(&n) {
@@ -99,6 +101,8 @@ impl DictP {
                 // Note: reuse of n requires a clonable type
                 self.names.insert(n.clone());
                 self.val.insert(n, o);
+            } else {
+                end = true;
             }
         }
         Ok(DictT::new(self.val))
@@ -175,7 +179,9 @@ impl IndirectP {
             return Err(ErrorKind::GuardError("invalid object generation"))
         }
         ws.parse(buf)?;
-        buf.skip_prefix("obj".as_bytes())?;
+        if let Err(_) = buf.skip_prefix("obj".as_bytes()) {
+            return Err(ErrorKind::GuardError("invalid object tag"))
+        }
         ws.parse(buf)?;
 
         let mut p = PDFObjP::new();
@@ -198,7 +204,10 @@ impl IndirectP {
                 o
             };
 
-        buf.skip_prefix("endobj".as_bytes())?;
+        ws.parse(buf)?;
+        if let Err(_) = buf.skip_prefix("endobj".as_bytes()) {
+            return Err(ErrorKind::GuardError("invalid endobject tag"))
+        }
 
         // TODO: update defs
 
@@ -241,7 +250,7 @@ impl ReferenceP {
         let num = int.parse(buf)?;
         if ! (num.is_integer() && num.is_positive()) {
             buf.set_cursor(cursor);
-            return Err(ErrorKind::GuardError("invalid object id"))
+            return Err(ErrorKind::GuardError("invalid ref-object id"))
         }
         ws.parse(buf)?;
 
@@ -249,10 +258,12 @@ impl ReferenceP {
         let gen = int.parse(buf)?;
         if ! (gen.is_integer() && (gen.is_zero() || gen.is_positive())) {
             buf.set_cursor(cursor);
-            return Err(ErrorKind::GuardError("invalid object generation"))
+            return Err(ErrorKind::GuardError("invalid ref-object generation"))
         }
         ws.parse(buf)?;
-        buf.skip_prefix("R".as_bytes())?;
+        if let Err(_) = buf.skip_prefix("R".as_bytes()) {
+            return Err(ErrorKind::GuardError("invalid reference tag"))
+        }
 
         // TODO: update refs
 
@@ -459,12 +470,12 @@ mod test_pdf_obj {
 
         let v = Vec::from("\r\n -1 0 R \r\n");
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(p.parse(&mut pb), Err(ErrorKind::GuardError("invalid object id")));
+        assert_eq!(p.parse(&mut pb), Err(ErrorKind::GuardError("invalid ref-object id")));
         assert_eq!(pb.get_cursor(), 3);
 
         let v = Vec::from("\r\n 1 -1 R \r\n");
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(p.parse(&mut pb), Err(ErrorKind::GuardError("invalid object generation")));
+        assert_eq!(p.parse(&mut pb), Err(ErrorKind::GuardError("invalid ref-object generation")));
         assert_eq!(pb.get_cursor(), 5);
     }
 
@@ -488,7 +499,7 @@ mod test_pdf_obj {
 
         let v = Vec::from("[ -1 0 R ] \r\n");
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(p.parse(&mut pb), Err(ErrorKind::GuardError("invalid object id")));
+        assert_eq!(p.parse(&mut pb), Err(ErrorKind::GuardError("invalid ref-object id")));
         assert_eq!(pb.get_cursor(), 2);
     }
 

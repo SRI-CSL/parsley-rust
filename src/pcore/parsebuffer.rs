@@ -199,7 +199,7 @@ impl ParseBuffer {
             self.ofs += prefix.len();
             Ok(true)
         } else {
-            Ok(false)
+            Err(ErrorKind::GuardError("no matching tag to skip"))
         }
     }
 

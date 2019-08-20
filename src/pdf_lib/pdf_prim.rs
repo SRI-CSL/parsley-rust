@@ -98,11 +98,17 @@ impl ParsleyParser for Boolean {
     type T = bool;
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
-        let mut b = buf.skip_prefix("true".as_bytes())?;
-        if b { return Ok(true) };
-        b = buf.skip_prefix("false".as_bytes())?;
-        if b { return Ok(false) };
-        Err(ErrorKind::GuardError("not at boolean"))
+        let mut b = buf.skip_prefix("true".as_bytes());
+        if let Err(_) = b {
+            b = buf.skip_prefix("false".as_bytes());
+            if let Err(_) = b {
+                Err(ErrorKind::GuardError("not at boolean"))
+            } else {
+                Ok(false)
+            }
+        } else {
+            Ok(true)
+        }
     }
 }
 
@@ -111,9 +117,12 @@ impl ParsleyParser for Null {
     type T = ();
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
-        let null = buf.skip_prefix("null".as_bytes())?;
-        if null { return Ok(()) };
-        Err(ErrorKind::GuardError("not at null"))
+        let null = buf.skip_prefix("null".as_bytes());
+        if let Err(_) = null {
+            Err(ErrorKind::GuardError("not at null"))
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -359,8 +368,8 @@ impl ParsleyParser for StreamContent {
     // has been consumed.
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
         let cursor = buf.get_cursor();
-        let is_stream = buf.skip_prefix("stream".as_bytes())?;
-        if !is_stream {
+        let is_stream = buf.skip_prefix("stream".as_bytes());
+        if let Err(_) = is_stream {
             return Err(ErrorKind::GuardError("not at stream content"))
         }
         if buf.peek() == Some(13) { // '\r'
@@ -401,7 +410,7 @@ impl ParsleyParser for StreamContent {
 
         // Go back to the end of the content
         buf.set_cursor(stream_end_cursor);
-        if !buf.skip_prefix("endstream".as_bytes()).unwrap() {
+        if let Err(_) = buf.skip_prefix("endstream".as_bytes()) {
             buf.set_cursor(cursor);
             return Err(ErrorKind::GuardError("invalid endstream"))
         }
