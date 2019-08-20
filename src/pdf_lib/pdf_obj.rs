@@ -292,9 +292,13 @@ impl PDFObjP {
     pub fn new() -> PDFObjP {
         PDFObjP {}
     }
+}
+
+impl ParsleyParser for PDFObjP {
+    type T = PDFObjT;
 
     // The top-level object parser.
-    pub fn parse(&mut self, buf: &mut ParseBuffer) -> Result<PDFObjT, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<PDFObjT, ErrorKind> {
         // First, consume possibly empty whitespace.
         // TODO: what about EOL?
         let mut ws = WhitespaceEOL::new(true);
@@ -436,7 +440,7 @@ impl PDFObjP {
 #[cfg(test)]
 mod test_pdf_obj {
     use std::collections::{HashMap};
-    use super::super::super::pcore::parsebuffer::{ParseBuffer, ErrorKind};
+    use super::super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, ErrorKind};
     use super::{PDFObjP, PDFObjT, ReferenceT, ArrayT, DictT, IndirectT, StreamT};
 
     #[test]
