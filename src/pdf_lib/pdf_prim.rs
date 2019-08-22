@@ -2,7 +2,6 @@
 
 use std::collections::{HashSet};
 use super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, ErrorKind};
-use super::super::pcore::prim_binary::{BinaryMatcher};
 
 // The whitespace parsers require at least one whitespace character
 // for a successful parse.
@@ -67,26 +66,6 @@ impl ParsleyParser for Comment {
         let c = buf.parse_bytes_until("\n".as_bytes())?;
         if buf.peek() == Some(10) { buf.incr_cursor(); }
         Ok(c)
-    }
-}
-
-// Keyword matcher
-
-pub struct Keyword {
-    matcher: BinaryMatcher
-}
-impl Keyword {
-    pub fn new(word: &[u8]) -> Keyword {
-        Keyword { matcher: BinaryMatcher::new(word) }
-    }
-}
-impl ParsleyParser for Keyword {
-    type T = ();
-
-    // The buffer should be positioned at the start of the keyword for a successful match.
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
-        &self.matcher.parse(buf)?;
-        Ok(())
     }
 }
 
@@ -424,7 +403,6 @@ mod test_pdf_prim {
     use super::{WhitespaceNoEOL, WhitespaceEOL, Comment, Boolean, Null};
     use super::{Number, NumberT};
     use super::{HexString, RawLiteralString, RawName, StreamContent};
-    use super::{Keyword};
 
     #[test]
     fn noeol() {
@@ -930,18 +908,5 @@ mod test_pdf_prim {
         let mut pb = ParseBuffer::new(v);
         assert_eq!(sc.parse(&mut pb), Ok(Vec::from("  \r")));
         assert_eq!(pb.get_cursor(), 20);
-    }
-
-    #[test]
-    fn keyword() {
-        let mut k = Keyword::new("obj".as_bytes());
-
-        let v = Vec::from("obj".as_bytes());
-        let mut pb = ParseBuffer::new(v);
-        assert_eq!(k.parse(&mut pb), Ok(()));
-
-        let v = Vec::from(" obj".as_bytes());
-        let mut pb = ParseBuffer::new(v);
-        assert_ne!(k.parse(&mut pb), Ok(()));
     }
 }
