@@ -19,14 +19,14 @@ impl ArrayT {
     }
 }
 
-pub struct ArrayP {
+struct ArrayP {
     val: Vec<PDFObjT>
 }
 impl ArrayP {
-    pub fn new() -> ArrayP {
+    fn new() -> ArrayP {
         ArrayP { val: Vec::new() }
     }
-    pub fn parse(mut self, buf: &mut ParseBuffer) -> Result<ArrayT, ErrorKind> {
+    fn parse(mut self, buf: &mut ParseBuffer) -> Result<ArrayT, ErrorKind> {
         if let Err(_) = buf.exact("[".as_bytes()) {
             return Err(ErrorKind::GuardError("not at array object"))
         }
@@ -65,15 +65,15 @@ impl DictT {
     }
 }
 
-pub struct DictP {
+struct DictP {
     val:   HashMap<<RawName as ParsleyParser>::T, PDFObjT>,
     names: HashSet<<RawName as ParsleyParser>::T>
 }
 impl DictP {
-    pub fn new() -> DictP {
+    fn new() -> DictP {
         DictP { val: HashMap::new(), names: HashSet::new() }
     }
-    pub fn parse(mut self, buf: &mut ParseBuffer) -> Result<DictT, ErrorKind> {
+    fn parse(mut self, buf: &mut ParseBuffer) -> Result<DictT, ErrorKind> {
         buf.exact("<<".as_bytes())?;
         let mut end = false;
         while !end {
@@ -110,7 +110,7 @@ impl DictP {
 }
 // type struct Stream {
 //   dict: DictObj,
-//   steam: StreamObj
+//   stream: StreamObj
 // }
 //
 // Indirect i { id : int, gen : int, val : PDFObj } :=
@@ -138,7 +138,7 @@ impl DictP {
 
 #[derive(Debug, PartialEq)]
 pub struct StreamT {
-    dict: DictT,
+    dict:   DictT,
     stream: Vec<u8>,
 }
 impl StreamT {
@@ -159,9 +159,9 @@ impl IndirectT {
     }
 }
 
-pub struct IndirectP;
+struct IndirectP;
 impl IndirectP {
-    pub fn parse(self, buf: &mut ParseBuffer) -> Result<IndirectT, ErrorKind> {
+    fn parse(self, buf: &mut ParseBuffer) -> Result<IndirectT, ErrorKind> {
         let mut int = Number;
         let mut ws = WhitespaceEOL::new(true);
 
@@ -215,7 +215,7 @@ impl IndirectP {
     }
 }
 
-// Reference r { id : int, gen : int } :=
+// Reference r { num : int, gen : int } :=
 //
 //     // the constraints check that the matched NumberObj objects
 //     // are appropriate integers.
@@ -224,7 +224,7 @@ impl IndirectP {
 //
 //     'R'
 //
-//     { r.id  := n.int_val();
+//     { r.num := n.int_val();
 //       r.gen := g.int_val();
 //       refs[(n.int_val(), g.int_val())] := $location();
 //     } ;
@@ -240,9 +240,9 @@ impl ReferenceT {
     }
 }
 
-pub struct ReferenceP;
+struct ReferenceP;
 impl ReferenceP {
-    pub fn parse(self, buf: &mut ParseBuffer) -> Result<ReferenceT, ErrorKind> {
+    fn parse(self, buf: &mut ParseBuffer) -> Result<ReferenceT, ErrorKind> {
         let mut int = Number;
         let mut ws = WhitespaceEOL::new(true);
 
