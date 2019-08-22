@@ -4,7 +4,7 @@ use std::collections::{HashSet, HashMap};
 use super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, ErrorKind};
 
 use super::pdf_prim::{WhitespaceEOL, Comment};
-use super::pdf_prim::{Boolean, Null, Number, NumberT, HexString, RawLiteralString};
+use super::pdf_prim::{Boolean, Null, IntegerT, IntegerP, RealT, RealP, HexString, RawLiteralString};
 use super::pdf_prim::{RawName, StreamContent};
 
 // Array a { val : [PDFObj] } := '[' ( o=PDFObj { a.val.append(o) } )* ']'
@@ -114,10 +114,10 @@ impl DictP {
 // }
 //
 // Indirect i { id : int, gen : int, val : PDFObj } :=
-//     // the constraints check that the matched NumberObj objects
+//     // the constraints check that the matched IntegerT objects
 //     // are appropriate integers.
-//     n=NumberObj [ n.is_integer() && n.int_val() >= 0 ]
-//     g=NumberObj [ g.is_integer() && g.int_val() >= 0 && !defs.has_key((n.int_val(), g.int_val()))]
+//     n=IntegerObj [ n.val >= 0 ]
+//     g=IntegerObj [ g.val >= 0 && !defs.has_key((n.val, g.val))]
 //
 //     ( 'obj' o=PDFObj 'endobj'
 //
@@ -130,9 +130,9 @@ impl DictP {
 //         { i.val := Stream { dict: o.val, stream: s.val } }
 //     )
 //     // At this point, we need to ensure that all attributes are defined for all cases
-//     { i.id  := n.int_val();
-//       i.gen := g.int_val();
-//       defs[(n.int_val(), g.int_val())] := (i, $location())
+//     { i.id  := n.val;
+//       i.gen := g.val;
+//       defs[(n.val, g.val)] := (i, $location())
 //     }
 
 
@@ -162,19 +162,19 @@ impl IndirectT {
 struct IndirectP;
 impl IndirectP {
     fn parse(self, buf: &mut ParseBuffer) -> Result<IndirectT, ErrorKind> {
-        let mut int = Number;
+        let mut int = IntegerP;
         let mut ws = WhitespaceEOL::new(true);
 
         let mut cursor = buf.get_cursor();
         let num = int.parse(buf)?;
-        if !(num.is_integer() && num.is_positive()) {
+        if !num.is_positive() {
             buf.set_cursor(cursor);
             return Err(ErrorKind::GuardError("invalid object id"))
         }
         ws.parse(buf)?;
         cursor = buf.get_cursor();
         let gen = int.parse(buf)?;
-        if ! (gen.is_integer() && (gen.is_zero() || gen.is_positive())) {
+        if ! (gen.is_zero() || gen.is_positive()) {
             buf.set_cursor(cursor);
             return Err(ErrorKind::GuardError("invalid object generation"))
         }
@@ -217,16 +217,16 @@ impl IndirectP {
 
 // Reference r { num : int, gen : int } :=
 //
-//     // the constraints check that the matched NumberObj objects
+//     // the constraints check that the matched IntegerObj objects
 //     // are appropriate integers.
-//     n=NumberObj [ n.is_integer() && n.int_val() > 0 ]
-//     g=NumberObj [ g.is_integer() && g.int_val() > 0 ]
+//     n=IntegerObj [ n.val > 0 ]
+//     g=IntegerObj [ g.val > 0 ]
 //
 //     'R'
 //
-//     { r.num := n.int_val();
-//       r.gen := g.int_val();
-//       refs[(n.int_val(), g.int_val())] := $location();
+//     { r.num := n.val;
+//       r.gen := g.val;
+//       refs[(n.val, g.val)] := $location();
 //     } ;
 
 #[derive(Debug, PartialEq)]
@@ -243,12 +243,12 @@ impl ReferenceT {
 struct ReferenceP;
 impl ReferenceP {
     fn parse(self, buf: &mut ParseBuffer) -> Result<ReferenceT, ErrorKind> {
-        let mut int = Number;
+        let mut int = IntegerP;
         let mut ws = WhitespaceEOL::new(true);
 
         let mut cursor = buf.get_cursor();
         let num = int.parse(buf)?;
-        if ! (num.is_integer() && num.is_positive()) {
+        if !num.is_positive() {
             buf.set_cursor(cursor);
             return Err(ErrorKind::GuardError("invalid ref-object id"))
         }
@@ -256,7 +256,7 @@ impl ReferenceP {
 
         cursor = buf.get_cursor();
         let gen = int.parse(buf)?;
-        if ! (gen.is_integer() && (gen.is_zero() || gen.is_positive())) {
+        if ! (gen.is_zero() || gen.is_positive()) {
             buf.set_cursor(cursor);
             return Err(ErrorKind::GuardError("invalid ref-object generation"))
         }
@@ -284,7 +284,8 @@ pub enum PDFObjT {
     Name(Vec<u8>),
     Null(()),
     Comment(Vec<u8>),
-    Number(NumberT)
+    Integer(IntegerT),
+    Real(RealT)
 }
 
 pub struct PDFObjP;
@@ -357,16 +358,23 @@ impl ParsleyParser for PDFObjP {
                 }
                 let cursor = buf.get_cursor();
 
-                let mut n = Number;
-                let mut ws = WhitespaceEOL::new(false); // no empty whitespace
-
                 // We have to distinguish between an indirect object,
-                // an indirect reference, and a number.  The first two
-                // will always have two integer numbers as a prefix.
+                // an indirect reference, and a real number.  The
+                // first two will always have two integer numbers as a
+                // prefix.
 
-                // Get the first number.
-                let n1 = n.parse(buf)?;
-                if !n1.is_integer() { return Ok(PDFObjT::Number(n1)) }
+                let mut real = RealP;
+                let mut int  = IntegerP;
+                let mut ws   = WhitespaceEOL::new(false); // no empty whitespace
+
+                // Check if we are at a real.
+                let r = real.parse(buf)?;
+                if !r.is_integer() {
+                    return Ok(PDFObjT::Real(r))
+                }
+
+                // We parsed the first integer.
+                let n1 = IntegerT::new(r.numerator());
                 let n1_end_cursor = buf.get_cursor();
 
                 // Skip past non-empty whitespace.
@@ -374,36 +382,30 @@ impl ParsleyParser for PDFObjP {
                     // We've already parsed a number, so set the
                     // cursor past that and return it.
                     buf.set_cursor(n1_end_cursor);
-                    return Ok(PDFObjT::Number(n1))
+                    return Ok(PDFObjT::Integer(n1))
                 }
 
-                // Get the second number.
-                let n2 = n.parse(buf);
+                // Get the second integer.
+                let n2 = int.parse(buf);
                 if let Err(_) = n2 {
                     // See above comment.
                     buf.set_cursor(n1_end_cursor);
-                    return Ok(PDFObjT::Number(n1))
-                }
-                let n2 = n2.unwrap();
-                if !n2.is_integer() {
-                    // See above comment.
-                    buf.set_cursor(n1_end_cursor);
-                    return Ok(PDFObjT::Number(n1))
+                    return Ok(PDFObjT::Integer(n1))
                 }
 
                 // Skip past non-empty whitespace.
                 if let Err(_) = ws.parse(buf) {
-                    // We've already parsed a number, so set the
+                    // We've already parsed the first number, so set the
                     // cursor past that and return it.
                     buf.set_cursor(n1_end_cursor);
-                    return Ok(PDFObjT::Number(n1))
+                    return Ok(PDFObjT::Integer(n1))
                 }
 
                 // We have now seen two integers.
                 let prefix = buf.check_prefix("obj".as_bytes());
                 if let Err(_) = prefix {
                     buf.set_cursor(n1_end_cursor);
-                    return Ok(PDFObjT::Number(n1))
+                    return Ok(PDFObjT::Integer(n1))
                 }
                 if prefix.unwrap() {
                     // This looks like an indirect object.  Rewind and
@@ -417,7 +419,7 @@ impl ParsleyParser for PDFObjP {
                 let prefix = buf.check_prefix("R".as_bytes());
                 if let Err(_) = prefix {
                     buf.set_cursor(n1_end_cursor);
-                    return Ok(PDFObjT::Number(n1))
+                    return Ok(PDFObjT::Integer(n1))
                 }
                 if prefix.unwrap() {
                     // This looks like an indirect reference.  Rewind
@@ -431,7 +433,7 @@ impl ParsleyParser for PDFObjP {
 
                 // Fallback case.
                 buf.set_cursor(n1_end_cursor);
-                return Ok(PDFObjT::Number(n1))
+                return Ok(PDFObjT::Integer(n1))
             }
         }
     }

@@ -105,60 +105,84 @@ impl ParsleyParser for Null {
     }
 }
 
-// Number objects, both integers and reals.
+// Integer objects.
 
 #[derive(Debug, PartialEq)]
-pub enum NumberT {
-    Integer(i64),
-    Real(i64, i64) // rational number representation: (numerator, denominator)
-}
-
-impl NumberT {
-    // constructors for each variant
-    pub fn new_integer(i: i64) -> NumberT {
-        NumberT::Integer(i)
-    }
-
-    pub fn new_real(n: i64, d: i64) -> NumberT {
-        NumberT::Real(n, d)
-    }
-
-    // predicates for each variant
-    pub fn is_integer(&self) -> bool {
-        match &self {
-            NumberT::Integer(_) => true,
-            NumberT::Real(_,_)  => false
-        }
-    }
-    pub fn is_real(&self) -> bool {
-        match &self {
-            NumberT::Integer(_) => false,
-            NumberT::Real(_,_)  => true
-        }
-    }
-    pub fn is_positive(&self) -> bool {
-        match &self {
-            NumberT::Integer(i)  => i >= &0,
-            NumberT::Real(n, _d) => n >= &0
-        }
-    }
-    pub fn is_zero(&self) -> bool {
-        match &self {
-            NumberT::Integer(i)  => i == &0,
-            NumberT::Real(n, _d) => n == &0
-        }
+pub struct IntegerT(i64);
+impl IntegerT {
+    pub fn new(i: i64) -> IntegerT {
+        IntegerT(i)
     }
     pub fn int_val(&self) -> i64 {
-        match &self {
-            NumberT::Integer(i) => *i,
-            NumberT::Real(_, _) => panic!("Called `NumberT::int_val` on a real value")
-        }
+        self.0
+    }
+    pub fn is_zero(&self) -> bool {
+        self.0 == 0
+    }
+    pub fn is_positive(&self) -> bool {
+        self.0 > 0
     }
 }
 
-pub struct Number;
-impl ParsleyParser for Number {
-    type T = NumberT;
+pub struct IntegerP;
+impl ParsleyParser for IntegerP {
+    type T = IntegerT;
+
+    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+        let cursor = buf.get_cursor();
+        let minus =
+            if buf.peek() == Some(45) {        // '-'
+                buf.incr_cursor();
+                true
+            } else if buf.peek() == Some(43) { // '+'
+                buf.incr_cursor();
+                false
+            } else {
+                false
+            };
+        let num_str = buf.parse_allowed_bytes("0123456789".as_bytes())?;
+        if (num_str.len() == 0) && (buf.peek() != Some(46)) {
+            buf.set_cursor(cursor);
+            return Err(ErrorKind::GuardError("not at number"))
+        }
+        let mut num : i64 = 0;
+        for c in num_str.iter() {
+            num = num * 10 + i64::from(c - 48);
+        }
+        if minus { num *= -1; }
+        Ok(IntegerT(num))
+    }
+}
+
+// Real objects.
+
+#[derive(Debug, PartialEq)]
+pub struct RealT(i64, i64); // rational number representation: (numerator, denominator)
+
+impl RealT {
+    pub fn new(n: i64, d: i64) -> RealT {
+        RealT(n, d)
+    }
+
+    pub fn is_positive(&self) -> bool {
+        self.0 >= 0
+    }
+    pub fn is_zero(&self) -> bool {
+        self.0 == 0
+    }
+    pub fn is_integer(&self) -> bool {
+        self.1 == 1
+    }
+    // FIXME: this is a hacky way to implement integer conversion.
+    // It's done this way so that we don't have to panic.
+    pub fn numerator(&self) -> i64 {
+        self.0
+    }
+}
+
+pub struct RealP;
+impl ParsleyParser for RealP {
+    type T = RealT;
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
         let cursor = buf.get_cursor();
@@ -192,10 +216,10 @@ impl ParsleyParser for Number {
                 }
             }
             if minus { num *= -1; }
-            Ok(NumberT::Real(num, den))
+            Ok(RealT(num, den))
         } else {
             if minus { num *= -1; }
-            Ok(NumberT::Integer(num))
+            Ok(RealT(num, 1))
         }
     }
 }
@@ -401,7 +425,7 @@ impl ParsleyParser for StreamContent {
 mod test_pdf_prim {
     use super::super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, ErrorKind};
     use super::{WhitespaceNoEOL, WhitespaceEOL, Comment, Boolean, Null};
-    use super::{Number, NumberT};
+    use super::{IntegerT, IntegerP, RealT, RealP};
     use super::{HexString, RawLiteralString, RawName, StreamContent};
 
     #[test]
@@ -555,7 +579,7 @@ mod test_pdf_prim {
     }
     #[test]
     fn integer() {
-        let mut int = Number;
+        let mut int = IntegerP;
 
         let v = Vec::new();
         let mut pb = ParseBuffer::new(v);
@@ -580,56 +604,49 @@ mod test_pdf_prim {
         let v = Vec::from("1".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let i = int.parse(&mut pb);
-        assert_eq!(i, Ok(NumberT::Integer(1)));
-        assert!(i.unwrap().is_integer());
+        assert_eq!(i, Ok(IntegerT(1)));
         assert_eq!(pb.get_cursor(), 1);
 
         let v = Vec::from("23 ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let i = int.parse(&mut pb);
-        assert_eq!(i, Ok(NumberT::Integer(23)));
-        assert!(i.unwrap().is_integer());
+        assert_eq!(i, Ok(IntegerT(23)));
         assert_eq!(pb.get_cursor(), 2);
 
         let v = Vec::from("+23 ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let i = int.parse(&mut pb);
-        assert_eq!(i, Ok(NumberT::Integer(23)));
-        assert!(i.unwrap().is_positive());
+        assert_eq!(i, Ok(IntegerT(23)));
         assert_eq!(pb.get_cursor(), 3);
 
         let v = Vec::from("-23 ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let i = int.parse(&mut pb);
-        assert_eq!(i, Ok(NumberT::Integer(-23)));
-        assert!(!i.unwrap().is_positive());
+        assert_eq!(i, Ok(IntegerT(-23)));
         assert_eq!(pb.get_cursor(), 3);
 
         let v = Vec::from("0 ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let i = int.parse(&mut pb);
-        assert_eq!(i, Ok(NumberT::Integer(0)));
-        assert!(i.unwrap().is_zero());
+        assert_eq!(i, Ok(IntegerT(0)));
         assert_eq!(pb.get_cursor(), 1);
 
         let v = Vec::from("-0 ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let i = int.parse(&mut pb);
-        assert_eq!(i, Ok(NumberT::Integer(0)));
-        assert!(i.unwrap().is_zero());
+        assert_eq!(i, Ok(IntegerT(0)));
         assert_eq!(pb.get_cursor(), 2);
 
         let v = Vec::from("+0 ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let i = int.parse(&mut pb);
-        assert_eq!(i, Ok(NumberT::Integer(0)));
-        assert!(i.unwrap().is_zero());
+        assert_eq!(i, Ok(IntegerT(0)));
         assert_eq!(pb.get_cursor(), 2);
     }
 
     #[test]
     fn real() {
-        let mut real = Number;
+        let mut real = RealP;
 
         let v = Vec::new();
         let mut pb = ParseBuffer::new(v);
@@ -654,50 +671,60 @@ mod test_pdf_prim {
         let v = Vec::from("1".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let r = real.parse(&mut pb);
-        assert_eq!(r, Ok(NumberT::Integer(1)));
-        assert!(! r.unwrap().is_real());
+        assert_eq!(r, Ok(RealT(1,1)));
+        assert!(r.unwrap().is_integer());
         assert_eq!(pb.get_cursor(), 1);
 
         let v = Vec::from("23.01 ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let r = real.parse(&mut pb);
-        assert_eq!(r, Ok(NumberT::Real(2301, 100)));
-        assert!(r.unwrap().is_real());
+        assert_eq!(r, Ok(RealT(2301, 100)));
+        let r = r.unwrap();
+        assert!(!r.is_integer());
+        assert_eq!(r.numerator(), 2301);
         assert_eq!(pb.get_cursor(), 5);
 
         let v = Vec::from("+23.10 ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let r = real.parse(&mut pb);
-        assert_eq!(r, Ok(NumberT::Real(2310, 100)));
-        assert!(r.unwrap().is_positive());
+        assert_eq!(r, Ok(RealT(2310, 100)));
+        let r = r.unwrap();
+        assert!(r.is_positive());
+        assert!(!r.is_integer());
         assert_eq!(pb.get_cursor(), 6);
 
         let v = Vec::from("-23.10 ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let r = real.parse(&mut pb);
-        assert_eq!(r, Ok(NumberT::Real(-2310, 100)));
-        assert!(!r.unwrap().is_positive());
+        assert_eq!(r, Ok(RealT(-2310, 100)));
+        let r = r.unwrap();
+        assert!(!r.is_positive());
+        assert!(!r.is_integer());
         assert_eq!(pb.get_cursor(), 6);
 
         let v = Vec::from("0.0 ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let r = real.parse(&mut pb);
-        assert_eq!(r, Ok(NumberT::Real(0, 10)));
+        assert_eq!(r, Ok(RealT(0, 10)));
         assert!(r.unwrap().is_zero());
         assert_eq!(pb.get_cursor(), 3);
 
         let v = Vec::from("+0.0 ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let r = real.parse(&mut pb);
-        assert_eq!(r, Ok(NumberT::Real(0, 10)));
-        assert!(r.unwrap().is_zero());
+        assert_eq!(r, Ok(RealT(0, 10)));
+        let r = r.unwrap();
+        assert!(r.is_zero());
+        assert!(!r.is_integer());
         assert_eq!(pb.get_cursor(), 4);
 
         let v = Vec::from("-0.00 ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let r = real.parse(&mut pb);
-        assert_eq!(r, Ok(NumberT::Real(0, 100)));
-        assert!(r.unwrap().is_zero());
+        assert_eq!(r, Ok(RealT(0, 100)));
+        let r = r.unwrap();
+        assert!(r.is_zero());
+        assert!(!r.is_integer());
         assert_eq!(pb.get_cursor(), 5);
     }
 
