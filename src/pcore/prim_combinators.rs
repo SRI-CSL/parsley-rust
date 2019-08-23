@@ -113,6 +113,34 @@ impl<'a, P: ParsleyParser> ParsleyParser for Star<'a, P> {
     }
 }
 
+pub struct Not<'a, P: ParsleyParser> {
+    p: &'a mut P
+}
+
+impl<'a, P> Not<'a, P>
+where P: ParsleyParser
+{
+    pub fn new(p: &'a mut P) -> Not<'a, P> {
+        Not { p }
+    }
+}
+
+impl<'a, P: ParsleyParser> ParsleyParser for Not<'a, P> {
+    type T = ();
+
+    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+        let c = buf.get_cursor();
+        let r = self.p.parse(buf);
+        buf.set_cursor(c);
+
+        if let Ok(_) = r {
+            Err(ErrorKind::GuardError("not"))
+        } else {
+            Ok(())
+        }
+    }
+}
+
 // combinator tests
 
 #[cfg(test)]
@@ -269,7 +297,7 @@ mod test_star {
 mod test_combined {
     use super::super::parsebuffer::{ParseBuffer, ParsleyParser, ParsleyPrimitive, ErrorKind};
     use super::super::prim_ascii::{AsciiChar, AsciiCharPrimitive};
-    use super::{Star, Sequence, Alternate, Alt};
+    use super::{Star, Sequence, Alternate, Alt, Not};
 
     #[test] // a*b*
     pub fn astar_bstar() {
@@ -477,6 +505,34 @@ mod test_combined {
         let e = Err(ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name()));
         assert_eq!(r, e);
         assert_eq!(pb.get_cursor(), 4);
+    }
 
+    #[test] // !(a|b)
+    pub fn not() {
+        let mut a      = AsciiChar::new_guarded(Box::new(|c: &char| *c == 'A'));
+        let mut b      = AsciiChar::new_guarded(Box::new(|c: &char| *c == 'B'));
+        let mut a_or_b = Alternate::new(&mut a, &mut b);
+        let mut not    = Not::new(&mut a_or_b);
+
+        // empty
+        let mut pb  = ParseBuffer::new(Vec::new());
+        let r = not.parse(&mut pb);
+        assert_eq!(r, Ok(()));
+        assert_eq!(pb.get_cursor(), 0);
+
+        // match-case
+        let mut v   = Vec::new();
+        v.extend_from_slice("B".as_bytes());
+        let mut pb  = ParseBuffer::new(v);
+        let r = not.parse(&mut pb);
+        let e = Err(ErrorKind::GuardError("not"));
+        assert_eq!(r, e);
+
+        // not-case
+        let mut v   = Vec::new();
+        v.extend_from_slice("C".as_bytes());
+        let mut pb  = ParseBuffer::new(v);
+        let r = not.parse(&mut pb);
+        assert_eq!(r, Ok(()));
     }
 }
