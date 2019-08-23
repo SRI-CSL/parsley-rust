@@ -41,6 +41,7 @@ impl ParsleyParser for Comment {
     // and including end-of-line or upto end-of-buffer.
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
         if !(buf.peek() == Some(37)) { return Err(ErrorKind::GuardError("not at comment")) }
+        buf.incr_cursor();
         let c = buf.parse_bytes_until("\n".as_bytes())?;
         if buf.peek() == Some(10) { buf.incr_cursor(); }
         Ok(c)
@@ -536,17 +537,17 @@ mod test_pdf_prim {
 
         let v = Vec::from("% ".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(com.parse(&mut pb), Ok(vec![37, 32]));
+        assert_eq!(com.parse(&mut pb), Ok(vec![32]));
         assert_eq!(pb.get_cursor(), 2);
 
         let v = Vec::from("% \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(com.parse(&mut pb), Ok(vec![37, 32, 13]));
+        assert_eq!(com.parse(&mut pb), Ok(vec![32, 13]));
         assert_eq!(pb.get_cursor(), 4);
 
         let v = Vec::from("%PDF-1.0 \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(com.parse(&mut pb), Ok(Vec::from("%PDF-1.0 \r".as_bytes())));
+        assert_eq!(com.parse(&mut pb), Ok(Vec::from("PDF-1.0 \r".as_bytes())));
         assert_eq!(pb.get_cursor(), 11);
     }
 

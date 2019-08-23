@@ -3,13 +3,34 @@
 use std::io::Read; // for read_to_string()
 use std::convert::TryFrom;
 use super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, ErrorKind};
-use super::pdf_prim::{IntegerP, WhitespaceEOL, WhitespaceNoEOL};
+use super::pdf_prim::{IntegerP, WhitespaceEOL, WhitespaceNoEOL, Comment};
 use super::pdf_obj::{PDFObjP, PDFObjT};
+
+// This doesn't yet fully specify a legal version string.
+//
+// Header h { version: typeof(CommentObj),
+//            binary: option(typeof(CommentObj)) } :=
+//
+//    v=CommentObj b=(CommentObj)?
+//    // '?' is a builtin that creates an option-type
 
 #[derive(Debug, PartialEq)]
 pub struct HeaderT {
     version: Vec<u8>,
     binary:  Option<Vec<u8>>
+}
+
+pub struct HeaderP;
+impl ParsleyParser for HeaderP {
+    type T = HeaderT;
+
+    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<HeaderT, ErrorKind> {
+        let mut c = Comment;
+
+        let version = c.parse(buf)?;
+        let binary = if let Ok(s) = c.parse(buf) { Some(s) } else { None };
+        Ok(HeaderT { version, binary })
+    }
 }
 
 // XrefEnt x { offset: int, gen: int, status: xfree_t } :=
@@ -236,8 +257,28 @@ impl ParsleyParser for BodyP {
 #[cfg(test)]
 mod test_pdf_file {
     use super::super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, ErrorKind};
-    use super::{XrefT, XrefEntT, XrefEntP, XrefSubSectT, XrefSubSectP, XrefSectT, XrefSectP, BodyT, BodyP};
+    use super::{HeaderT, HeaderP, XrefT, XrefEntT, XrefEntP, XrefSubSectT, XrefSubSectP, XrefSectT, XrefSectP, BodyT, BodyP};
     use super::super::super::pdf_lib::pdf_obj::{PDFObjT};
+
+    #[test]
+    fn test_header() {
+        let mut p = HeaderP;
+
+        let v = Vec::from("%PDF-1.0 \r\n".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let val = p.parse(&mut pb);
+        let hdr = HeaderT { version: Vec::from("PDF-1.0 \r".as_bytes()), binary: None };
+        assert_eq!(val, Ok(hdr));
+        assert_eq!(pb.get_cursor(), 11);
+
+        let v = Vec::from("%PDF-1.0 \r\n%binary_bytes\n".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let val = p.parse(&mut pb);
+        let hdr = HeaderT { version: Vec::from("PDF-1.0 \r".as_bytes()),
+                            binary: Some(Vec::from("binary_bytes".as_bytes())) };
+        assert_eq!(val, Ok(hdr));
+        assert_eq!(pb.get_cursor(), 25);
+    }
 
     #[test]
     fn test_xref_ent() {
