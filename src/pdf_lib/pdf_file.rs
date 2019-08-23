@@ -12,7 +12,6 @@ pub struct HeaderT {
     binary:  Option<Vec<u8>>
 }
 
-
 // XrefEnt x { offset: int, gen: int, status: xfree_t } :=
 //     o=[[digit]*10] g=[[digit]*5]
 //     { x.offset = $string_to_int(o);
@@ -102,10 +101,22 @@ impl XrefEntP {
     }
 }
 
+// XrefSubSect x { start: int, count: int, ents: [XrefEnt] } :=
+//
+//    s=IntegerObj [ s.val >= 0 ]
+//    c=IntegerObj [ s.val >  0 ]
+//
+//   '\n'  // EOL-type is not specified in the spec.
+//
+//   { x.start := s.val;
+//      x.count := c.val }
+//
+//   ( e=XrefEnt [ x.ents.len() < x.count() ] { x.ents.append(e) } )* ;
+
 #[derive(Debug, PartialEq)]
 pub struct XrefSubSectT {
     start: u64,
-    cnt:   u64,
+    count: u64,
     ents:  Vec<XrefEntT>
 }
 
@@ -126,28 +137,32 @@ impl XrefSubSectP {
         let start = start.unwrap();
 
         let _ = buf.exact(" ".as_bytes())?;
-        let cnt = u64::try_from(int.parse(buf)?.int_val());
-        if let Err(_) = cnt {
+        let count = u64::try_from(int.parse(buf)?.int_val());
+        if let Err(_) = count {
             return Err(ErrorKind::GuardError("conversion error on xref-subsect count"))
         }
-        let cnt = cnt.unwrap();
+        let count = count.unwrap();
 
         // Again, no clarity on the type of EOL terminating this line.
         // Assume we need one for now.
         let mut ws = WhitespaceEOL::new(false);
         ws.parse(buf)?;
 
-        // Now get the entries.
+        // Now get the specified number of entries.
         let p = XrefEntP;
         let mut ents = Vec::new();
-        for _i in 0 .. cnt {
+        for _ in 0 .. count {
             let ent = p.parse(buf)?;
             ents.push(ent);
         }
 
-        Ok(XrefSubSectT{ start, cnt, ents })
+        Ok(XrefSubSectT{ start, count, ents })
     }
 }
+
+// XrefSect x { sects: [XrefSubSect] } :=
+//
+//    'xref' ( s=XrefSubSect { x.sects.append(s) } )* ;
 
 #[derive(Debug, PartialEq)]
 pub struct XrefSectT {
@@ -179,6 +194,10 @@ impl ParsleyParser for XrefSectP {
         Ok(XrefSectT { sects })
     }
 }
+
+// Body b { objs = [PDFObj] } :=
+//
+//    ( o=PDFObj [ o ~~ IndirectObj ] { b.objs.append(o) } )* ;
 
 #[derive(Debug, PartialEq)]
 pub struct BodyT {
@@ -256,7 +275,7 @@ mod test_pdf_file {
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
         let xref = XrefEntT::Free(XrefT{ info: 1234567890, gen: 12345});
-        let s = XrefSubSectT { start: 0, cnt: 1, ents: vec![xref] };
+        let s = XrefSubSectT { start: 0, count: 1, ents: vec![xref] };
         assert_eq!(val, Ok(s));
 
         // leading and trailing space on leading line
@@ -264,7 +283,7 @@ mod test_pdf_file {
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
         let xref = XrefEntT::Free(XrefT{ info: 1234567890, gen: 12345});
-        let s = XrefSubSectT { start: 0, cnt: 1, ents: vec![xref] };
+        let s = XrefSubSectT { start: 0, count: 1, ents: vec![xref] };
         assert_eq!(val, Ok(s));
     }
 
@@ -275,7 +294,7 @@ mod test_pdf_file {
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
         let xref = XrefEntT::Free(XrefT{ info: 1234567890, gen: 12345});
-        let ssect = XrefSubSectT { start: 0, cnt: 1, ents: vec![xref] };
+        let ssect = XrefSubSectT { start: 0, count: 1, ents: vec![xref] };
         let s = XrefSectT { sects: vec![ssect] };
         assert_eq!(val, Ok(s));
 
@@ -284,7 +303,7 @@ mod test_pdf_file {
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
         let xref = XrefEntT::Free(XrefT{ info: 1234567890, gen: 12345});
-        let ssect = XrefSubSectT { start: 0, cnt: 1, ents: vec![xref] };
+        let ssect = XrefSubSectT { start: 0, count: 1, ents: vec![xref] };
         let s = XrefSectT { sects: vec![ssect] };
         assert_eq!(val, Ok(s));
 
@@ -309,7 +328,7 @@ mod test_pdf_file {
         ents.push(XrefEntT::Inuse(XrefT{ info: 173, gen: 0}));
         ents.push(XrefEntT::Inuse(XrefT{ info: 301, gen: 0}));
         ents.push(XrefEntT::Inuse(XrefT{ info: 380, gen: 0}));
-        let ssect = XrefSubSectT { start: 0, cnt: 6, ents };
+        let ssect = XrefSubSectT { start: 0, count: 6, ents };
         let s = XrefSectT { sects: vec![ssect] };
         assert_eq!(val, Ok(s));
     }
