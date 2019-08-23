@@ -39,7 +39,7 @@ impl ArrayP {
             let mut ws = WhitespaceEOL::new(true);
             ws.parse(buf)?;
             if let Err(_) = buf.exact("]".as_bytes()) {
-                let mut p = PDFObjP::new();
+                let mut p = PDFObjP;
                 let o = p.parse(buf)?;
                 self.val.push(o);
             } else {
@@ -96,7 +96,7 @@ impl DictP {
                 let mut ws = WhitespaceEOL::new(false);
                 ws.parse(buf)?;
 
-                let mut p = PDFObjP::new();
+                let mut p = PDFObjP;
                 let o = p.parse(buf)?;
                 // Note: reuse of n requires a clonable type
                 self.names.insert(n.clone());
@@ -184,7 +184,7 @@ impl IndirectP {
         }
         ws.parse(buf)?;
 
-        let mut p = PDFObjP::new();
+        let mut p = PDFObjP;
         let o = p.parse(buf)?;
 
         // If we parsed a dictionary, check whether this could be a
@@ -289,17 +289,11 @@ pub enum PDFObjT {
 }
 
 pub struct PDFObjP;
-impl PDFObjP {
-    pub fn new() -> PDFObjP {
-        PDFObjP {}
-    }
-}
-
 impl ParsleyParser for PDFObjP {
     type T = PDFObjT;
 
     // The top-level object parser.
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<PDFObjT, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
         // First, consume possibly empty whitespace.
         // TODO: what about EOL?
         let mut ws = WhitespaceEOL::new(true);
@@ -447,7 +441,7 @@ mod test_pdf_obj {
 
     #[test]
     fn empty() {
-        let mut p = PDFObjP::new();
+        let mut p = PDFObjP;
 
         let v = Vec::from("");
         let mut pb = ParseBuffer::new(v);
@@ -457,7 +451,7 @@ mod test_pdf_obj {
 
     #[test]
     fn comment() {
-        let mut p = PDFObjP::new();
+        let mut p = PDFObjP;
 
         let v = Vec::from("\r\n %PDF-1.0 \r\n");
         let mut pb = ParseBuffer::new(v);
@@ -467,7 +461,7 @@ mod test_pdf_obj {
 
     #[test]
     fn reference() {
-        let mut p = PDFObjP::new();
+        let mut p = PDFObjP;
 
         let v = Vec::from("\r\n 1 0 R \r\n");
         let mut pb = ParseBuffer::new(v);
@@ -487,7 +481,7 @@ mod test_pdf_obj {
 
     #[test]
     fn array() {
-        let mut p = PDFObjP::new();
+        let mut p = PDFObjP;
 
         let v = Vec::from("[ 1 0 R ] \r\n");
         let mut pb = ParseBuffer::new(v);
@@ -511,7 +505,7 @@ mod test_pdf_obj {
 
     #[test]
     fn dict() {
-        let mut p = PDFObjP::new();
+        let mut p = PDFObjP;
 
         let v = Vec::from("<< /Entry [ 1 0 R ] \r\n >>");
         let vlen = v.len();
@@ -543,7 +537,7 @@ mod test_pdf_obj {
 
     #[test]
     fn indirect() {
-        let mut p = PDFObjP::new();
+        let mut p = PDFObjP;
 
         let v = Vec::from("1 0 obj << /Entry [ 1 0 R ] \r\n >> endobj");
         let vlen = v.len();
@@ -561,7 +555,7 @@ mod test_pdf_obj {
 
     #[test]
     fn stream() {
-        let mut p = PDFObjP::new();
+        let mut p = PDFObjP;
 
         let v = Vec::from("1 0 obj << /Entry [ 1 0 R ] >> stream\n junk \nendstream\nendobj");
         let vlen = v.len();
