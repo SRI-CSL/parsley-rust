@@ -443,7 +443,7 @@ mod test_pdf_obj {
     fn empty() {
         let mut p = PDFObjP;
 
-        let v = Vec::from("");
+        let v = Vec::from("".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(p.parse(&mut pb), Err(ErrorKind::EndOfBuffer));
         assert_eq!(pb.get_cursor(), 0);
@@ -453,7 +453,7 @@ mod test_pdf_obj {
     fn comment() {
         let mut p = PDFObjP;
 
-        let v = Vec::from("\r\n %PDF-1.0 \r\n");
+        let v = Vec::from("\r\n %PDF-1.0 \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(p.parse(&mut pb), Ok(PDFObjT::Comment(Vec::from("%PDF-1.0 \r".as_bytes()))));
         assert_eq!(pb.get_cursor(), 14);
@@ -463,17 +463,17 @@ mod test_pdf_obj {
     fn reference() {
         let mut p = PDFObjP;
 
-        let v = Vec::from("\r\n 1 0 R \r\n");
+        let v = Vec::from("\r\n 1 0 R \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(p.parse(&mut pb), Ok(PDFObjT::Reference(ReferenceT::new(1, 0))));
         assert_eq!(pb.get_cursor(), 8);
 
-        let v = Vec::from("\r\n -1 0 R \r\n");
+        let v = Vec::from("\r\n -1 0 R \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(p.parse(&mut pb), Err(ErrorKind::GuardError("invalid ref-object id")));
         assert_eq!(pb.get_cursor(), 3);
 
-        let v = Vec::from("\r\n 1 -1 R \r\n");
+        let v = Vec::from("\r\n 1 -1 R \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(p.parse(&mut pb), Err(ErrorKind::GuardError("invalid ref-object generation")));
         assert_eq!(pb.get_cursor(), 5);
@@ -483,21 +483,21 @@ mod test_pdf_obj {
     fn array() {
         let mut p = PDFObjP;
 
-        let v = Vec::from("[ 1 0 R ] \r\n");
+        let v = Vec::from("[ 1 0 R ] \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let mut aval = Vec::new();
         aval.push(PDFObjT::Reference(ReferenceT::new(1, 0)));
         assert_eq!(p.parse(&mut pb), Ok(PDFObjT::Array(ArrayT::new(aval))));
         assert_eq!(pb.get_cursor(), 9);
 
-        let v = Vec::from("[ 1 \r 0 \n R ] \r\n");
+        let v = Vec::from("[ 1 \r 0 \n R ] \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let mut aval = Vec::new();
         aval.push(PDFObjT::Reference(ReferenceT::new(1, 0)));
         assert_eq!(p.parse(&mut pb), Ok(PDFObjT::Array(ArrayT::new(aval))));
         assert_eq!(pb.get_cursor(), 13);
 
-        let v = Vec::from("[ -1 0 R ] \r\n");
+        let v = Vec::from("[ -1 0 R ] \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(p.parse(&mut pb), Err(ErrorKind::GuardError("invalid ref-object id")));
         assert_eq!(pb.get_cursor(), 2);
@@ -507,7 +507,7 @@ mod test_pdf_obj {
     fn dict() {
         let mut p = PDFObjP;
 
-        let v = Vec::from("<< /Entry [ 1 0 R ] \r\n >>");
+        let v = Vec::from("<< /Entry [ 1 0 R ] \r\n >>".as_bytes());
         let vlen = v.len();
         let mut pb = ParseBuffer::new(v);
         let mut aval = Vec::new();
@@ -519,7 +519,7 @@ mod test_pdf_obj {
         assert_eq!(pb.get_cursor(), vlen);
 
         // version with minimal whitespace
-        let v = Vec::from("<</Entry [1 0 R]>>");
+        let v = Vec::from("<</Entry [1 0 R]>>".as_bytes());
         let vlen = v.len();
         let mut pb = ParseBuffer::new(v);
         let mut aval = Vec::new();
@@ -530,7 +530,7 @@ mod test_pdf_obj {
         assert_eq!(p.parse(&mut pb), Ok(PDFObjT::Dict(DictT { val: hm })));
         assert_eq!(pb.get_cursor(), vlen);
 
-        let v = Vec::from("<< /Entry [ 1 0 R ] /Entry \r\n >>");
+        let v = Vec::from("<< /Entry [ 1 0 R ] /Entry \r\n >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(p.parse(&mut pb), Err(ErrorKind::GuardError("non-unique dictionary key")));
     }
@@ -539,7 +539,7 @@ mod test_pdf_obj {
     fn indirect() {
         let mut p = PDFObjP;
 
-        let v = Vec::from("1 0 obj << /Entry [ 1 0 R ] \r\n >> endobj");
+        let v = Vec::from("1 0 obj << /Entry [ 1 0 R ] \r\n >> endobj".as_bytes());
         let vlen = v.len();
         let mut pb = ParseBuffer::new(v);
         let mut aval = Vec::new();
@@ -557,7 +557,7 @@ mod test_pdf_obj {
     fn stream() {
         let mut p = PDFObjP;
 
-        let v = Vec::from("1 0 obj << /Entry [ 1 0 R ] >> stream\n junk \nendstream\nendobj");
+        let v = Vec::from("1 0 obj << /Entry [ 1 0 R ] >> stream\n junk \nendstream\nendobj".as_bytes());
         let vlen = v.len();
         let mut pb = ParseBuffer::new(v);
         let mut aval = Vec::new();
@@ -570,5 +570,37 @@ mod test_pdf_obj {
         let obj = PDFObjT::Indirect(IndirectT::new(1, 0, Box::new(stream)));
         assert_eq!(p.parse(&mut pb), Ok(obj));
         assert_eq!(pb.get_cursor(), vlen);
+    }
+
+    #[test]
+    fn test_obj_no_embedded_comment() {
+        let mut p = PDFObjP;
+
+        let v = Vec::from("1 0 obj  \n<<  /Type /Catalog\n  /Pages 2 0 R\n>>\nendobj".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let val = p.parse(&mut pb);
+        let mut hm = HashMap::new();
+        hm.insert(Vec::from("Type".as_bytes()), PDFObjT::Name(Vec::from("Catalog".as_bytes())));
+        hm.insert(Vec::from("Pages".as_bytes()), PDFObjT::Reference(ReferenceT::new(2, 0)));
+        let d = PDFObjT::Dict(DictT { val: hm });
+        let o = PDFObjT::Indirect(IndirectT::new(1, 0, Box::new(d)));
+        assert_eq!(val, Ok(o));
+    }
+
+    // FIXME: we are not handling embedded comments properly
+    #[test]
+    #[ignore]
+    fn test_obj_embedded_comment() {
+        let mut p = PDFObjP;
+
+        let v = Vec::from("1 0 obj  % entry point\n<<  /Type /Catalog\n  /Pages 2 0 R\n>>\nendobj".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let val = p.parse(&mut pb);
+        let mut hm = HashMap::new();
+        hm.insert(Vec::from("Type".as_bytes()), PDFObjT::Name(Vec::from("Catalog".as_bytes())));
+        hm.insert(Vec::from("Pages".as_bytes()), PDFObjT::Reference(ReferenceT::new(2, 0)));
+        let d = PDFObjT::Dict(DictT { val: hm });
+        let o = PDFObjT::Indirect(IndirectT::new(1, 0, Box::new(d)));
+        assert_eq!(val, Ok(o));
     }
 }
