@@ -24,7 +24,7 @@ pub struct HeaderP;
 impl ParsleyParser for HeaderP {
     type T = HeaderT;
 
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<HeaderT, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
         let mut c = Comment;
 
         let version = c.parse(buf)?;
@@ -253,11 +253,39 @@ impl ParsleyParser for BodyP {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub struct StartXrefT {
+    offset: u64
+}
+
+pub struct StartXrefP;
+impl ParsleyParser for StartXrefP {
+    type T = StartXrefT;
+
+    // This assumes we are positioned at 'startxref', which is
+    // typically found by scanning backwards from EOF.
+    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+        if let Err(_) = buf.exact("startxref".as_bytes()) {
+            return Err(ErrorKind::GuardError("not at startxref"))
+        }
+        let mut ws = WhitespaceEOL::new(false); // need to consume an EOL
+        ws.parse(buf)?;
+
+        let mut int = IntegerP;
+        let offset = u64::try_from(int.parse(buf)?.int_val());
+        if let Err(_) = offset {
+            return Err(ErrorKind::GuardError("conversion error on startxref"))
+        }
+        let offset = offset.unwrap();
+        Ok(StartXrefT{ offset })
+    }
+}
 
 #[cfg(test)]
 mod test_pdf_file {
     use super::super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, ErrorKind};
-    use super::{HeaderT, HeaderP, XrefT, XrefEntT, XrefEntP, XrefSubSectT, XrefSubSectP, XrefSectT, XrefSectP, BodyT, BodyP};
+    use super::{HeaderT, HeaderP, BodyT, BodyP, StartXrefT, StartXrefP};
+    use super::{XrefT, XrefEntT, XrefEntP, XrefSubSectT, XrefSubSectP, XrefSectT, XrefSectP};
     use super::super::super::pdf_lib::pdf_obj::{PDFObjT};
 
     #[test]
@@ -511,5 +539,20 @@ endobj".as_bytes());
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_startxref() {
+        let mut p = StartXrefP;
+
+        let v = Vec::from("startxref \n642\n".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let val = p.parse(&mut pb);
+        assert_eq!(val, Ok(StartXrefT { offset: 642 }));
+
+        let v = Vec::from("startxref %absurd comment \n642\n".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let val = p.parse(&mut pb);
+        assert_eq!(val, Ok(StartXrefT { offset: 642 }));
     }
 }
