@@ -384,9 +384,7 @@ endobj
         }
     }
 
-    // FIXME: we are not handling embedded comments properly
     #[test]
-    #[ignore]
     fn test_body_with_comments() {
         let mut p = BodyP;
         // original body snippet from hello world (with embedded comments)

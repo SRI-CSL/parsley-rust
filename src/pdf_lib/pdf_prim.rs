@@ -3,30 +3,8 @@
 use std::collections::{HashSet};
 use super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, ErrorKind};
 
-// The whitespace parsers require at least one whitespace character
-// for a successful parse.
-
-pub struct WhitespaceEOL {
-    empty_ok: bool
-}
-impl WhitespaceEOL {
-    pub fn new(empty_ok: bool) -> WhitespaceEOL {
-        WhitespaceEOL { empty_ok }
-    }
-}
-
-impl ParsleyParser for WhitespaceEOL {
-    type T = ();
-
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
-        let v = buf.parse_allowed_bytes(" \0\t\r\n\x0c".as_bytes())?;
-        if v.len() == 0 && !self.empty_ok {
-            return Err(ErrorKind::GuardError("not at whitespace-eol"))
-        };
-        Ok(())
-    }
-}
-
+// There are two whitespace parsers.  This first one does not allow
+// EOL as whitespace.
 pub struct WhitespaceNoEOL {
     empty_ok: bool
 }
@@ -69,9 +47,47 @@ impl ParsleyParser for Comment {
     }
 }
 
-// Booleans are almost keywords, except that they have a semantic
-// value.  Include Null here since it is an explicit PDF object.
+// This is the second whitespace parser, that allows EOL.  Since
+// comments can appear anywhere outside of strings, they are
+// essentially whitespace, and are consumed by this parser.
+pub struct WhitespaceEOL {
+    empty_ok: bool
+}
+impl WhitespaceEOL {
+    pub fn new(empty_ok: bool) -> WhitespaceEOL {
+        WhitespaceEOL { empty_ok }
+    }
+}
 
+impl ParsleyParser for WhitespaceEOL {
+    type T = ();
+
+    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+        // loop to consume comments
+        let mut is_empty = true;
+        loop {
+            let v = buf.parse_allowed_bytes(" \0\t\r\n\x0c".as_bytes())?;
+            if v.len() > 0 { is_empty = false }
+            // Check if we are at a comment.
+            if let Some(37) = buf.peek() { // '%'
+                let mut c = Comment;
+                c.parse(buf)?;
+                is_empty = false;
+                continue;
+            }
+            break;
+        }
+
+        if is_empty && !self.empty_ok {
+            // we did not consume anything
+            return Err(ErrorKind::GuardError("not at whitespace-eol"))
+        };
+        Ok(())
+    }
+}
+
+// Booleans are almost keywords, except that they have a semantic
+// value.
 pub struct Boolean;
 impl ParsleyParser for Boolean {
     type T = bool;
@@ -91,6 +107,7 @@ impl ParsleyParser for Boolean {
     }
 }
 
+// null is an explicit PDF object.
 pub struct Null;
 impl ParsleyParser for Null {
     type T = ();
@@ -526,6 +543,11 @@ mod test_pdf_prim {
         let mut pb = ParseBuffer::new(v);
         assert_eq!(com.parse(&mut pb), Ok(vec![37, 32, 13]));
         assert_eq!(pb.get_cursor(), 4);
+
+        let v = Vec::from("%PDF-1.0 \r\n".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(com.parse(&mut pb), Ok(Vec::from("%PDF-1.0 \r".as_bytes())));
+        assert_eq!(pb.get_cursor(), 11);
     }
 
     #[test]

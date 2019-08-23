@@ -191,7 +191,7 @@ impl IndirectP {
         // stream object.
         let obj =
             if let PDFObjT::Dict(d) = o {
-                let mut ws = WhitespaceEOL::new(false); // allow empty whitespace
+                let mut ws = WhitespaceEOL::new(true); // allow empty whitespace
                 ws.parse(buf)?;
                 if buf.check_prefix("stream".as_bytes())? {
                     let mut s = StreamContent;
@@ -453,9 +453,10 @@ mod test_pdf_obj {
     fn comment() {
         let mut p = PDFObjP;
 
+        // Comments are essentially whitespace.
         let v = Vec::from("\r\n %PDF-1.0 \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(p.parse(&mut pb), Ok(PDFObjT::Comment(Vec::from("%PDF-1.0 \r".as_bytes()))));
+        assert_eq!(p.parse(&mut pb), Err(ErrorKind::EndOfBuffer));
         assert_eq!(pb.get_cursor(), 14);
     }
 
@@ -587,9 +588,7 @@ mod test_pdf_obj {
         assert_eq!(val, Ok(o));
     }
 
-    // FIXME: we are not handling embedded comments properly
     #[test]
-    #[ignore]
     fn test_obj_embedded_comment() {
         let mut p = PDFObjP;
 
