@@ -65,15 +65,15 @@ impl DictT {
     }
 }
 
-struct DictP {
+pub struct DictP {
     val:   HashMap<<RawName as ParsleyParser>::T, PDFObjT>,
     names: HashSet<<RawName as ParsleyParser>::T>
 }
 impl DictP {
-    fn new() -> DictP {
+    pub fn new() -> DictP {
         DictP { val: HashMap::new(), names: HashSet::new() }
     }
-    fn parse(mut self, buf: &mut ParseBuffer) -> Result<DictT, ErrorKind> {
+    pub fn parse(mut self, buf: &mut ParseBuffer) -> Result<DictT, ErrorKind> {
         buf.exact("<<".as_bytes())?;
         let mut end = false;
         while !end {

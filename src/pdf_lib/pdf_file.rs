@@ -4,7 +4,7 @@ use std::io::Read; // for read_to_string()
 use std::convert::TryFrom;
 use super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, ErrorKind};
 use super::pdf_prim::{IntegerP, WhitespaceEOL, WhitespaceNoEOL, Comment};
-use super::pdf_obj::{PDFObjP, PDFObjT};
+use super::pdf_obj::{PDFObjP, PDFObjT, DictT, DictP};
 
 // This doesn't yet fully specify a legal version string.
 //
@@ -253,6 +253,34 @@ impl ParsleyParser for BodyP {
     }
 }
 
+// Trailer t { dict: DictObj } := 'trailer' d=DictObj { t.dict = d } ;
+#[derive(Debug, PartialEq)]
+pub struct TrailerT {
+    dict: DictT
+}
+
+pub struct TrailerP;
+impl ParsleyParser for TrailerP {
+    type T = TrailerT;
+
+    // This assumes we are positioned at 'trailer'.
+    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+        if let Err(_) = buf.exact("trailer".as_bytes()) {
+            return Err(ErrorKind::GuardError("not at trailer"))
+        }
+        let mut ws = WhitespaceEOL::new(false); // need to consume an EOL
+        ws.parse(buf)?;
+
+        let dp = DictP::new();
+        let dict = dp.parse(buf);
+        if let Err(_) = dict {
+            return Err(ErrorKind::GuardError("error parsing trailer dictionary"))
+        }
+        let dict = dict.unwrap();
+        Ok(TrailerT{ dict })
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct StartXrefT {
     offset: u64
@@ -283,10 +311,12 @@ impl ParsleyParser for StartXrefP {
 
 #[cfg(test)]
 mod test_pdf_file {
+    use std::collections::{HashMap};
     use super::super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, ErrorKind};
-    use super::{HeaderT, HeaderP, BodyT, BodyP, StartXrefT, StartXrefP};
+    use super::super::super::pdf_lib::pdf_obj::{PDFObjT, ReferenceT, DictT};
+    use super::super::super::pdf_lib::pdf_prim::{IntegerT};
+    use super::{HeaderT, HeaderP, BodyT, BodyP, StartXrefT, StartXrefP, TrailerT, TrailerP};
     use super::{XrefT, XrefEntT, XrefEntP, XrefSubSectT, XrefSubSectP, XrefSectT, XrefSectP};
-    use super::super::super::pdf_lib::pdf_obj::{PDFObjT};
 
     #[test]
     fn test_header() {
@@ -539,6 +569,27 @@ endobj".as_bytes());
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_trailer() {
+        let mut p = TrailerP;
+
+        let v = Vec::from(
+"trailer
+<<
+ /Size 8
+ /Root 1 0 R
+>>
+".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let val = p.parse(&mut pb);
+
+        let mut hm = HashMap::new();
+        hm.insert(Vec::from("Size".as_bytes()), PDFObjT::Integer(IntegerT::new(8)));
+        hm.insert(Vec::from("Root".as_bytes()), PDFObjT::Reference(ReferenceT::new(1, 0)));
+        let dict = DictT::new(hm);
+        assert_eq!(val, Ok(TrailerT{ dict }));
     }
 
     #[test]
