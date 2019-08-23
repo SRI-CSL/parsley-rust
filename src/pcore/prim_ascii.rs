@@ -24,7 +24,7 @@ impl ParsleyPrimitive for AsciiCharPrimitive {
 // use with the primitive combinators.
 
 pub struct AsciiChar {
-    guard: Option<Box<FnMut(&char) -> bool>>
+    guard: Option<Box<dyn FnMut(&char) -> bool>>
 }
 
 impl AsciiChar {
