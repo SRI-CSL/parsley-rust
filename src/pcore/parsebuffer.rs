@@ -195,13 +195,31 @@ impl ParseBuffer {
     // Scanning for a tag.  The cursor is set to the *start* of the
     // tag when successful, and the number of bytes skipped over is
     // returned.  If the tag is not found, the cursor is not moved.
-    // This is a primitive since low-level access to the parse buffer
-    // is needed.
+    // It includes the current position in the match, so the returned
+    // relative offset (if any) could be zero if the cursor is
+    // positioned at the tag.  This is a primitive since low-level
+    // access to the parse buffer is needed.
     pub fn scan(&mut self, tag: &[u8]) -> Result<usize, ErrorKind> {
         let mut skip = 0;
         for w in self.buf[self.ofs..].windows(tag.len()) {
             if w.starts_with(tag) {
                 self.ofs = self.ofs + skip;
+                return Ok(skip)
+            }
+            skip += 1;
+        }
+        Err(ErrorKind::EndOfBuffer)
+    }
+
+    // Scan backwards for a tag. As above, the cursor is set to the
+    // *start* of the tag when successful.  Since it skips the current
+    // position, the returned relative offset (if any) is always
+    // positive.
+    pub fn backward_scan(&mut self, tag: &[u8]) -> Result<usize, ErrorKind> {
+        let mut skip = 1;
+        for w in self.buf[..self.ofs].windows(tag.len()).rev() {
+            if w.starts_with(tag) {
+                self.ofs = self.ofs - skip;
                 return Ok(skip)
             }
             skip += 1;
@@ -230,5 +248,34 @@ impl ParseBuffer {
             self.ofs += len;
             Ok(ret)
         }
+    }
+}
+
+#[cfg(test)]
+mod test_parsebuffer {
+    use super::{ParseBuffer, ErrorKind};
+
+    #[test]
+    fn test_scan() {
+        let v = Vec::from("0123456789".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(pb.scan("56".as_bytes()), Ok(5));
+        assert_eq!(pb.get_cursor(), 5);
+        assert_eq!(pb.scan("56".as_bytes()), Ok(0));
+        assert_eq!(pb.get_cursor(), 5);
+        assert_eq!(pb.scan("0".as_bytes()), Err(ErrorKind::EndOfBuffer));
+        assert_eq!(pb.get_cursor(), 5);
+    }
+
+    #[test]
+    fn test_backward_scan() {
+        let v = Vec::from("0123456789".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(pb.scan("56".as_bytes()), Ok(5));
+        assert_eq!(pb.get_cursor(), 5);
+        assert_eq!(pb.backward_scan("56".as_bytes()), Err(ErrorKind::EndOfBuffer));
+        assert_eq!(pb.get_cursor(), 5);
+        assert_eq!(pb.backward_scan("0".as_bytes()), Ok(5));
+        assert_eq!(pb.get_cursor(), 0);
     }
 }
