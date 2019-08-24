@@ -106,14 +106,6 @@ impl ParseBuffer {
         }
     }
 
-    // to be used only for low-level primitives.
-    pub fn incr_cursor(&mut self) -> () {
-        self.ofs += 1;
-    }
-    pub fn decr_cursor(&mut self) -> () {
-        self.ofs -= 1;
-    }
-
     // Cursor management: get and set the parsing cursor; to allow
     // parsing to backtrack or rewind after an unsuccessful complex
     // parse.
@@ -123,6 +115,14 @@ impl ParseBuffer {
     pub fn set_cursor(&mut self, ofs: usize) {
         assert!(ofs <= self.buf.len());
         self.ofs = ofs
+    }
+
+    // to be used only for low-level primitives.
+    pub fn incr_cursor(&mut self) -> () {
+        self.ofs += 1;
+    }
+    pub fn decr_cursor(&mut self) -> () {
+        self.ofs -= 1;
     }
 
     // Parsing a single element of the Parsley primitive type P; it
@@ -219,6 +219,7 @@ impl ParseBuffer {
         let mut skip = 1;
         for w in self.buf[..self.ofs].windows(tag.len()).rev() {
             if w.starts_with(tag) {
+                skip = skip + tag.len() - 1;
                 self.ofs = self.ofs - skip;
                 return Ok(skip)
             }
@@ -275,7 +276,7 @@ mod test_parsebuffer {
         assert_eq!(pb.get_cursor(), 5);
         assert_eq!(pb.backward_scan("56".as_bytes()), Err(ErrorKind::EndOfBuffer));
         assert_eq!(pb.get_cursor(), 5);
-        assert_eq!(pb.backward_scan("0".as_bytes()), Ok(5));
+        assert_eq!(pb.backward_scan("012".as_bytes()), Ok(5));
         assert_eq!(pb.get_cursor(), 0);
     }
 }
