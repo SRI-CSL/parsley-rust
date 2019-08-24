@@ -19,6 +19,10 @@ pub struct HeaderT {
     version: Vec<u8>,
     binary:  Option<Vec<u8>>
 }
+impl HeaderT {
+    pub fn version(&self) -> &[u8] { self.version.as_slice() }
+    pub fn binary(&self) -> &Option<Vec<u8>> { &self.binary }
+}
 
 pub struct HeaderP;
 impl ParsleyParser for HeaderP {
@@ -236,6 +240,9 @@ impl ParsleyParser for XrefSectP {
 #[derive(Debug, PartialEq)]
 pub struct BodyT {
     objs: Vec<PDFObjT>
+}
+impl BodyT {
+    pub fn objs(&self) -> &[PDFObjT] { self.objs.as_slice() }
 }
 
 pub struct BodyP;

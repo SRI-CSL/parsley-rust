@@ -142,6 +142,8 @@ impl StreamT {
     pub fn new(dict: DictT, stream: Vec<u8>) -> StreamT {
         StreamT { dict, stream }
     }
+    pub fn dict(&self)   -> &DictT { &self.dict }
+    pub fn stream(&self) -> &[u8]  { self.stream.as_slice() }
 }
 
 #[derive(Debug, PartialEq)]
@@ -154,6 +156,9 @@ impl IndirectT {
     pub fn new(num: i64, gen: i64, obj: Box<PDFObjT>) -> IndirectT {
         IndirectT { num, gen, obj }
     }
+    pub fn num(&self) -> i64      { self.num }
+    pub fn gen(&self) -> i64      { self.gen }
+    pub fn obj(&self) -> &PDFObjT { &self.obj }
 }
 
 struct IndirectP;
@@ -235,6 +240,8 @@ impl ReferenceT {
     pub fn new(num: i64, gen: i64) -> ReferenceT {
         ReferenceT { num, gen }
     }
+    pub fn num(&self) -> i64 { self.num }
+    pub fn gen(&self) -> i64 { self.gen }
 }
 
 struct ReferenceP;
