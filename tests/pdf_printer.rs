@@ -9,8 +9,7 @@ use parsley_rust::pcore::parsebuffer::{ParseBuffer, ParsleyParser};
 use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, XrefSectP, XrefEntT};
 use parsley_rust::pdf_lib::pdf_obj::{PDFObjT, PDFObjP};
 
-#[test]
-fn parse_file() {
+fn parse_file(test_file: &str) {
     // Print current path
     let path = env::current_dir();
     if let Err(_) = path {
@@ -18,7 +17,7 @@ fn parse_file() {
         assert!(false);
     }
     let mut path = path.unwrap();
-    path.push("tests/test_files/minimal.pdf");
+    path.push(test_file);
     let display = path.as_path().display();
 
     // Open the path in read-only mode, returns `io::Result<File>`
@@ -114,4 +113,21 @@ fn parse_file() {
             println!("found non-indirect object at offset {}!", o)
         }
     }
+}
+
+#[test]
+fn test_minimal() {
+    parse_file("tests/test_files/minimal.pdf")
+}
+
+#[test]
+#[ignore]
+fn test_rosenthol() {
+    parse_file("tests/test_files/Rosenthol_example.pdf")
+}
+
+#[test]
+#[ignore]
+fn test_rosenthol_2pages() {
+    parse_file("tests/test_files/Rosenthol_example_2pages.pdf")
 }
