@@ -11,7 +11,7 @@ use parsley_rust::pdf_lib::pdf_obj::{PDFObjT, PDFObjP};
 
 #[test]
 fn parse_file() {
-    // Print current path
+     //Print current path
     let path = env::current_dir();
     if let Err(_) = path {
         println!("Cannot get current dir!");
@@ -36,7 +36,8 @@ fn parse_file() {
         Ok(_)    => ()
     }
 
-    let mut pb = ParseBuffer::new(Vec::from(s.as_bytes()));
+    //let mut pb_new = ParseBuffer::new(Vec::from(s.as_bytes()));
+    let mut pb = parsley_rust::parse_file("tests/test_files/minimal.pdf");
     assert_eq!(pb.get_cursor(), 0);
     let buflen = pb.remaining();
 

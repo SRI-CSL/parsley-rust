@@ -21,6 +21,12 @@ impl ParseError {
     }
 }
 
+impl fmt::Display for ParseBuffer {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self.buf)
+    }
+}
+
 // The trait defining the interface for parsing a primitive type of
 // unknown size.  The parsers implementing this trait are usually
 // associated with a specific primitive type, specified by name().
