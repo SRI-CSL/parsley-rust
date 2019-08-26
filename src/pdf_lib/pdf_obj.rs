@@ -7,29 +7,28 @@ use super::pdf_prim::{WhitespaceEOL, Comment};
 use super::pdf_prim::{Boolean, Null, IntegerT, IntegerP, RealT, RealP, HexString, RawLiteralString};
 use super::pdf_prim::{RawName, StreamContent};
 
-// Array a { val : [PDFObj] } := '[' ( o=PDFObj { a.val.append(o) } )* ']'
+// Array a { objs : [PDFObj] } := '[' ( o=PDFObj { a.objs.append(o) } )* ']'
 
 #[derive(Debug, PartialEq)]
 pub struct ArrayT {
-    val: Vec<PDFObjT>
+    objs: Vec<PDFObjT>
 }
 impl ArrayT {
-    pub fn new(val: Vec<PDFObjT>) -> ArrayT {
-        ArrayT { val }
+    pub fn new(objs: Vec<PDFObjT>) -> ArrayT {
+        ArrayT { objs }
+    }
+    pub fn objs(&self) -> &[PDFObjT] {
+        self.objs.as_slice()
     }
 }
 
-struct ArrayP {
-    val: Vec<PDFObjT>
-}
+struct ArrayP;
 impl ArrayP {
-    fn new() -> ArrayP {
-        ArrayP { val: Vec::new() }
-    }
-    fn parse(mut self, buf: &mut ParseBuffer) -> Result<ArrayT, ErrorKind> {
+    fn parse(self, buf: &mut ParseBuffer) -> Result<ArrayT, ErrorKind> {
         if let Err(_) = buf.exact("[".as_bytes()) {
             return Err(ErrorKind::GuardError("not at array object"))
         }
+        let mut objs = Vec::new();
         let mut end = false;
         while !end {
             // Need more precise handling of whitespace to
@@ -41,41 +40,39 @@ impl ArrayP {
             if let Err(_) = buf.exact("]".as_bytes()) {
                 let mut p = PDFObjP;
                 let o = p.parse(buf)?;
-                self.val.push(o);
+                objs.push(o);
             } else {
                 end = true;
             }
         }
-        Ok(ArrayT::new(self.val))
+        Ok(ArrayT::new(objs))
     }
 }
 
-// Dict d { val : map<typeof(NameObj.val), PDFObj> } :=
+// Dict d { map : map<typeof(NameObj.val), PDFObj> } :=
 //  { names : set<typeof(NameObj.val)> }
-//  '<<' ( n=NameObj [ !names.contains(n.val) "Unique dictionary key" ] o=PDFObj { d.val[n.val] := o; names.add(n.val) } )* '>>' ;
+//  '<<' ( n=NameObj [ !names.contains(n.val) "Unique dictionary key" ] o=PDFObj { d.map[n.val] := o; names.add(n.val) } )* '>>' ;
 
 #[derive(Debug, PartialEq)]
 pub struct DictT {
-    // TODO: use a better way to name the type
-    val: HashMap<<RawName as ParsleyParser>::T, PDFObjT>
+    map: HashMap<<RawName as ParsleyParser>::T, PDFObjT>
 }
 impl DictT {
-    pub fn new(val: HashMap<<RawName as ParsleyParser>::T, PDFObjT>) -> DictT {
-        DictT { val }
+    pub fn new(map: HashMap<<RawName as ParsleyParser>::T, PDFObjT>) -> DictT {
+        DictT { map }
+    }
+    pub fn map(&self) -> &HashMap<<RawName as ParsleyParser>::T, PDFObjT> {
+        &self.map
     }
 }
 
-pub struct DictP {
-    val:   HashMap<<RawName as ParsleyParser>::T, PDFObjT>,
-    names: HashSet<<RawName as ParsleyParser>::T>
-}
+pub struct DictP;
 impl DictP {
-    pub fn new() -> DictP {
-        DictP { val: HashMap::new(), names: HashSet::new() }
-    }
-    pub fn parse(mut self, buf: &mut ParseBuffer) -> Result<DictT, ErrorKind> {
+    pub fn parse(self, buf: &mut ParseBuffer) -> Result<DictT, ErrorKind> {
         buf.exact("<<".as_bytes())?;
-        let mut end = false;
+        let mut end   = false;
+        let mut map   = HashMap::new();
+        let mut names = HashSet::new();
         while !end {
             // Need more precise handling of whitespace to
             // differentiate between legal and illegal empty
@@ -87,7 +84,7 @@ impl DictP {
             if let Err(_) = buf.exact(">>".as_bytes()) {
                 let mut p = RawName;
                 let n = p.parse(buf)?;
-                if self.names.contains(&n) {
+                if names.contains(&n) {
                     // TODO: need extensible error reporting
                     return Err(ErrorKind::GuardError("non-unique dictionary key"))
                 }
@@ -99,13 +96,13 @@ impl DictP {
                 let mut p = PDFObjP;
                 let o = p.parse(buf)?;
                 // Note: reuse of n requires a clonable type
-                self.names.insert(n.clone());
-                self.val.insert(n, o);
+                names.insert(n.clone());
+                map.insert(n, o);
             } else {
                 end = true;
             }
         }
-        Ok(DictT::new(self.val))
+        Ok(DictT::new(map))
     }
 }
 // type struct Stream {
@@ -145,6 +142,8 @@ impl StreamT {
     pub fn new(dict: DictT, stream: Vec<u8>) -> StreamT {
         StreamT { dict, stream }
     }
+    pub fn dict(&self)   -> &DictT { &self.dict }
+    pub fn stream(&self) -> &[u8]  { self.stream.as_slice() }
 }
 
 #[derive(Debug, PartialEq)]
@@ -157,6 +156,9 @@ impl IndirectT {
     pub fn new(num: i64, gen: i64, obj: Box<PDFObjT>) -> IndirectT {
         IndirectT { num, gen, obj }
     }
+    pub fn num(&self) -> i64      { self.num }
+    pub fn gen(&self) -> i64      { self.gen }
+    pub fn obj(&self) -> &PDFObjT { &self.obj }
 }
 
 struct IndirectP;
@@ -238,6 +240,8 @@ impl ReferenceT {
     pub fn new(num: i64, gen: i64) -> ReferenceT {
         ReferenceT { num, gen }
     }
+    pub fn num(&self) -> i64 { self.num }
+    pub fn gen(&self) -> i64 { self.gen }
 }
 
 struct ReferenceP;
@@ -324,7 +328,7 @@ impl ParsleyParser for PDFObjP {
                 Ok(PDFObjT::Name(n.parse(buf)?))
             },
             Some(91)  => { // '['
-                let p = ArrayP::new();
+                let p = ArrayP;
                 Ok(PDFObjT::Array(p.parse(buf)?))
             },
             Some(60)  => { // '<'
@@ -337,7 +341,7 @@ impl ParsleyParser for PDFObjP {
 
                 match next {
                     Some(60) => {
-                        let p = DictP::new();
+                        let p = DictP;
                         Ok(PDFObjT::Dict(p.parse(buf)?))
                     },
                     Some(_) | None => {
@@ -486,16 +490,16 @@ mod test_pdf_obj {
 
         let v = Vec::from("[ 1 0 R ] \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let mut aval = Vec::new();
-        aval.push(PDFObjT::Reference(ReferenceT::new(1, 0)));
-        assert_eq!(p.parse(&mut pb), Ok(PDFObjT::Array(ArrayT::new(aval))));
+        let mut objs = Vec::new();
+        objs.push(PDFObjT::Reference(ReferenceT::new(1, 0)));
+        assert_eq!(p.parse(&mut pb), Ok(PDFObjT::Array(ArrayT::new(objs))));
         assert_eq!(pb.get_cursor(), 9);
 
         let v = Vec::from("[ 1 \r 0 \n R ] \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let mut aval = Vec::new();
-        aval.push(PDFObjT::Reference(ReferenceT::new(1, 0)));
-        assert_eq!(p.parse(&mut pb), Ok(PDFObjT::Array(ArrayT::new(aval))));
+        let mut objs = Vec::new();
+        objs.push(PDFObjT::Reference(ReferenceT::new(1, 0)));
+        assert_eq!(p.parse(&mut pb), Ok(PDFObjT::Array(ArrayT::new(objs))));
         assert_eq!(pb.get_cursor(), 13);
 
         let v = Vec::from("[ -1 0 R ] \r\n".as_bytes());
@@ -511,24 +515,24 @@ mod test_pdf_obj {
         let v = Vec::from("<< /Entry [ 1 0 R ] \r\n >>".as_bytes());
         let vlen = v.len();
         let mut pb = ParseBuffer::new(v);
-        let mut aval = Vec::new();
-        aval.push(PDFObjT::Reference(ReferenceT::new(1, 0)));
-        let entval = PDFObjT::Array(ArrayT::new(aval));
-        let mut hm = HashMap::new();
-        hm.insert(Vec::from("Entry".as_bytes()), entval);
-        assert_eq!(p.parse(&mut pb), Ok(PDFObjT::Dict(DictT { val: hm })));
+        let mut objs = Vec::new();
+        objs.push(PDFObjT::Reference(ReferenceT::new(1, 0)));
+        let entval = PDFObjT::Array(ArrayT::new(objs));
+        let mut map = HashMap::new();
+        map.insert(Vec::from("Entry".as_bytes()), entval);
+        assert_eq!(p.parse(&mut pb), Ok(PDFObjT::Dict(DictT::new(map))));
         assert_eq!(pb.get_cursor(), vlen);
 
         // version with minimal whitespace
         let v = Vec::from("<</Entry [1 0 R]>>".as_bytes());
         let vlen = v.len();
         let mut pb = ParseBuffer::new(v);
-        let mut aval = Vec::new();
-        aval.push(PDFObjT::Reference(ReferenceT::new(1, 0)));
-        let entval = PDFObjT::Array(ArrayT::new(aval));
-        let mut hm = HashMap::new();
-        hm.insert(Vec::from("Entry".as_bytes()), entval);
-        assert_eq!(p.parse(&mut pb), Ok(PDFObjT::Dict(DictT { val: hm })));
+        let mut objs = Vec::new();
+        objs.push(PDFObjT::Reference(ReferenceT::new(1, 0)));
+        let entval = PDFObjT::Array(ArrayT::new(objs));
+        let mut map = HashMap::new();
+        map.insert(Vec::from("Entry".as_bytes()), entval);
+        assert_eq!(p.parse(&mut pb), Ok(PDFObjT::Dict(DictT::new(map))));
         assert_eq!(pb.get_cursor(), vlen);
 
         let v = Vec::from("<< /Entry [ 1 0 R ] /Entry \r\n >>".as_bytes());
@@ -543,12 +547,12 @@ mod test_pdf_obj {
         let v = Vec::from("1 0 obj << /Entry [ 1 0 R ] \r\n >> endobj".as_bytes());
         let vlen = v.len();
         let mut pb = ParseBuffer::new(v);
-        let mut aval = Vec::new();
-        aval.push(PDFObjT::Reference(ReferenceT::new(1, 0)));
-        let entval = PDFObjT::Array(ArrayT::new(aval));
-        let mut hm = HashMap::new();
-        hm.insert(Vec::from("Entry".as_bytes()), entval);
-        let dict = PDFObjT::Dict(DictT::new(hm));
+        let mut objs = Vec::new();
+        objs.push(PDFObjT::Reference(ReferenceT::new(1, 0)));
+        let entval = PDFObjT::Array(ArrayT::new(objs));
+        let mut map = HashMap::new();
+        map.insert(Vec::from("Entry".as_bytes()), entval);
+        let dict = PDFObjT::Dict(DictT::new(map));
         let obj = PDFObjT::Indirect(IndirectT::new(1, 0, Box::new(dict)));
         assert_eq!(p.parse(&mut pb), Ok(obj));
         assert_eq!(pb.get_cursor(), vlen);
@@ -561,12 +565,12 @@ mod test_pdf_obj {
         let v = Vec::from("1 0 obj << /Entry [ 1 0 R ] >> stream\n junk \nendstream\nendobj".as_bytes());
         let vlen = v.len();
         let mut pb = ParseBuffer::new(v);
-        let mut aval = Vec::new();
-        aval.push(PDFObjT::Reference(ReferenceT::new(1, 0)));
-        let entval = PDFObjT::Array(ArrayT::new(aval));
-        let mut hm = HashMap::new();
-        hm.insert(Vec::from("Entry".as_bytes()), entval);
-        let dict = DictT::new(hm);
+        let mut objs = Vec::new();
+        objs.push(PDFObjT::Reference(ReferenceT::new(1, 0)));
+        let entval = PDFObjT::Array(ArrayT::new(objs));
+        let mut map = HashMap::new();
+        map.insert(Vec::from("Entry".as_bytes()), entval);
+        let dict = DictT::new(map);
         let stream = PDFObjT::Stream(StreamT::new(dict, Vec::from(" junk ".as_bytes())));
         let obj = PDFObjT::Indirect(IndirectT::new(1, 0, Box::new(stream)));
         assert_eq!(p.parse(&mut pb), Ok(obj));
@@ -580,10 +584,10 @@ mod test_pdf_obj {
         let v = Vec::from("1 0 obj  \n<<  /Type /Catalog\n  /Pages 2 0 R\n>>\nendobj".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
-        let mut hm = HashMap::new();
-        hm.insert(Vec::from("Type".as_bytes()), PDFObjT::Name(Vec::from("Catalog".as_bytes())));
-        hm.insert(Vec::from("Pages".as_bytes()), PDFObjT::Reference(ReferenceT::new(2, 0)));
-        let d = PDFObjT::Dict(DictT { val: hm });
+        let mut map = HashMap::new();
+        map.insert(Vec::from("Type".as_bytes()), PDFObjT::Name(Vec::from("Catalog".as_bytes())));
+        map.insert(Vec::from("Pages".as_bytes()), PDFObjT::Reference(ReferenceT::new(2, 0)));
+        let d = PDFObjT::Dict(DictT::new(map));
         let o = PDFObjT::Indirect(IndirectT::new(1, 0, Box::new(d)));
         assert_eq!(val, Ok(o));
     }
@@ -595,10 +599,10 @@ mod test_pdf_obj {
         let v = Vec::from("1 0 obj  % entry point\n<<  /Type /Catalog\n  /Pages 2 0 R\n>>\nendobj".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
-        let mut hm = HashMap::new();
-        hm.insert(Vec::from("Type".as_bytes()), PDFObjT::Name(Vec::from("Catalog".as_bytes())));
-        hm.insert(Vec::from("Pages".as_bytes()), PDFObjT::Reference(ReferenceT::new(2, 0)));
-        let d = PDFObjT::Dict(DictT { val: hm });
+        let mut map = HashMap::new();
+        map.insert(Vec::from("Type".as_bytes()), PDFObjT::Name(Vec::from("Catalog".as_bytes())));
+        map.insert(Vec::from("Pages".as_bytes()), PDFObjT::Reference(ReferenceT::new(2, 0)));
+        let d = PDFObjT::Dict(DictT::new(map));
         let o = PDFObjT::Indirect(IndirectT::new(1, 0, Box::new(d)));
         assert_eq!(val, Ok(o));
     }

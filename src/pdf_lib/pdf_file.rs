@@ -19,6 +19,10 @@ pub struct HeaderT {
     version: Vec<u8>,
     binary:  Option<Vec<u8>>
 }
+impl HeaderT {
+    pub fn version(&self) -> &[u8] { self.version.as_slice() }
+    pub fn binary(&self) -> &Option<Vec<u8>> { &self.binary }
+}
 
 pub struct HeaderP;
 impl ParsleyParser for HeaderP {
@@ -50,6 +54,10 @@ impl ParsleyParser for HeaderP {
 pub struct XrefT {
     info: u64,
     gen:  u64
+}
+impl XrefT {
+    pub fn info(&self) -> u64 { self.info }
+    pub fn gen(&self)  -> u64 { self.gen }
 }
 #[derive(Debug, PartialEq)]
 pub enum XrefEntT {
@@ -140,6 +148,11 @@ pub struct XrefSubSectT {
     count: u64,
     ents:  Vec<XrefEntT>
 }
+impl XrefSubSectT {
+    pub fn start(&self) -> u64 { self.start }
+    pub fn count(&self) -> u64 { self.count }
+    pub fn ents(&self)  -> &[XrefEntT] { self.ents.as_slice() }
+}
 
 struct XrefSubSectP;
 impl XrefSubSectP {
@@ -174,6 +187,7 @@ impl XrefSubSectP {
         let mut ents = Vec::new();
         for _ in 0 .. count {
             let ent = p.parse(buf)?;
+            // TODO: constrain object 0 to always be free
             ents.push(ent);
         }
 
@@ -188,6 +202,9 @@ impl XrefSubSectP {
 #[derive(Debug, PartialEq)]
 pub struct XrefSectT {
     sects: Vec<XrefSubSectT>
+}
+impl XrefSectT {
+    pub fn sects(&self) -> &[XrefSubSectT] { self.sects.as_slice() }
 }
 
 pub struct XrefSectP;
@@ -224,6 +241,9 @@ impl ParsleyParser for XrefSectP {
 pub struct BodyT {
     objs: Vec<PDFObjT>
 }
+impl BodyT {
+    pub fn objs(&self) -> &[PDFObjT] { self.objs.as_slice() }
+}
 
 pub struct BodyP;
 impl ParsleyParser for BodyP {
@@ -258,6 +278,9 @@ impl ParsleyParser for BodyP {
 pub struct TrailerT {
     dict: DictT
 }
+impl TrailerT {
+    pub fn dict(&self) -> &DictT { &self.dict }
+}
 
 pub struct TrailerP;
 impl ParsleyParser for TrailerP {
@@ -271,7 +294,7 @@ impl ParsleyParser for TrailerP {
         let mut ws = WhitespaceEOL::new(false); // need to consume an EOL
         ws.parse(buf)?;
 
-        let dp = DictP::new();
+        let dp = DictP;
         let dict = dp.parse(buf);
         if let Err(_) = dict {
             return Err(ErrorKind::GuardError("error parsing trailer dictionary"))
@@ -284,6 +307,9 @@ impl ParsleyParser for TrailerP {
 #[derive(Debug, PartialEq)]
 pub struct StartXrefT {
     offset: u64
+}
+impl StartXrefT {
+    pub fn offset(&self) -> u64 { self.offset }
 }
 
 pub struct StartXrefP;
@@ -585,10 +611,10 @@ endobj".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
 
-        let mut hm = HashMap::new();
-        hm.insert(Vec::from("Size".as_bytes()), PDFObjT::Integer(IntegerT::new(8)));
-        hm.insert(Vec::from("Root".as_bytes()), PDFObjT::Reference(ReferenceT::new(1, 0)));
-        let dict = DictT::new(hm);
+        let mut map = HashMap::new();
+        map.insert(Vec::from("Size".as_bytes()), PDFObjT::Integer(IntegerT::new(8)));
+        map.insert(Vec::from("Root".as_bytes()), PDFObjT::Reference(ReferenceT::new(1, 0)));
+        let dict = DictT::new(map);
         assert_eq!(val, Ok(TrailerT{ dict }));
     }
 
