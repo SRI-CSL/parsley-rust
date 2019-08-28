@@ -2,12 +2,43 @@
 
 use std::result::Result;
 use std::error::Error;
+use std::cmp::PartialEq;
 use std::fmt;
 
 #[derive(Debug)]
 pub struct ParseBuffer {
     buf: Vec<u8>,
     ofs: usize,
+}
+
+pub trait Location {
+    fn parsebuf_start(&self) -> usize;
+    fn parsebuf_end(&self)   -> usize;
+}
+
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct LocatedVal<T>
+where T : PartialEq
+{
+    val:   T,
+    start: usize,
+    end:   usize,
+}
+impl<T> LocatedVal<T>
+where T : PartialEq
+{
+    pub fn new(val: T, start: usize, end: usize) -> LocatedVal<T> {
+        LocatedVal { val, start, end }
+    }
+    pub fn val(&self)   -> &T { &self.val }
+    pub fn unwrap(self) -> T  { self.val }
+}
+
+impl<T> Location for LocatedVal<T>
+where T : PartialEq
+{
+    fn parsebuf_start(&self) -> usize { self.start }
+    fn parsebuf_end(&self)   -> usize { self.end }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -17,7 +48,7 @@ pub struct ParseError {
 
 impl ParseError {
     pub fn new(msg: &'static str) -> ParseError {
-        ParseError{msg}
+        ParseError { msg }
     }
 }
 
@@ -46,7 +77,7 @@ pub trait ParsleyPrimitive {
 // general parsers do not have a defined name.
 pub trait ParsleyParser {
     // The Rust type for the parsed value
-    type T;
+    type T : Location;
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind>;
 }

@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::env;
 use std::convert::TryInto;
-use parsley_rust::pcore::parsebuffer::{ParseBuffer, ParsleyParser};
+use parsley_rust::pcore::parsebuffer::{ParseBuffer, ParsleyParser, Location};
 use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, XrefSectP, XrefEntT};
 use parsley_rust::pdf_lib::pdf_obj::{PDFObjT, PDFObjP};
 
@@ -69,6 +69,8 @@ fn parse_file(test_file: &str) {
                display, pb.get_cursor(), sxref);
     }
     let sxref = sxref.unwrap();
+    println!(" startxref span: {}..{}.", sxref.parsebuf_start(), sxref.parsebuf_end());
+    let sxref = sxref.unwrap();
     println!("startxref points to offset {} for xref", sxref.offset());
 
     // Parse xref at that offset.
@@ -79,12 +81,13 @@ fn parse_file(test_file: &str) {
         panic!("Could not parse xref in {} at pos {}: {:?}",
                display, pb.get_cursor(), xref);
     }
-    let xref = xref.unwrap();
+    let xref = xref.unwrap().unwrap();
     let mut offsets = Vec::new();
-    for s in xref.sects().iter() {
+    for ls in xref.sects().iter() {
+        let s = ls.val();
         println!("Found {} objects starting at {}:", s.count(), s.start());
         for o in s.ents() {
-            match o {
+            match o.val() {
                 XrefEntT::Inuse(x) => {
                     println!("   inuse object at {}.", x.info());
                     offsets.push(x.info())
@@ -101,12 +104,13 @@ fn parse_file(test_file: &str) {
     for o in offsets.iter() {
         let mut p = PDFObjP;
         pb.set_cursor((*o).try_into().unwrap());
-        let obj = p.parse(&mut pb);
-        if let Err(_) = obj {
+        let lobj = p.parse(&mut pb);
+        if let Err(_) = lobj {
             panic!("Cannot parse object at offset {} in {}: {:?}",
-                   o, display, obj)
+                   o, display, lobj)
         }
-        let obj = obj.unwrap();
+        let lobj = lobj.unwrap();
+        let obj = lobj.unwrap();
         if let PDFObjT::Indirect(_) = obj {
             objs.push(obj)
         } else {

@@ -2,7 +2,7 @@
 
 use std::io::Read; // for read_to_string()
 use std::convert::TryFrom;
-use super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, ErrorKind};
+use super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal, ErrorKind};
 use super::pdf_prim::{IntegerP, WhitespaceEOL, WhitespaceNoEOL, Comment};
 use super::pdf_obj::{PDFObjP, PDFObjT, DictT, DictP};
 
@@ -16,24 +16,26 @@ use super::pdf_obj::{PDFObjP, PDFObjT, DictT, DictP};
 
 #[derive(Debug, PartialEq)]
 pub struct HeaderT {
-    version: Vec<u8>,
-    binary:  Option<Vec<u8>>
+    version: LocatedVal<Vec<u8>>,
+    binary:  Option<LocatedVal<Vec<u8>>>
 }
 impl HeaderT {
-    pub fn version(&self) -> &[u8] { self.version.as_slice() }
-    pub fn binary(&self) -> &Option<Vec<u8>> { &self.binary }
+    pub fn version(&self) -> &LocatedVal<Vec<u8>>         { &self.version }
+    pub fn binary(&self)  -> &Option<LocatedVal<Vec<u8>>> { &self.binary }
 }
 
 pub struct HeaderP;
 impl ParsleyParser for HeaderP {
-    type T = HeaderT;
+    type T = LocatedVal<HeaderT>;
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
         let mut c = Comment;
 
+        let start   = buf.get_cursor();
         let version = c.parse(buf)?;
-        let binary = if let Ok(s) = c.parse(buf) { Some(s) } else { None };
-        Ok(HeaderT { version, binary })
+        let binary  = if let Ok(s) = c.parse(buf) { Some(s) } else { None };
+        let end     = buf.get_cursor();
+        Ok(LocatedVal::new(HeaderT { version, binary }, start, end))
     }
 }
 
@@ -67,7 +69,9 @@ pub enum XrefEntT {
 
 struct XrefEntP;
 impl XrefEntP {
-    fn parse(&self, buf: &mut ParseBuffer) -> Result<XrefEntT, ErrorKind> {
+    fn parse(&self, buf: &mut ParseBuffer) -> Result<LocatedVal<XrefEntT>, ErrorKind> {
+        let start = buf.get_cursor();
+
         // Due to borrow checking of the mutable buf, each extracted
         // segment has to be processed completely before the next
         // extraction.
@@ -125,8 +129,11 @@ impl XrefEntP {
             return Err(ErrorKind::GuardError("bad eol gen"))
         }
 
-        if inuse { Ok(XrefEntT::Inuse(XrefT {info: inf, gen })) }
-        else     { Ok(XrefEntT::Free (XrefT {info: inf, gen })) }
+        let refv = XrefT {info: inf, gen };
+        let ent  = if inuse { XrefEntT::Inuse(refv) }
+                   else     { XrefEntT::Free (refv) };
+        let end = buf.get_cursor();
+        Ok(LocatedVal::new(ent, start, end))
     }
 }
 
@@ -146,17 +153,19 @@ impl XrefEntP {
 pub struct XrefSubSectT {
     start: u64,
     count: u64,
-    ents:  Vec<XrefEntT>
+    ents:  Vec<LocatedVal<XrefEntT>>
 }
 impl XrefSubSectT {
     pub fn start(&self) -> u64 { self.start }
     pub fn count(&self) -> u64 { self.count }
-    pub fn ents(&self)  -> &[XrefEntT] { self.ents.as_slice() }
+    pub fn ents(&self)  -> &[LocatedVal<XrefEntT>] { self.ents.as_slice() }
 }
 
 struct XrefSubSectP;
 impl XrefSubSectP {
-    fn parse(&self, buf: &mut ParseBuffer) -> Result<XrefSubSectT, ErrorKind> {
+    fn parse(&self, buf: &mut ParseBuffer) -> Result<LocatedVal<XrefSubSectT>, ErrorKind> {
+        let start = buf.get_cursor();
+
         // The spec is not clear whether there is any leading or
         // trailing whitespace on the first line of a subsection.
         // Assume there can be possibly empty leading whitespace for now.
@@ -164,18 +173,18 @@ impl XrefSubSectP {
         ws.parse(buf)?;
 
         let mut int = IntegerP;
-        let start = u64::try_from(int.parse(buf)?.int_val());
-        if let Err(_) = start {
+        let xstart = u64::try_from(int.parse(buf)?.val().int_val());
+        if let Err(_) = xstart {
             return Err(ErrorKind::GuardError("conversion error on xref-subsect start"))
         }
-        let start = start.unwrap();
+        let xstart = xstart.unwrap();
 
         let _ = buf.exact(" ".as_bytes())?;
-        let count = u64::try_from(int.parse(buf)?.int_val());
-        if let Err(_) = count {
+        let xcount = u64::try_from(int.parse(buf)?.val().int_val());
+        if let Err(_) = xcount {
             return Err(ErrorKind::GuardError("conversion error on xref-subsect count"))
         }
-        let count = count.unwrap();
+        let xcount = xcount.unwrap();
 
         // Again, no clarity on the type of EOL terminating this line.
         // Assume we need one for now.
@@ -185,13 +194,14 @@ impl XrefSubSectP {
         // Now get the specified number of entries.
         let p = XrefEntP;
         let mut ents = Vec::new();
-        for _ in 0 .. count {
+        for _ in 0 .. xcount {
             let ent = p.parse(buf)?;
             // TODO: constrain object 0 to always be free
             ents.push(ent);
         }
 
-        Ok(XrefSubSectT{ start, count, ents })
+        let end = buf.get_cursor();
+        Ok(LocatedVal::new(XrefSubSectT{ start: xstart, count: xcount, ents }, start, end))
     }
 }
 
@@ -201,17 +211,19 @@ impl XrefSubSectP {
 
 #[derive(Debug, PartialEq)]
 pub struct XrefSectT {
-    sects: Vec<XrefSubSectT>
+    sects: Vec<LocatedVal<XrefSubSectT>>
 }
 impl XrefSectT {
-    pub fn sects(&self) -> &[XrefSubSectT] { self.sects.as_slice() }
+    pub fn sects(&self) -> &[LocatedVal<XrefSubSectT>] { self.sects.as_slice() }
 }
 
 pub struct XrefSectP;
 impl ParsleyParser for XrefSectP {
-    type T = XrefSectT;
+    type T = LocatedVal<XrefSectT>;
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+        let start = buf.get_cursor();
+
         if let Err(_) = buf.exact("xref".as_bytes()) {
             return Err(ErrorKind::GuardError("not at xref"))
         }
@@ -229,7 +241,8 @@ impl ParsleyParser for XrefSectP {
             if let Err(_) = sect { break }
             sects.push(sect.unwrap());
         }
-        Ok(XrefSectT { sects })
+        let end = buf.get_cursor();
+        Ok(LocatedVal::new(XrefSectT { sects }, start, end))
     }
 }
 
@@ -239,21 +252,22 @@ impl ParsleyParser for XrefSectP {
 
 #[derive(Debug, PartialEq)]
 pub struct BodyT {
-    objs: Vec<PDFObjT>
+    objs: Vec<LocatedVal<PDFObjT>>
 }
 impl BodyT {
-    pub fn objs(&self) -> &[PDFObjT] { self.objs.as_slice() }
+    pub fn objs(&self) -> &[LocatedVal<PDFObjT>] { self.objs.as_slice() }
 }
 
 pub struct BodyP;
 impl ParsleyParser for BodyP {
-    type T = BodyT;
+    type T = LocatedVal<BodyT>;
 
     // PDF documents will almost never be parsed in this linear
     // fashion, but will instead be parsed by seeking to offsets
     // specified in the xref table.  Nevertheless, this function can
     // be used with simple files for debugging purposes.
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+        let start = buf.get_cursor();
         let mut op = PDFObjP;
         // The outermost objects should all be indirect objects.  In
         // the simplest case, we just terminate when we can't parse
@@ -263,13 +277,14 @@ impl ParsleyParser for BodyP {
             let o = op.parse(buf);
             if let Err(_) = o { break }
             let o = o.unwrap();
-            if let PDFObjT::Indirect(_) = o {
+            if let PDFObjT::Indirect(_) = o.val() {
                 objs.push(o)
             } else {
                 return Err(ErrorKind::GuardError("non-indirect object in body"))
             }
         }
-        Ok(BodyT{ objs })
+        let end = buf.get_cursor();
+        Ok(LocatedVal::new(BodyT{ objs }, start, end))
     }
 }
 
@@ -284,10 +299,11 @@ impl TrailerT {
 
 pub struct TrailerP;
 impl ParsleyParser for TrailerP {
-    type T = TrailerT;
+    type T = LocatedVal<TrailerT>;
 
     // This assumes we are positioned at 'trailer'.
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+        let start = buf.get_cursor();
         if let Err(_) = buf.exact("trailer".as_bytes()) {
             return Err(ErrorKind::GuardError("not at trailer"))
         }
@@ -300,7 +316,8 @@ impl ParsleyParser for TrailerP {
             return Err(ErrorKind::GuardError("error parsing trailer dictionary"))
         }
         let dict = dict.unwrap();
-        Ok(TrailerT{ dict })
+        let end = buf.get_cursor();
+        Ok(LocatedVal::new(TrailerT{ dict }, start, end))
     }
 }
 
@@ -314,11 +331,13 @@ impl StartXrefT {
 
 pub struct StartXrefP;
 impl ParsleyParser for StartXrefP {
-    type T = StartXrefT;
+    type T = LocatedVal<StartXrefT>;
 
     // This assumes we are positioned at 'startxref', which is
     // typically found by scanning backwards from EOF.
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+        let start = buf.get_cursor();
+
         if let Err(_) = buf.exact("startxref".as_bytes()) {
             return Err(ErrorKind::GuardError("not at startxref"))
         }
@@ -326,19 +345,20 @@ impl ParsleyParser for StartXrefP {
         ws.parse(buf)?;
 
         let mut int = IntegerP;
-        let offset = u64::try_from(int.parse(buf)?.int_val());
+        let offset = u64::try_from(int.parse(buf)?.val().int_val());
         if let Err(_) = offset {
             return Err(ErrorKind::GuardError("conversion error on startxref"))
         }
         let offset = offset.unwrap();
-        Ok(StartXrefT{ offset })
+        let end = buf.get_cursor();
+        Ok(LocatedVal::new(StartXrefT{ offset }, start, end))
     }
 }
 
 #[cfg(test)]
 mod test_pdf_file {
     use std::collections::{HashMap};
-    use super::super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, ErrorKind};
+    use super::super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal, ErrorKind};
     use super::super::super::pdf_lib::pdf_obj::{PDFObjT, ReferenceT, DictT};
     use super::super::super::pdf_lib::pdf_prim::{IntegerT};
     use super::{HeaderT, HeaderP, BodyT, BodyP, StartXrefT, StartXrefP, TrailerT, TrailerP};
@@ -348,43 +368,45 @@ mod test_pdf_file {
     fn test_header() {
         let mut p = HeaderP;
 
+        //                 012345678901234567890
         let v = Vec::from("%PDF-1.0 \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
-        let hdr = HeaderT { version: Vec::from("PDF-1.0 \r".as_bytes()), binary: None };
-        assert_eq!(val, Ok(hdr));
+        let hdr = HeaderT { version: LocatedVal::new(Vec::from("PDF-1.0 \r".as_bytes()), 0, 11),
+                            binary: None };
+        assert_eq!(val, Ok(LocatedVal::new(hdr, 0, 11)));
         assert_eq!(pb.get_cursor(), 11);
-
+        //                 01234567890123456789012345678
         let v = Vec::from("%PDF-1.0 \r\n%binary_bytes\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
-        let hdr = HeaderT { version: Vec::from("PDF-1.0 \r".as_bytes()),
-                            binary: Some(Vec::from("binary_bytes".as_bytes())) };
-        assert_eq!(val, Ok(hdr));
+        let hdr = HeaderT { version: LocatedVal::new(Vec::from("PDF-1.0 \r".as_bytes()), 0, 11),
+                            binary: Some(LocatedVal::new(Vec::from("binary_bytes".as_bytes()), 11, 25)) };
+        assert_eq!(val, Ok(LocatedVal::new(hdr, 0, 25)));
         assert_eq!(pb.get_cursor(), 25);
     }
 
     #[test]
     fn test_xref_ent() {
         let p = XrefEntP;
-
+        //                 01234567890123456789012345678
         let v = Vec::from("1234567890 12345 f\r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let ent = p.parse(&mut pb);
         let xref = XrefT{ info: 1234567890, gen: 12345};
-        assert_eq!(ent, Ok(XrefEntT::Free(xref)));
-
+        assert_eq!(ent, Ok(LocatedVal::new(XrefEntT::Free(xref), 0, 20)));
+        //                 01234567890123456789012345678
         let v = Vec::from("1234567890 12345 n \n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let ent = p.parse(&mut pb);
         let xref = XrefT{ info: 1234567890, gen: 12345};
-        assert_eq!(ent, Ok(XrefEntT::Inuse(xref)));
-
+        assert_eq!(ent, Ok(LocatedVal::new(XrefEntT::Inuse(xref), 0, 20)));
+        //                 01234567890123456789012345678
         let v = Vec::from("1234567890 12345 f \r".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let ent = p.parse(&mut pb);
         let xref = XrefT{ info: 1234567890, gen: 12345};
-        assert_eq!(ent, Ok(XrefEntT::Free(xref)));
+        assert_eq!(ent, Ok(LocatedVal::new(XrefEntT::Free(xref), 0, 20)));
 
         // bad eol
         let v = Vec::from("1234567890 12345 f  \r".as_bytes());
@@ -396,43 +418,58 @@ mod test_pdf_file {
     #[test]
     fn test_xref_subsect() {
         let p = XrefSubSectP;
+        //                 01234567890123456789012345678
         let v = Vec::from("0 1\n1234567890 12345 f\r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
-        let xref = XrefEntT::Free(XrefT{ info: 1234567890, gen: 12345});
+        let xref = LocatedVal::new(XrefEntT::Free(XrefT{ info: 1234567890, gen: 12345}), 4, 24);
         let s = XrefSubSectT { start: 0, count: 1, ents: vec![xref] };
-        assert_eq!(val, Ok(s));
+        assert_eq!(val, Ok(LocatedVal::new(s, 0, 24)));
 
         // leading and trailing space on leading line
+        //                 01234567890123456789012345678901
         let v = Vec::from(" 0 1 \r\n1234567890 12345 f\r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
-        let xref = XrefEntT::Free(XrefT{ info: 1234567890, gen: 12345});
+        let xref = LocatedVal::new(XrefEntT::Free(XrefT{ info: 1234567890, gen: 12345}), 7, 27);
         let s = XrefSubSectT { start: 0, count: 1, ents: vec![xref] };
-        assert_eq!(val, Ok(s));
+        assert_eq!(val, Ok(LocatedVal::new(s, 0, 27)));
     }
 
     #[test]
     fn test_xref_sect() {
         let mut p = XrefSectP;
+        //                           1         2         3
+        //                 0123456789012345678901234567890123
         let v = Vec::from("xref\n0 1\n1234567890 12345 f\r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
-        let xref = XrefEntT::Free(XrefT{ info: 1234567890, gen: 12345});
-        let ssect = XrefSubSectT { start: 0, count: 1, ents: vec![xref] };
+        let xref = LocatedVal::new(XrefEntT::Free(XrefT{ info: 1234567890, gen: 12345}), 9, 29);
+        let ssect = LocatedVal::new(XrefSubSectT { start: 0, count: 1, ents: vec![xref] }, 5, 29);
         let s = XrefSectT { sects: vec![ssect] };
-        assert_eq!(val, Ok(s));
+        assert_eq!(val, Ok(LocatedVal::new(s, 0, 29)));
 
         // different leading eol, and terminate with trailer
+        //                           1         2         3         4
+        //                 0123456789012345678901234567890123456789012
         let v = Vec::from("xref\r\n0 1\n1234567890 12345 f\r\ntrailer".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
-        let xref = XrefEntT::Free(XrefT{ info: 1234567890, gen: 12345});
-        let ssect = XrefSubSectT { start: 0, count: 1, ents: vec![xref] };
+        let xref = LocatedVal::new(XrefEntT::Free(XrefT{ info: 1234567890, gen: 12345}), 10, 30);
+        let ssect = LocatedVal::new(XrefSubSectT { start: 0, count: 1, ents: vec![xref] }, 6, 30);
         let s = XrefSectT { sects: vec![ssect] };
-        assert_eq!(val, Ok(s));
+        assert_eq!(val, Ok(LocatedVal::new(s, 0, 30)));
 
         // snippet from hello-world pdf.
+//01234
+//5678
+//9
+//29
+//49
+//69
+//89
+//109
+//129
         let v = Vec::from(
 "xref
 0 6
@@ -447,14 +484,14 @@ mod test_pdf_file {
         let val = p.parse(&mut pb);
 
         let mut ents = Vec::new();
-        ents.push(XrefEntT::Free( XrefT{ info: 0,   gen: 65535}));
-        ents.push(XrefEntT::Inuse(XrefT{ info: 10,  gen: 0}));
-        ents.push(XrefEntT::Inuse(XrefT{ info: 79,  gen: 0}));
-        ents.push(XrefEntT::Inuse(XrefT{ info: 173, gen: 0}));
-        ents.push(XrefEntT::Inuse(XrefT{ info: 301, gen: 0}));
-        ents.push(XrefEntT::Inuse(XrefT{ info: 380, gen: 0}));
-        let ssect = XrefSubSectT { start: 0, count: 6, ents };
-        let s = XrefSectT { sects: vec![ssect] };
+        ents.push(LocatedVal::new(XrefEntT::Free( XrefT{ info: 0,   gen: 65535}), 9, 29));
+        ents.push(LocatedVal::new(XrefEntT::Inuse(XrefT{ info: 10,  gen: 0}),  29,  49));
+        ents.push(LocatedVal::new(XrefEntT::Inuse(XrefT{ info: 79,  gen: 0}),  49,  69));
+        ents.push(LocatedVal::new(XrefEntT::Inuse(XrefT{ info: 173, gen: 0}),  69,  89));
+        ents.push(LocatedVal::new(XrefEntT::Inuse(XrefT{ info: 301, gen: 0}),  89, 109));
+        ents.push(LocatedVal::new(XrefEntT::Inuse(XrefT{ info: 380, gen: 0}), 109, 129));
+        let ssect = LocatedVal::new(XrefSubSectT { start: 0, count: 6, ents }, 5, 129);
+        let s = LocatedVal::new(XrefSectT { sects: vec![ssect] }, 0, 129);
         assert_eq!(val, Ok(s));
     }
 
@@ -514,16 +551,15 @@ endstream
 endobj
 ".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let val = p.parse(&mut pb);
+        let val = p.parse(&mut pb).unwrap();
 
         // quick and dirty test.
-        if let Ok(BodyT { objs }) = val {
-            assert_eq!(objs.len(), 5);
-            for o in objs {
-                if let PDFObjT::Indirect(_) = o {
-                } else {
-                    assert!(false)
-                }
+        let BodyT { objs } = val.unwrap();
+        assert_eq!(objs.len(), 5);
+        for o in objs {
+            if let PDFObjT::Indirect(_) = o.unwrap() {
+            } else {
+                assert!(false)
             }
         }
     }
@@ -583,16 +619,15 @@ ET
 endstream
 endobj".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let val = p.parse(&mut pb);
+        let val = p.parse(&mut pb).unwrap();
 
         // quick and dirty test.
-        if let Ok(BodyT { objs }) = val {
-            assert_eq!(objs.len(), 5);
-            for o in objs {
-                if let PDFObjT::Indirect(_) = o {
-                } else {
-                    assert!(false)
-                }
+        let BodyT { objs } = val.unwrap();
+        assert_eq!(objs.len(), 5);
+        for o in objs {
+            if let PDFObjT::Indirect(_) = o.unwrap() {
+            } else {
+                assert!(false)
             }
         }
     }
@@ -600,7 +635,11 @@ endobj".as_bytes());
     #[test]
     fn test_trailer() {
         let mut p = TrailerP;
-
+//01234567
+//890
+//123456789
+//0123456789012
+//345
         let v = Vec::from(
 "trailer
 <<
@@ -612,24 +651,26 @@ endobj".as_bytes());
         let val = p.parse(&mut pb);
 
         let mut map = HashMap::new();
-        map.insert(Vec::from("Size".as_bytes()), PDFObjT::Integer(IntegerT::new(8)));
-        map.insert(Vec::from("Root".as_bytes()), PDFObjT::Reference(ReferenceT::new(1, 0)));
+        map.insert(LocatedVal::new(Vec::from("Size".as_bytes()), 12, 17),
+                   LocatedVal::new(PDFObjT::Integer(IntegerT::new(8)), 18, 19));
+        map.insert(LocatedVal::new(Vec::from("Root".as_bytes()), 21, 26),
+                   LocatedVal::new(PDFObjT::Reference(ReferenceT::new(1, 0)), 27, 32));
         let dict = DictT::new(map);
-        assert_eq!(val, Ok(TrailerT{ dict }));
+        assert_eq!(val, Ok(LocatedVal::new(TrailerT{ dict }, 0, 35)));
     }
 
     #[test]
     fn test_startxref() {
         let mut p = StartXrefP;
-
+        //                 01234567890123456789012345678
         let v = Vec::from("startxref \n642\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
-        assert_eq!(val, Ok(StartXrefT { offset: 642 }));
-
+        assert_eq!(val, Ok(LocatedVal::new(StartXrefT { offset: 642 }, 0, 14)));
+        //                 0123456789012345678901234567890123
         let v = Vec::from("startxref %absurd comment \n642\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
-        assert_eq!(val, Ok(StartXrefT { offset: 642 }));
+        assert_eq!(val, Ok(LocatedVal::new(StartXrefT { offset: 642 }, 0, 30)));
     }
 }

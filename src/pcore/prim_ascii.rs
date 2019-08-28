@@ -1,5 +1,5 @@
 use std::convert::TryFrom;
-use super::parsebuffer::{ParsleyPrimitive, ParsleyParser, ParseBuffer, ParseError, ErrorKind};
+use super::parsebuffer::{ParsleyPrimitive, ParsleyParser, ParseBuffer, ParseError, LocatedVal, ErrorKind};
 
 pub struct AsciiCharPrimitive;
 
@@ -38,13 +38,16 @@ impl AsciiChar {
 }
 
 impl ParsleyParser for AsciiChar {
-    type T = char;
+    type T = LocatedVal<char>;
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
-        match &mut self.guard {
-            None    => buf.parse_prim::<AsciiCharPrimitive>(),
-            Some(b) => buf.parse_guarded::<AsciiCharPrimitive>(b)
-        }
+        let start = buf.get_cursor();
+        let c = match &mut self.guard {
+            None    => buf.parse_prim::<AsciiCharPrimitive>()?,
+            Some(b) => buf.parse_guarded::<AsciiCharPrimitive>(b)?
+        };
+        let end = buf.get_cursor();
+        Ok(LocatedVal::new(c, start, end))
     }
 }
 
@@ -130,7 +133,7 @@ mod test_prim_ascii {
 #[cfg(test)]
 mod test_ascii {
     use super::{AsciiCharPrimitive, AsciiChar};
-    use super::super::parsebuffer::{ParseBuffer, ParsleyPrimitive, ParsleyParser, ParseError, ErrorKind};
+    use super::super::parsebuffer::{ParseBuffer, ParsleyPrimitive, ParsleyParser, ParseError, LocatedVal, ErrorKind};
 
     #[test]
     fn empty() {
@@ -152,7 +155,7 @@ mod test_ascii {
         assert_eq!(pb.get_cursor(), 0);
 
         let r = ascii_parser.parse(&mut pb);
-        assert_eq!(r, Ok('A'));
+        assert_eq!(r, Ok(LocatedVal::new('A', 0, 1)));
         assert_eq!(pb.get_cursor(), 1);
 
         let r = ascii_parser.parse(&mut pb);

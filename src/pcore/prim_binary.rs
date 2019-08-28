@@ -1,5 +1,5 @@
 /// Primitives for handling binary data.
-use super::parsebuffer::{ParsleyParser, ParseBuffer, ErrorKind};
+use super::parsebuffer::{ParsleyParser, ParseBuffer, LocatedVal, ErrorKind};
 
 pub struct BinaryScanner {
     tag: Vec<u8>
@@ -14,10 +14,13 @@ impl BinaryScanner {
 }
 
 impl ParsleyParser for BinaryScanner {
-    type T = usize;
+    type T = LocatedVal<usize>;
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
-        buf.scan(&self.tag)
+        let start = buf.get_cursor();
+        let val   = buf.scan(&self.tag)?;
+        let end   = buf.get_cursor();
+        Ok(LocatedVal::new(val, start, end))
     }
 }
 
@@ -34,10 +37,13 @@ impl BinaryMatcher {
 }
 
 impl ParsleyParser for BinaryMatcher {
-    type T = bool;
+    type T = LocatedVal<bool>;
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
-        buf.exact(&self.tag)
+        let start = buf.get_cursor();
+        let val   = buf.exact(&self.tag)?;
+        let end   = buf.get_cursor();
+        Ok(LocatedVal::new(val, start, end))
     }
 }
 
@@ -82,13 +88,15 @@ impl BinaryBuffer {
 }
 
 impl ParsleyParser for BinaryBuffer {
-    type T = Vec<u8>;
+    type T = LocatedVal<Vec<u8>>;
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+        let start = buf.get_cursor();
         let bytes = buf.extract(self.len)?;
         let mut ret = Vec::new();
         ret.extend_from_slice(bytes);
-        Ok(ret)
+        let end   = buf.get_cursor();
+        Ok(LocatedVal::new(ret, start, end))
     }
 }
 
@@ -97,7 +105,7 @@ impl ParsleyParser for BinaryBuffer {
 #[cfg(test)]
 mod test_binary {
     use super::{BinaryScanner, BinaryMatcher, BinaryBuffer};
-    use super::super::parsebuffer::{ParseBuffer, ParsleyParser, ErrorKind};
+    use super::super::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal, ErrorKind};
 
     #[test]
     fn scan() {
@@ -105,13 +113,13 @@ mod test_binary {
         let mut s = BinaryScanner::new("%PDF-".as_bytes());
 
         let mut pb = ParseBuffer::new(Vec::from("%PDF-".as_bytes()));
-        assert_eq!(s.parse(&mut pb), Ok(0));
+        assert_eq!(s.parse(&mut pb), Ok(LocatedVal::new(0, 0, 0)));
         assert_eq!(pb.get_cursor(), 0);
 
         let mut pb = ParseBuffer::new(Vec::from("garbage %PDF-".as_bytes()));
-        assert_eq!(s.parse(&mut pb), Ok(8));
+        assert_eq!(s.parse(&mut pb), Ok(LocatedVal::new(8, 0, 8)));
         assert_eq!(pb.get_cursor(), 8);
-        assert_eq!(s.parse(&mut pb), Ok(0));
+        assert_eq!(s.parse(&mut pb), Ok(LocatedVal::new(0, 8, 8)));
         assert_eq!(pb.get_cursor(), 8);
 
         let mut pb = ParseBuffer::new(Vec::from("".as_bytes()));
@@ -129,7 +137,7 @@ mod test_binary {
         assert_eq!(pb.get_cursor(), 0);
 
         let mut pb = ParseBuffer::new(Vec::from("%PDF-".as_bytes()));
-        assert_eq!(s.parse(&mut pb), Ok(true));
+        assert_eq!(s.parse(&mut pb), Ok(LocatedVal::new(true, 0, 5)));
         assert_eq!(pb.get_cursor(), 5);
 
         let mut pb = ParseBuffer::new(Vec::from(" %PDF-".as_bytes()));
@@ -145,9 +153,9 @@ mod test_binary {
 
         let mut s = BinaryBuffer::new(3);
         let mut pb = ParseBuffer::new(Vec::from("%PDF-".as_bytes()));
-        let v = s.parse(&mut pb);
+        let v = s.parse(&mut pb).unwrap();
         let r = Vec::from("%PD".as_bytes());
-        assert_eq!(v.unwrap(), r);
+        assert_eq!(*v.val(), r);
         assert_eq!(pb.get_cursor(), 3);
     }
 }
