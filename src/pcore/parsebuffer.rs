@@ -314,7 +314,8 @@ impl ParseBuffer {
 
 #[cfg(test)]
 mod test_parsebuffer {
-    use super::{ParseBuffer, ErrorKind};
+    use std::collections::HashMap;
+    use super::{ParseBuffer, LocatedVal, ErrorKind};
 
     #[test]
     fn test_scan() {
@@ -338,5 +339,16 @@ mod test_parsebuffer {
         assert_eq!(pb.get_cursor(), 5);
         assert_eq!(pb.backward_scan("012".as_bytes()), Ok(5));
         assert_eq!(pb.get_cursor(), 0);
+    }
+
+    #[test]
+    fn test_locatedval_eq() {
+        let v = LocatedVal::new(1, 0, 0);
+        let w = LocatedVal::new(1, 1, 2);
+        assert_eq!(v, w);
+
+        let mut map = HashMap::new();
+        map.insert(v, 0);
+        assert!(map.contains_key(&1));
     }
 }
