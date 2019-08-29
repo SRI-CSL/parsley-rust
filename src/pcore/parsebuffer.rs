@@ -3,20 +3,25 @@
 use std::result::Result;
 use std::error::Error;
 use std::cmp::PartialEq;
+use std::borrow::Borrow;
+use std::hash::{Hash, Hasher};
 use std::fmt;
 
+// The basic parsing buffer.
 #[derive(Debug)]
 pub struct ParseBuffer {
     buf: Vec<u8>,
     ofs: usize,
 }
 
+// Location information for objects returned by parsers.
 pub trait Location {
     fn parsebuf_start(&self) -> usize;
     fn parsebuf_end(&self)   -> usize;
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+// Values returned by parsers should provide location annotations.
+#[derive(Debug)]
 pub struct LocatedVal<T>
 where T : PartialEq
 {
@@ -33,7 +38,31 @@ where T : PartialEq
     pub fn val(&self)   -> &T { &self.val }
     pub fn unwrap(self) -> T  { self.val }
 }
-
+// Equality for LocatedVal<T> should not take into account the
+// location.  Similarly, when a LocatedVal<T> is placed into a map
+// (i.e. HashMap) as the key-type, the matching should be performed
+// over the T.
+impl<T> PartialEq for LocatedVal<T>
+where T : PartialEq
+{
+    fn eq(&self, other: &Self) -> bool { self.val == other.val }
+}
+impl<T> Eq for LocatedVal<T>
+where T : PartialEq
+{}
+impl<T> Hash for LocatedVal<T>
+where T : PartialEq, T : Hash
+{
+    fn hash<H : Hasher>(&self, state: &mut H) { self.val.hash(state) }
+}
+// This allows HashMap lookup using T even when the HashMap is keyed
+// by LocatedVal<T>.
+impl<T> Borrow<T> for LocatedVal<T>
+where T : PartialEq
+{
+    fn borrow(&self) -> &T { &self.val }
+}
+// Provide location information.
 impl<T> Location for LocatedVal<T>
 where T : PartialEq
 {

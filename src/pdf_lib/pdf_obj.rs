@@ -585,6 +585,22 @@ mod test_pdf_obj {
     }
 
     #[test]
+    fn dict_lookup() {
+        let entval = LocatedVal::new(PDFObjT::Null(()), 9, 16);
+        let mut map = HashMap::new();
+        map.insert(LocatedVal::new(Vec::from("Entry".as_bytes()), 2, 8), entval);
+        let val = PDFObjT::Dict(DictT::new(map));
+        if let PDFObjT::Dict(d) = val {
+            // the same located key
+            assert!(d.map().contains_key(&LocatedVal::new(Vec::from("Entry".as_bytes()), 2, 8)));
+            // different located key with the same val
+            assert!(d.map().contains_key(&LocatedVal::new(Vec::from("Entry".as_bytes()), 0, 0)));
+            // the same key val but not located
+            assert!(d.map().contains_key(&Vec::from("Entry".as_bytes())));
+        }
+    }
+
+    #[test]
     fn indirect() {
         let mut p = PDFObjP;
 //                                   1         2         3         4         5         6
