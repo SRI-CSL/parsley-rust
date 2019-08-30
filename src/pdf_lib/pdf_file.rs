@@ -2,7 +2,7 @@
 
 use std::io::Read; // for read_to_string()
 use std::convert::TryFrom;
-use super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal, ErrorKind};
+use super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal, ParseResult, ErrorKind};
 use super::pdf_prim::{IntegerP, WhitespaceEOL, WhitespaceNoEOL, Comment};
 use super::pdf_obj::{PDFObjP, PDFObjT, DictT, DictP};
 
@@ -28,7 +28,7 @@ pub struct HeaderP;
 impl ParsleyParser for HeaderP {
     type T = LocatedVal<HeaderT>;
 
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let mut c = Comment;
 
         let start   = buf.get_cursor();
@@ -69,7 +69,7 @@ pub enum XrefEntT {
 
 struct XrefEntP;
 impl XrefEntP {
-    fn parse(&self, buf: &mut ParseBuffer) -> Result<LocatedVal<XrefEntT>, ErrorKind> {
+    fn parse(&self, buf: &mut ParseBuffer) -> ParseResult<LocatedVal<XrefEntT>> {
         let start = buf.get_cursor();
 
         // Due to borrow checking of the mutable buf, each extracted
@@ -163,7 +163,7 @@ impl XrefSubSectT {
 
 struct XrefSubSectP;
 impl XrefSubSectP {
-    fn parse(&self, buf: &mut ParseBuffer) -> Result<LocatedVal<XrefSubSectT>, ErrorKind> {
+    fn parse(&self, buf: &mut ParseBuffer) -> ParseResult<LocatedVal<XrefSubSectT>> {
         let start = buf.get_cursor();
 
         // The spec is not clear whether there is any leading or
@@ -221,7 +221,7 @@ pub struct XrefSectP;
 impl ParsleyParser for XrefSectP {
     type T = LocatedVal<XrefSectT>;
 
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
 
         if let Err(_) = buf.exact("xref".as_bytes()) {
@@ -266,7 +266,7 @@ impl ParsleyParser for BodyP {
     // fashion, but will instead be parsed by seeking to offsets
     // specified in the xref table.  Nevertheless, this function can
     // be used with simple files for debugging purposes.
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let mut op = PDFObjP;
         // The outermost objects should all be indirect objects.  In
@@ -302,7 +302,7 @@ impl ParsleyParser for TrailerP {
     type T = LocatedVal<TrailerT>;
 
     // This assumes we are positioned at 'trailer'.
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         if let Err(_) = buf.exact("trailer".as_bytes()) {
             return Err(ErrorKind::GuardError("not at trailer"))
@@ -335,7 +335,7 @@ impl ParsleyParser for StartXrefP {
 
     // This assumes we are positioned at 'startxref', which is
     // typically found by scanning backwards from EOF.
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
 
         if let Err(_) = buf.exact("startxref".as_bytes()) {

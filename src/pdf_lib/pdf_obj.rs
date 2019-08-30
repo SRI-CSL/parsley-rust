@@ -1,7 +1,7 @@
 // Basic PDF objects (simple and compound).
 
 use std::collections::{HashSet, HashMap};
-use super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, Location, LocatedVal, ErrorKind};
+use super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, Location, LocatedVal, ParseResult, ErrorKind};
 
 use super::pdf_prim::{WhitespaceEOL, Comment};
 use super::pdf_prim::{Boolean, Null, IntegerT, IntegerP, RealT, RealP, HexString, RawLiteralString};
@@ -24,7 +24,7 @@ impl ArrayT {
 
 struct ArrayP;
 impl ArrayP {
-    fn parse(self, buf: &mut ParseBuffer) -> Result<LocatedVal<ArrayT>, ErrorKind> {
+    fn parse(self, buf: &mut ParseBuffer) -> ParseResult<LocatedVal<ArrayT>> {
         let start = buf.get_cursor();
         if let Err(_) = buf.exact("[".as_bytes()) {
             return Err(ErrorKind::GuardError("not at array object"))
@@ -70,7 +70,7 @@ impl DictT {
 
 pub struct DictP;
 impl DictP {
-    pub fn parse(self, buf: &mut ParseBuffer) -> Result<DictT, ErrorKind> {
+    pub fn parse(self, buf: &mut ParseBuffer) -> ParseResult<DictT> {
         buf.exact("<<".as_bytes())?;
         let mut end   = false;
         let mut map   = HashMap::new();
@@ -165,7 +165,7 @@ impl IndirectT {
 
 struct IndirectP;
 impl IndirectP {
-    fn parse(self, buf: &mut ParseBuffer) -> Result<IndirectT, ErrorKind> {
+    fn parse(self, buf: &mut ParseBuffer) -> ParseResult<IndirectT> {
         let mut int = IntegerP;
         let mut ws = WhitespaceEOL::new(true);
 
@@ -259,7 +259,7 @@ impl ReferenceT {
 
 struct ReferenceP;
 impl ReferenceP {
-    fn parse(self, buf: &mut ParseBuffer) -> Result<ReferenceT, ErrorKind> {
+    fn parse(self, buf: &mut ParseBuffer) -> ParseResult<ReferenceT> {
         let mut int = IntegerP;
         let mut ws = WhitespaceEOL::new(true);
 
@@ -308,7 +308,7 @@ pub enum PDFObjT {
 pub struct PDFObjP;
 impl PDFObjP {
     // The top-level object parser, as an internal helper.
-    fn parse_internal(&mut self, buf: &mut ParseBuffer) -> Result<PDFObjT, ErrorKind> {
+    fn parse_internal(&mut self, buf: &mut ParseBuffer) -> ParseResult<PDFObjT> {
         let c = buf.peek();
         match c {
             None      => Err(ErrorKind::EndOfBuffer),
@@ -455,7 +455,7 @@ impl ParsleyParser for PDFObjP {
     type T = LocatedVal<PDFObjT>;
 
     // The top-level object parser.
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         // First, consume possibly empty whitespace.
         // TODO: what about EOL?
         let mut ws = WhitespaceEOL::new(true);

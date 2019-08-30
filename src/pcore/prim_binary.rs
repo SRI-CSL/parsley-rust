@@ -1,5 +1,5 @@
 /// Primitives for handling binary data.
-use super::parsebuffer::{ParsleyParser, ParseBuffer, LocatedVal, ErrorKind};
+use super::parsebuffer::{ParsleyParser, ParseBuffer, ParseResult, LocatedVal};
 
 pub struct BinaryScanner {
     tag: Vec<u8>
@@ -16,7 +16,7 @@ impl BinaryScanner {
 impl ParsleyParser for BinaryScanner {
     type T = LocatedVal<usize>;
 
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let val   = buf.scan(&self.tag)?;
         let end   = buf.get_cursor();
@@ -39,7 +39,7 @@ impl BinaryMatcher {
 impl ParsleyParser for BinaryMatcher {
     type T = LocatedVal<bool>;
 
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let val   = buf.exact(&self.tag)?;
         let end   = buf.get_cursor();
@@ -71,7 +71,7 @@ impl<'a> BinaryBuffer<'a> {
 impl<'a> ParsleyParser for BinaryBuffer<'a> {
     type T<'a> = &'a [u8];
 
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         buf.extract(self.len)
     }
 }
@@ -90,7 +90,7 @@ impl BinaryBuffer {
 impl ParsleyParser for BinaryBuffer {
     type T = LocatedVal<Vec<u8>>;
 
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let bytes = buf.extract(self.len)?;
         let mut ret = Vec::new();

@@ -1,7 +1,7 @@
 // Basic primitive (non-compound or non-recursive) PDF objects.
 
 use std::collections::{HashSet};
-use super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal, ErrorKind};
+use super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal, ParseResult, ErrorKind};
 
 // There are two whitespace parsers.  This first one does not allow
 // EOL as whitespace.
@@ -17,7 +17,7 @@ impl WhitespaceNoEOL {
 impl ParsleyParser for WhitespaceNoEOL {
     type T = LocatedVal<()>;
 
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let ws    = buf.parse_allowed_bytes(" \0\t\r\x0c".as_bytes())?;
         if ws.len() == 0 && !self.empty_ok {
@@ -41,7 +41,7 @@ impl ParsleyParser for Comment {
 
     // The buffer should be positioned at the '%'; it consumes upto
     // and including end-of-line or upto end-of-buffer.
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         if !(buf.peek() == Some(37)) { return Err(ErrorKind::GuardError("not at comment")) }
         buf.incr_cursor();
@@ -67,7 +67,7 @@ impl WhitespaceEOL {
 impl ParsleyParser for WhitespaceEOL {
     type T = LocatedVal<()>;
 
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         // loop to consume comments
         let mut is_empty = true;
@@ -99,7 +99,7 @@ pub struct Boolean;
 impl ParsleyParser for Boolean {
     type T = LocatedVal<bool>;
 
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let mut b = buf.exact("true".as_bytes());
         if let Err(_) = b {
@@ -122,7 +122,7 @@ pub struct Null;
 impl ParsleyParser for Null {
     type T = LocatedVal<()>;
 
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let null  = buf.exact("null".as_bytes());
         if let Err(_) = null {
@@ -157,7 +157,7 @@ pub struct IntegerP;
 impl ParsleyParser for IntegerP {
     type T = LocatedVal<IntegerT>;
 
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let minus =
             if buf.peek() == Some(45) {        // '-'
@@ -214,7 +214,7 @@ pub struct RealP;
 impl ParsleyParser for RealP {
     type T = LocatedVal<RealT>;
 
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let minus =
             if buf.peek() == Some(45) {        // '-'
@@ -272,7 +272,7 @@ fn int_of_hex(b: u8) -> u8 {
 impl ParsleyParser for HexString {
     type T = LocatedVal<Vec<u8>>;
 
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         if buf.peek() != Some(60) {
             return Err(ErrorKind::GuardError("not at hex string"))
@@ -314,7 +314,7 @@ impl ParsleyParser for RawLiteralString {
     // version is represented as a byte vector.
     type T = LocatedVal<Vec<u8>>;
 
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         if buf.peek() != Some(40) { // '('
             return Err(ErrorKind::GuardError("not at literal string"))
@@ -378,7 +378,7 @@ pub struct RawName;
 impl ParsleyParser for RawName {
     type T = LocatedVal<Vec<u8>>;
 
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         if buf.peek() != Some(47) {
             return Err(ErrorKind::GuardError("not at name object"))
@@ -405,7 +405,7 @@ impl ParsleyParser for StreamContent {
 
     // This assumes that the whitespace before the 'stream' keyword
     // has been consumed.
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let is_stream = buf.exact("stream".as_bytes());
         if let Err(_) = is_stream {

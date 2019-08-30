@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
-use super::parsebuffer::{ParsleyPrimitive, ParsleyParser, ParseBuffer, ParseError, LocatedVal, ErrorKind};
+use super::parsebuffer::{ParsleyPrimitive, ParsleyParser, ParseBuffer,
+                         ParseResult, ParseError, LocatedVal, ErrorKind};
 
 pub struct AsciiCharPrimitive;
 
@@ -8,7 +9,7 @@ impl ParsleyPrimitive for AsciiCharPrimitive {
 
     fn name() -> &'static str { "ascii-prim" }
 
-    fn parse(buf: &[u8]) -> Result<(Self::T, usize), ErrorKind> {
+    fn parse(buf: &[u8]) -> ParseResult<(Self::T, usize)> {
         if buf.len() < 1 { return Err(ErrorKind::EndOfBuffer) }
         let c = char::try_from(buf[0]);
         // check this: we should never get the below error from
@@ -40,7 +41,7 @@ impl AsciiChar {
 impl ParsleyParser for AsciiChar {
     type T = LocatedVal<char>;
 
-    fn parse(&mut self, buf: &mut ParseBuffer) -> Result<Self::T, ErrorKind> {
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let c = match &mut self.guard {
             None    => buf.parse_prim::<AsciiCharPrimitive>()?,
