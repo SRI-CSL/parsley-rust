@@ -176,6 +176,7 @@ impl ParsleyParser for IntegerP {
         }
         let mut num : i64 = 0;
         for c in num_str.iter() {
+            // TODO: used checked_* operations to check for overflow.
             num = num * 10 + i64::from(c - 48);
         }
         if minus { num *= -1; }
@@ -380,7 +381,7 @@ impl ParsleyParser for RawName {
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
-        if buf.peek() != Some(47) {
+        if buf.peek() != Some(47) { // '/'
             return Err(ErrorKind::GuardError("not at name object"))
         }
         buf.incr_cursor();

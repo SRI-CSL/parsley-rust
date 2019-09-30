@@ -91,8 +91,8 @@ impl DictP {
                     return Err(ErrorKind::GuardError("non-unique dictionary key"))
                 }
 
-                // require whitespace
-                let mut ws = WhitespaceEOL::new(false);
+                // do not require whitespace between key/value pairs
+                let mut ws = WhitespaceEOL::new(true);
                 ws.parse(buf)?;
 
                 let mut p = PDFObjP;
@@ -472,6 +472,7 @@ impl ParsleyParser for PDFObjP {
 mod test_pdf_obj {
     use std::collections::{HashMap};
     use super::super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal, ErrorKind};
+    use super::super::pdf_prim::{RealT};
     use super::{PDFObjP, PDFObjT, ReferenceT, ArrayT, DictT, IndirectT, StreamT};
 
     #[test]
@@ -675,5 +676,65 @@ mod test_pdf_obj {
         let d = LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 23, 59);
         let o = PDFObjT::Indirect(IndirectT::new(1, 0, Box::new(d)));
         assert_eq!(val, Ok(LocatedVal::new(o, 0, 66)));
+    }
+
+    #[test]
+    // Tests extracted from Peter Wyatt's webinar slides.
+    fn test_pdf_expert_dict() {
+        let mut p = PDFObjP;
+
+//                                    1         2         3          4
+//                         01234567 890123456789012345678901234 56789012
+        let v = Vec::from("10 0 obj\n[/<><</[]>>()[[]]-.1/+0]%]\nendobj");
+        let vlen = v.len();
+        let mut pb = ParseBuffer::new(v);
+        let val = p.parse(&mut pb);
+        let mut objs = Vec::new();
+        objs.push(LocatedVal::new(PDFObjT::Name(Vec::from("")), 10, 11));
+        objs.push(LocatedVal::new(PDFObjT::String(Vec::from("")), 11, 13));
+        let mut map = HashMap::new();
+        map.insert(LocatedVal::new(Vec::from(""), 15, 16),
+                   LocatedVal::new(PDFObjT::Array(ArrayT::new(Vec::new())), 16, 18));
+        objs.push(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 13, 20));
+        objs.push(LocatedVal::new(PDFObjT::String(Vec::from("")), 20, 22));
+        let ea = LocatedVal::new(PDFObjT::Array(ArrayT::new(Vec::new())), 23, 25);
+        objs.push(LocatedVal::new(PDFObjT::Array(ArrayT::new(vec![ea])), 22, 26));
+        objs.push(LocatedVal::new(PDFObjT::Real(RealT::new(-1, 10)), 26, 29));
+        objs.push(LocatedVal::new(PDFObjT::Name(Vec::from("+0")), 29, 32));
+        let a = LocatedVal::new(PDFObjT::Array(ArrayT::new(objs)), 9, 33);
+        let o = PDFObjT::Indirect(IndirectT::new(10, 0, Box::new(a)));
+        assert_eq!(pb.get_cursor(), vlen);
+        assert_eq!(val, Ok(LocatedVal::new(o, 0, vlen)));
+
+//                         012345678901234567890
+        let v = Vec::from("10 0 obj<<//>>endobj");
+        let vlen = v.len();
+        let mut pb = ParseBuffer::new(v);
+        let val = p.parse(&mut pb);
+        let mut map = HashMap::new();
+        map.insert(LocatedVal::new(Vec::from("".as_bytes()), 10, 11),
+                   LocatedVal::new(PDFObjT::Name(Vec::from("".as_bytes())), 11, 12));
+        let d = LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 8, 14);
+        let o = PDFObjT::Indirect(IndirectT::new(10, 0, Box::new(d)));
+        assert_eq!(pb.get_cursor(), vlen);
+        assert_eq!(val, Ok(LocatedVal::new(o, 0, vlen)));
+
+//                         0123456789012345678901
+        let v = Vec::from("11 0 obj<</<>>>endobj");
+        let vlen = v.len();
+        let mut pb = ParseBuffer::new(v);
+        let val = p.parse(&mut pb);
+        let mut map = HashMap::new();
+        map.insert(LocatedVal::new(Vec::from("".as_bytes()), 10, 11),
+                   LocatedVal::new(PDFObjT::String(Vec::from("".as_bytes())), 11, 13));
+        let d = LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 8, 15);
+        let o = PDFObjT::Indirect(IndirectT::new(11, 0, Box::new(d)));
+        assert_eq!(pb.get_cursor(), vlen);
+        assert_eq!(val, Ok(LocatedVal::new(o, 0, vlen)));
+
+        // TODO: handle empty values
+        let v = Vec::from("12 0 obj/ endobj");
+        let mut pb = ParseBuffer::new(v);
+        let _val = p.parse(&mut pb);
     }
 }
