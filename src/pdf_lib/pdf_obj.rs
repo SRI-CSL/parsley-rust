@@ -7,6 +7,42 @@ use super::pdf_prim::{WhitespaceEOL, Comment};
 use super::pdf_prim::{Boolean, Null, IntegerT, IntegerP, RealT, RealP, HexString, RawLiteralString};
 use super::pdf_prim::{RawName, StreamContent};
 
+// Object locations in the PDF file.  This will need to become
+// hierarchical to handle nested object streams.
+
+pub struct PDFLocation {
+    start: usize,
+    end:   usize
+}
+
+impl Location for PDFLocation {
+    fn loc_start(&self) -> usize { self.start }
+    fn loc_end(&self)   -> usize { self.end }
+}
+
+// PDF object parsing context.
+// This keeps track of information collected during parsing.
+
+pub struct PDFObjContext {
+    defns: HashMap<(i64, i64), Box<LocatedVal<PDFObjT>>>
+}
+
+impl PDFObjContext {
+    pub fn new() -> PDFObjContext {
+        PDFObjContext { defns: HashMap::new() }
+    }
+    pub fn register_obj(&mut self, p: &IndirectT, o: Box<LocatedVal<PDFObjT>>) {
+        self.defns.insert((p.num(), p.gen()), o);
+    }
+    pub fn lookup_obj(&self, oid: (i64, i64)) -> Option<&LocatedVal<PDFObjT>> {
+        match self.defns.get(&oid) {
+            Some(v) => Some(&v),
+            None    => None
+        }
+    }
+}
+
+
 // Array a { objs : [PDFObj] } := '[' ( o=PDFObj { a.objs.append(o) } )* ']'
 
 #[derive(Debug, PartialEq)]
@@ -22,9 +58,15 @@ impl ArrayT {
     }
 }
 
-struct ArrayP;
-impl ArrayP {
-    fn parse(self, buf: &mut ParseBuffer) -> ParseResult<LocatedVal<ArrayT>> {
+struct ArrayP<'a> {
+    ctxt: &'a mut PDFObjContext
+}
+
+impl ArrayP<'_> {
+    pub fn new<'a>(ctxt: &'a mut PDFObjContext) -> ArrayP<'a> {
+        ArrayP { ctxt }
+    }
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<LocatedVal<ArrayT>> {
         let start = buf.get_cursor();
         if let Err(_) = buf.exact("[".as_bytes()) {
             return Err(ErrorKind::GuardError("not at array object"))
@@ -39,7 +81,7 @@ impl ArrayP {
             let mut ws = WhitespaceEOL::new(true);
             ws.parse(buf)?;
             if let Err(_) = buf.exact("]".as_bytes()) {
-                let mut p = PDFObjP;
+                let mut p = PDFObjP::new(&mut self.ctxt);
                 let o = p.parse(buf)?;
                 objs.push(o);
             } else {
@@ -68,9 +110,15 @@ impl DictT {
     }
 }
 
-pub struct DictP;
-impl DictP {
-    pub fn parse(self, buf: &mut ParseBuffer) -> ParseResult<DictT> {
+pub struct DictP<'a> {
+    ctxt: &'a mut PDFObjContext
+}
+
+impl DictP<'_> {
+    pub fn new<'a>(ctxt: &'a mut PDFObjContext) -> DictP<'a> {
+        DictP { ctxt }
+    }
+    pub fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<DictT> {
         buf.exact("<<".as_bytes())?;
         let mut end   = false;
         let mut map   = HashMap::new();
@@ -95,7 +143,7 @@ impl DictP {
                 let mut ws = WhitespaceEOL::new(true);
                 ws.parse(buf)?;
 
-                let mut p = PDFObjP;
+                let mut p = PDFObjP::new(&mut self.ctxt);
                 let o = p.parse(buf)?;
                 // Note: reuse of n requires a clonable type
                 names.insert(n.val().clone());
@@ -151,21 +199,25 @@ impl StreamT {
 #[derive(Debug, PartialEq)]
 pub struct IndirectT {
     num: i64,
-    gen: i64,
-    obj: Box<LocatedVal<PDFObjT>>
+    gen: i64
 }
 impl IndirectT {
-    pub fn new(num: i64, gen: i64, obj: Box<LocatedVal<PDFObjT>>) -> IndirectT {
-        IndirectT { num, gen, obj }
+    pub fn new(num: i64, gen: i64) -> IndirectT {
+        IndirectT { num, gen }
     }
     pub fn num(&self) -> i64 { self.num }
     pub fn gen(&self) -> i64 { self.gen }
-    pub fn obj(&self) -> &LocatedVal<PDFObjT> { &self.obj }
 }
 
-struct IndirectP;
-impl IndirectP {
-    fn parse(self, buf: &mut ParseBuffer) -> ParseResult<IndirectT> {
+struct IndirectP<'a> {
+    ctxt: &'a mut PDFObjContext
+}
+
+impl IndirectP<'_> {
+    pub fn new<'a>(ctxt: &'a mut PDFObjContext) -> IndirectP<'a> {
+        IndirectP { ctxt }
+    }
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<IndirectT> {
         let mut int = IntegerP;
         let mut ws = WhitespaceEOL::new(true);
 
@@ -188,7 +240,7 @@ impl IndirectP {
         }
         ws.parse(buf)?;
 
-        let mut p = PDFObjP;
+        let mut p = PDFObjP::new(&mut self.ctxt);
         let o = p.parse(buf)?;
 
         // If we parsed a dictionary, check whether this could be a
@@ -225,8 +277,9 @@ impl IndirectP {
         }
 
         // TODO: update defs
-
-        Ok(IndirectT::new(num.val().int_val(), gen.val().int_val(), Box::new(obj)))
+        let ind = IndirectT::new(num.val().int_val(), gen.val().int_val());
+        self.ctxt.register_obj(&ind, Box::new(obj));
+        Ok(ind)
     }
 }
 
@@ -305,8 +358,14 @@ pub enum PDFObjT {
     Real(RealT)
 }
 
-pub struct PDFObjP;
-impl PDFObjP {
+pub struct PDFObjP<'a> {
+    ctxt: &'a mut PDFObjContext
+}
+
+impl PDFObjP<'_> {
+    pub fn new<'a>(ctxt: &'a mut PDFObjContext) -> PDFObjP<'a> {
+        PDFObjP { ctxt }
+    }
     // The top-level object parser, as an internal helper.
     fn parse_internal(&mut self, buf: &mut ParseBuffer) -> ParseResult<PDFObjT> {
         let c = buf.peek();
@@ -339,7 +398,7 @@ impl PDFObjP {
                 Ok(PDFObjT::Name(n.unwrap()))
             },
             Some(91)  => { // '['
-                let ap = ArrayP;
+                let mut ap = ArrayP::new(&mut self.ctxt);
                 let a = ap.parse(buf)?;
                 Ok(PDFObjT::Array(a.unwrap()))
             },
@@ -353,7 +412,7 @@ impl PDFObjP {
 
                 match next {
                     Some(60) => {
-                        let dp = DictP;
+                        let mut dp = DictP::new(&mut self.ctxt);
                         let d = dp.parse(buf)?;
                         Ok(PDFObjT::Dict(d))
                     },
@@ -424,7 +483,7 @@ impl PDFObjP {
                     // call its parser.
                     buf.set_cursor(cursor);
 
-                    let p = IndirectP;
+                    let mut p = IndirectP::new(&mut self.ctxt);
                     return Ok(PDFObjT::Indirect(p.parse(buf)?))
                 }
 
@@ -451,7 +510,7 @@ impl PDFObjP {
     }
 }
 
-impl ParsleyParser for PDFObjP {
+impl ParsleyParser for PDFObjP<'_> {
     type T = LocatedVal<PDFObjT>;
 
     // The top-level object parser.
@@ -473,11 +532,12 @@ mod test_pdf_obj {
     use std::collections::{HashMap};
     use super::super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal, ErrorKind};
     use super::super::pdf_prim::{RealT};
-    use super::{PDFObjP, PDFObjT, ReferenceT, ArrayT, DictT, IndirectT, StreamT};
+    use super::{PDFObjContext, PDFObjP, PDFObjT, ReferenceT, ArrayT, DictT, IndirectT, StreamT};
 
     #[test]
     fn empty() {
-        let mut p = PDFObjP;
+        let mut ctxt = PDFObjContext::new();
+        let mut p = PDFObjP::new(&mut ctxt);
 
         let v = Vec::from("".as_bytes());
         let mut pb = ParseBuffer::new(v);
@@ -487,7 +547,8 @@ mod test_pdf_obj {
 
     #[test]
     fn comment() {
-        let mut p = PDFObjP;
+        let mut ctxt = PDFObjContext::new();
+        let mut p = PDFObjP::new(&mut ctxt);
 
         // Comments are essentially whitespace.
         let v = Vec::from("\r\n %PDF-1.0 \r\n".as_bytes());
@@ -498,7 +559,8 @@ mod test_pdf_obj {
 
     #[test]
     fn reference() {
-        let mut p = PDFObjP;
+        let mut ctxt = PDFObjContext::new();
+        let mut p = PDFObjP::new(&mut ctxt);
 
 //                         012345678901234567890
         let v = Vec::from("\r\n 1 0 R \r\n".as_bytes());
@@ -522,7 +584,8 @@ mod test_pdf_obj {
 
     #[test]
     fn array() {
-        let mut p = PDFObjP;
+        let mut ctxt = PDFObjContext::new();
+        let mut p = PDFObjP::new(&mut ctxt);
 
 //                         012345678901234567890
         let v = Vec::from("[ 1 0 R ] \r\n".as_bytes());
@@ -550,7 +613,8 @@ mod test_pdf_obj {
 
     #[test]
     fn dict() {
-        let mut p = PDFObjP;
+        let mut ctxt = PDFObjContext::new();
+        let mut p = PDFObjP::new(&mut ctxt);
 //                                   1         2         3         4         5         6
 //                         0123456789012345678901234567890123456789012345678901234567890123
         let v = Vec::from("<< /Entry [ 1 0 R ] \r\n >>".as_bytes());
@@ -603,7 +667,8 @@ mod test_pdf_obj {
 
     #[test]
     fn indirect() {
-        let mut p = PDFObjP;
+        let mut ctxt = PDFObjContext::new();
+        let mut p = PDFObjP::new(&mut ctxt);
 //                                   1         2         3         4         5         6
 //                         0123456789012345678901234567890123456789012345678901234567890123
         let v = Vec::from("1 0 obj << /Entry [ 1 0 R ] \r\n >> endobj".as_bytes());
@@ -615,14 +680,16 @@ mod test_pdf_obj {
         let mut map = HashMap::new();
         map.insert(LocatedVal::new(Vec::from("Entry".as_bytes()), 11, 17), entval);
         let dict = LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 8, 33);
-        let obj = PDFObjT::Indirect(IndirectT::new(1, 0, Box::new(dict)));
+        let obj = PDFObjT::Indirect(IndirectT::new(1, 0));
         assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(obj, 0, 40)));
         assert_eq!(pb.get_cursor(), vlen);
+        assert_eq!(ctxt.lookup_obj((1,0)), Some(&dict));
     }
 
     #[test]
     fn stream() {
-        let mut p = PDFObjP;
+        let mut ctxt = PDFObjContext::new();
+        let mut p = PDFObjP::new(&mut ctxt);
 //                                   1         2         3         4         5         6
 //                         0123456789012345678901234567890123456789012345678901234567890123
         let v = Vec::from("1 0 obj << /Entry [ 1 0 R ] >> stream\n junk \nendstream\nendobj".as_bytes());
@@ -636,14 +703,16 @@ mod test_pdf_obj {
         let dict = LocatedVal::new(DictT::new(map), 8, 30);
         let content = LocatedVal::new(Vec::from(" junk ".as_bytes()), 31, 54);
         let stream = LocatedVal::new(PDFObjT::Stream(StreamT::new(dict, content)), 8, 54);
-        let obj = PDFObjT::Indirect(IndirectT::new(1, 0, Box::new(stream)));
+        let obj = PDFObjT::Indirect(IndirectT::new(1, 0));
         assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(obj, 0, 61)));
         assert_eq!(pb.get_cursor(), vlen);
+        assert_eq!(ctxt.lookup_obj((1,0)), Some(&stream));
     }
 
     #[test]
     fn test_obj_no_embedded_comment() {
-        let mut p = PDFObjP;
+        let mut ctxt = PDFObjContext::new();
+        let mut p = PDFObjP::new(&mut ctxt);
 //                                   1         2         3         4         5         6
 //                         0123456789012345678901234567890123456789012345678901234567890123
         let v = Vec::from("1 0 obj  \n<<  /Type /Catalog\n  /Pages 2 0 R\n>>\nendobj".as_bytes());
@@ -655,14 +724,15 @@ mod test_pdf_obj {
         map.insert(LocatedVal::new(Vec::from("Pages".as_bytes()), 31, 37),
                    LocatedVal::new(PDFObjT::Reference(ReferenceT::new(2, 0)), 38, 43));
         let d = LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 10, 46);
-        let o = PDFObjT::Indirect(IndirectT::new(1, 0, Box::new(d)));
+        let o = PDFObjT::Indirect(IndirectT::new(1, 0));
         assert_eq!(val, Ok(LocatedVal::new(o, 0, 53)));
+        assert_eq!(ctxt.lookup_obj((1,0)), Some(&d));
     }
 
     #[test]
     fn test_obj_embedded_comment() {
-        let mut p = PDFObjP;
-
+        let mut ctxt = PDFObjContext::new();
+        let mut p = PDFObjP::new(&mut ctxt);
 //                                   1         2         3         4         5         6         7
 //                         01234567890123456789012345678901234567890123456789012345678901234567890
         let v = Vec::from("1 0 obj  % entry point\n<<  /Type /Catalog\n  /Pages 2 0 R\n>>\nendobj".as_bytes());
@@ -674,15 +744,16 @@ mod test_pdf_obj {
         map.insert(LocatedVal::new(Vec::from("Pages".as_bytes()), 44, 50),
                    LocatedVal::new(PDFObjT::Reference(ReferenceT::new(2, 0)), 51, 56));
         let d = LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 23, 59);
-        let o = PDFObjT::Indirect(IndirectT::new(1, 0, Box::new(d)));
+        let o = PDFObjT::Indirect(IndirectT::new(1, 0));
         assert_eq!(val, Ok(LocatedVal::new(o, 0, 66)));
+        assert_eq!(ctxt.lookup_obj((1,0)), Some(&d));
     }
 
     #[test]
     // Tests extracted from Peter Wyatt's webinar slides.
     fn test_pdf_expert_dict() {
-        let mut p = PDFObjP;
-
+        let mut ctxt = PDFObjContext::new();
+        let mut p = PDFObjP::new(&mut ctxt);
 //                                    1         2         3          4
 //                         01234567 890123456789012345678901234 56789012
         let v = Vec::from("10 0 obj\n[/<><</[]>>()[[]]-.1/+0]%]\nendobj");
@@ -702,10 +773,13 @@ mod test_pdf_obj {
         objs.push(LocatedVal::new(PDFObjT::Real(RealT::new(-1, 10)), 26, 29));
         objs.push(LocatedVal::new(PDFObjT::Name(Vec::from("+0")), 29, 32));
         let a = LocatedVal::new(PDFObjT::Array(ArrayT::new(objs)), 9, 33);
-        let o = PDFObjT::Indirect(IndirectT::new(10, 0, Box::new(a)));
+        let o = PDFObjT::Indirect(IndirectT::new(10, 0));
         assert_eq!(pb.get_cursor(), vlen);
         assert_eq!(val, Ok(LocatedVal::new(o, 0, vlen)));
+        assert_eq!(ctxt.lookup_obj((10,0)), Some(&a));
 
+        let mut ctxt = PDFObjContext::new();
+        let mut p = PDFObjP::new(&mut ctxt);
 //                         012345678901234567890
         let v = Vec::from("10 0 obj<<//>>endobj");
         let vlen = v.len();
@@ -715,10 +789,13 @@ mod test_pdf_obj {
         map.insert(LocatedVal::new(Vec::from("".as_bytes()), 10, 11),
                    LocatedVal::new(PDFObjT::Name(Vec::from("".as_bytes())), 11, 12));
         let d = LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 8, 14);
-        let o = PDFObjT::Indirect(IndirectT::new(10, 0, Box::new(d)));
+        let o = PDFObjT::Indirect(IndirectT::new(10, 0));
         assert_eq!(pb.get_cursor(), vlen);
         assert_eq!(val, Ok(LocatedVal::new(o, 0, vlen)));
+        assert_eq!(ctxt.lookup_obj((10,0)), Some(&d));
 
+        let mut ctxt = PDFObjContext::new();
+        let mut p = PDFObjP::new(&mut ctxt);
 //                         0123456789012345678901
         let v = Vec::from("11 0 obj<</<>>>endobj");
         let vlen = v.len();
@@ -728,11 +805,14 @@ mod test_pdf_obj {
         map.insert(LocatedVal::new(Vec::from("".as_bytes()), 10, 11),
                    LocatedVal::new(PDFObjT::String(Vec::from("".as_bytes())), 11, 13));
         let d = LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 8, 15);
-        let o = PDFObjT::Indirect(IndirectT::new(11, 0, Box::new(d)));
+        let o = PDFObjT::Indirect(IndirectT::new(11, 0));
         assert_eq!(pb.get_cursor(), vlen);
         assert_eq!(val, Ok(LocatedVal::new(o, 0, vlen)));
+        assert_eq!(ctxt.lookup_obj((11,0)), Some(&d));
 
         // TODO: handle empty values
+        let mut ctxt = PDFObjContext::new();
+        let mut p = PDFObjP::new(&mut ctxt);
         let v = Vec::from("12 0 obj/ endobj");
         let mut pb = ParseBuffer::new(v);
         let _val = p.parse(&mut pb);

@@ -96,7 +96,7 @@ pub trait ParsleyPrimitive {
 
     // Parses a single value from the provided buffer, and returns the
     // value and the number of bytes consumed from the buffer.
-    fn parse(buf: &[u8]) -> ParseResult<(Self::T,usize)>;
+    fn parse(buf: &[u8]) -> ParseResult<(Self::T, usize)>;
 }
 
 // The trait defining a general Parsley parser.  This trait is

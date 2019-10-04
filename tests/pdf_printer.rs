@@ -7,7 +7,7 @@ use std::env;
 use std::convert::TryInto;
 use parsley_rust::pcore::parsebuffer::{ParseBuffer, ParsleyParser, Location};
 use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, XrefSectP, XrefEntT};
-use parsley_rust::pdf_lib::pdf_obj::{PDFObjT, PDFObjP};
+use parsley_rust::pdf_lib::pdf_obj::{PDFObjContext, PDFObjT, PDFObjP};
 
 fn parse_file(test_file: &str) {
     // Print current path
@@ -100,9 +100,10 @@ fn parse_file(test_file: &str) {
     }
 
     // Now get the objects at each offset.
+    let mut ctxt = PDFObjContext::new();
     let mut objs = Vec::new();
     for o in offsets.iter() {
-        let mut p = PDFObjP;
+        let mut p = PDFObjP::new(&mut ctxt);
         pb.set_cursor((*o).try_into().unwrap());
         let lobj = p.parse(&mut pb);
         if let Err(_) = lobj {
