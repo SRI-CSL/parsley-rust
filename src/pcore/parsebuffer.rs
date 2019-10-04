@@ -15,8 +15,8 @@ pub struct ParseBuffer {
 
 // Location information for objects returned by parsers.
 pub trait Location {
-    fn parsebuf_start(&self) -> usize;
-    fn parsebuf_end(&self)   -> usize;
+    fn loc_start(&self) -> usize;
+    fn loc_end(&self)   -> usize;
 }
 
 // Values returned by parsers should provide location annotations.
@@ -65,8 +65,8 @@ where T : PartialEq
 impl<T> Location for LocatedVal<T>
 where T : PartialEq
 {
-    fn parsebuf_start(&self) -> usize { self.start }
-    fn parsebuf_end(&self)   -> usize { self.end }
+    fn loc_start(&self) -> usize { self.start }
+    fn loc_end(&self)   -> usize { self.end }
 }
 
 #[derive(Debug, PartialEq)]

@@ -200,14 +200,14 @@ impl IndirectP {
                 ws.parse(buf)?;
                 if buf.check_prefix("stream".as_bytes())? {
                     // This is indeed a stream object.
-                    let dict_start = o.parsebuf_start();
-                    let dict_end   = o.parsebuf_end();
+                    let dict_start = o.loc_start();
+                    let dict_end   = o.loc_end();
                     if let PDFObjT::Dict(dict) = o.unwrap() {
                         let dict = LocatedVal::new(dict, dict_start, dict_end);
                         let mut s = StreamContent;
                         let stream = s.parse(buf)?;
                         let start = dict_start;
-                        let end = stream.parsebuf_end();
+                        let end = stream.loc_end();
                         LocatedVal::new(PDFObjT::Stream(StreamT { dict, stream }), start, end)
                     } else {
                         panic!("can never happen")

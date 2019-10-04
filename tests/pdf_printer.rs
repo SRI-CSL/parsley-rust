@@ -69,7 +69,7 @@ fn parse_file(test_file: &str) {
                display, pb.get_cursor(), sxref);
     }
     let sxref = sxref.unwrap();
-    println!(" startxref span: {}..{}.", sxref.parsebuf_start(), sxref.parsebuf_end());
+    println!(" startxref span: {}..{}.", sxref.loc_start(), sxref.loc_end());
     let sxref = sxref.unwrap();
     println!("startxref points to offset {} for xref", sxref.offset());
 
