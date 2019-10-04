@@ -309,6 +309,13 @@ impl ParseBuffer {
             Ok(ret)
         }
     }
+
+    // Destructive modification of parsing buffer by dropping content
+    // before the cursor.  The cursor will then have offset 0.
+    pub fn drop_upto(&mut self) {
+        self.buf = self.buf.split_off(self.ofs);
+        self.ofs = 0
+    }
 }
 
 #[cfg(test)]
@@ -349,5 +356,15 @@ mod test_parsebuffer {
         let mut map = HashMap::new();
         map.insert(v, 0);
         assert!(map.contains_key(&1));
+    }
+
+    #[test]
+    fn test_drop_upto() {
+        let v = Vec::from("0123456789".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(pb.scan("56".as_bytes()), Ok(5));
+        pb.drop_upto();
+        assert_eq!(pb.get_cursor(), 0);
+        assert_eq!(pb.scan("56".as_bytes()), Ok(0));
     }
 }
