@@ -121,7 +121,7 @@ fn parse_file(test_file: &str) {
 }
 
 fn print_usage(code: i32) {
-    println!("{}: <pdf-file>", env::args_os().nth(0).unwrap().into_string().unwrap());
+    println!("{}: <pdf-file>", env::args().nth(0).unwrap());
     process::exit(code)
 }
 
