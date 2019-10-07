@@ -373,8 +373,8 @@ impl ParsleyParser for RawLiteralString {
     }
 }
 
-// Raw names: does not perform normalization or UTF decoding, and
-// the representation does not include the leading '/'.
+// Raw names: does not perform UTF decoding, and the representation
+// does not include the leading '/'.
 pub struct RawName;
 impl ParsleyParser for RawName {
     type T = LocatedVal<Vec<u8>>;
@@ -390,7 +390,66 @@ impl ParsleyParser for RawName {
         // names are considered valid.
         let v = buf.parse_bytes_until(" \0\t\r\n\x0c()<>[]{}/%".as_bytes())?;
         let end = buf.get_cursor();
-        Ok(LocatedVal::new(v, start, end))
+
+        // Normalize hex-codes if length permits.
+        let ret =
+            if v.len() < 3 {
+                v
+            } else {
+                let mut r = Vec::new();
+                let mut iter = v.windows(3);
+                let mut w = iter.next();
+
+                while w.is_some() {
+                    fn from_hex(b: u8) -> u8 {
+                        if b'0' <= b && b <= b'9' {
+                            b - b'0'
+                        } else {
+                            b - b'a' + 10
+                        }
+                    }
+                    let triple = w.unwrap();
+                    if triple[0] == 35  // '#'
+                        && triple[1].is_ascii_hexdigit() && triple[2].is_ascii_hexdigit()
+                    {
+                        let h = from_hex(triple[1].to_ascii_lowercase());
+                        let l = from_hex(triple[2].to_ascii_lowercase());
+                        let ch = 16 * h + l;
+                        if ch == 0 {
+                            buf.set_cursor(start);
+                            return Err(ErrorKind::GuardError("null char in name"))
+                        }
+                        r.push(ch);
+                        // adjust iterator to skip the next two windows if present.
+                        // if not present, properly handle any trailing bytes.
+                        let x = iter.next();
+                        if x.is_none() { break }
+                        let y = iter.next();
+                        if y.is_none() {
+                            let x = x.unwrap();
+                            r.push(x[2]);
+                            break
+                        }
+                        w = iter.next();
+                        if w.is_none() {
+                            let y = y.unwrap();
+                            r.push(y[1]);
+                            r.push(y[2]);
+                            break;
+                        }
+                    } else {
+                        r.push(triple[0]);
+                        w = iter.next();
+                        if w.is_none() {
+                            // push trailing bytes
+                            r.push(triple[1]);
+                            r.push(triple[2]);
+                        }
+                    }
+                }
+                r
+            };
+        Ok(LocatedVal::new(ret, start, end))
     }
 }
 
@@ -939,6 +998,38 @@ mod test_pdf_prim {
         let mut pb = ParseBuffer::new(v);
         assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![], 0, 1)));
         assert_eq!(pb.get_cursor(), 1);
+
+        // embedded character codes
+
+        let v = vec![47, 35, 48, 48];
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(name.parse(&mut pb), Err(ErrorKind::GuardError("null char in name")));
+        assert_eq!(pb.get_cursor(), 0);
+
+        let v = vec![47, 35, 48, 49];
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![1], 0, 4)));
+        assert_eq!(pb.get_cursor(), 4);
+
+        let v = vec![47, 65, 35, 48, 49];
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![65, 1], 0, 5)));
+        assert_eq!(pb.get_cursor(), 5);
+
+        let v = vec![47, 35, 48, 49, 35, 48, 49];
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![1, 1], 0, 7)));
+        assert_eq!(pb.get_cursor(), 7);
+
+        let v = vec![47, 35, 48, 49, 65];
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![1, 65], 0, 5)));
+        assert_eq!(pb.get_cursor(), 5);
+
+        let v = vec![47, 35, 48, 49, 65, 66];
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![1, 65, 66], 0, 6)));
+        assert_eq!(pb.get_cursor(), 6);
     }
 
     #[test]
