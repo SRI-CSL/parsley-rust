@@ -31,8 +31,8 @@ impl PDFObjContext {
     pub fn new() -> PDFObjContext {
         PDFObjContext { defns: HashMap::new() }
     }
-    pub fn register_obj(&mut self, p: &IndirectT, o: Box<LocatedVal<PDFObjT>>) {
-        self.defns.insert((p.num(), p.gen()), o);
+    pub fn register_obj(&mut self, p: &IndirectT, o: Box<LocatedVal<PDFObjT>>) -> Option<Box<LocatedVal<PDFObjT>>> {
+        self.defns.insert((p.num(), p.gen()), o)
     }
     pub fn lookup_obj(&self, oid: (i64, i64)) -> Option<&LocatedVal<PDFObjT>> {
         match self.defns.get(&oid) {
@@ -278,8 +278,10 @@ impl IndirectP<'_> {
 
         // TODO: update defs
         let ind = IndirectT::new(num.val().int_val(), gen.val().int_val());
-        self.ctxt.register_obj(&ind, Box::new(obj));
-        Ok(ind)
+        match self.ctxt.register_obj(&ind, Box::new(obj)) {
+            None    => Ok(ind),
+            Some(_) => Err(ErrorKind::GuardError("non-unique object id"))
+        }
     }
 }
 
@@ -747,6 +749,18 @@ mod test_pdf_obj {
         let o = PDFObjT::Indirect(IndirectT::new(1, 0));
         assert_eq!(val, Ok(LocatedVal::new(o, 0, 66)));
         assert_eq!(ctxt.lookup_obj((1,0)), Some(&d));
+    }
+
+    #[test]
+    fn test_obj_nonunique() {
+        let mut ctxt = PDFObjContext::new();
+        let mut p = PDFObjP::new(&mut ctxt);
+//                                   1         2         3         4         5         6
+//                         0123456789012345678901234567890123456789012345678901234567890123
+        let v = Vec::from("1 0 obj  \n<<  /Type 1 0 obj true endobj>>\nendobj".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let val = p.parse(&mut pb);
+        assert_eq!(val, Err(ErrorKind::GuardError("non-unique object id")));
     }
 
     #[test]
