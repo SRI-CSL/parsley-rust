@@ -1021,14 +1021,34 @@ mod test_pdf_prim {
         assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![1, 1], 0, 7)));
         assert_eq!(pb.get_cursor(), 7);
 
-        let v = vec![47, 35, 48, 49, 65];
+        let v = vec![47, 35, 48, 49, 65];     // code '01'
         let mut pb = ParseBuffer::new(v);
         assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![1, 65], 0, 5)));
         assert_eq!(pb.get_cursor(), 5);
 
-        let v = vec![47, 35, 48, 49, 65, 66];
+        let v = vec![47, 35, 48, 49, 65, 66]; // code '01'
         let mut pb = ParseBuffer::new(v);
         assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![1, 65, 66], 0, 6)));
+        assert_eq!(pb.get_cursor(), 6);
+
+        let v = vec![47, 35, 48, 65, 65, 66]; // code '0A'
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![10, 65, 66], 0, 6)));
+        assert_eq!(pb.get_cursor(), 6);
+
+        let v = vec![47, 35, 48, 97, 65, 66]; // code '0a'
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![10, 65, 66], 0, 6)));
+        assert_eq!(pb.get_cursor(), 6);
+
+        let v = vec![47, 35, 102, 70, 65, 66]; // code 'fF'
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![255, 65, 66], 0, 6)));
+        assert_eq!(pb.get_cursor(), 6);
+
+        let v = vec![47, 35, 102, 102, 65, 66]; // code 'ff'
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![255, 65, 66], 0, 6)));
         assert_eq!(pb.get_cursor(), 6);
     }
 
