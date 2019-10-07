@@ -927,6 +927,18 @@ mod test_pdf_prim {
         let mut pb = ParseBuffer::new(v);
         assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(Vec::from("".as_bytes()), 0, 1)));
         assert_eq!(pb.get_cursor(), 1);
+
+        // embedded null-character in name
+
+        let v = vec![47, 65, 0, 66, 32];
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![65], 0, 2)));
+        assert_eq!(pb.get_cursor(), 2);
+
+        let v = vec![47, 0, 66, 32];
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![], 0, 1)));
+        assert_eq!(pb.get_cursor(), 1);
     }
 
     #[test]
