@@ -145,9 +145,16 @@ impl DictP<'_> {
 
                 let mut p = PDFObjP::new(&mut self.ctxt);
                 let o = p.parse(buf)?;
-                // Note: reuse of n requires a clonable type
-                names.insert(n.val().clone());
-                map.insert(n, o);
+
+                // Entries with 'null' values are treated as though
+                // the entry does not exist.
+                if let PDFObjT::Null(_) = o.val() {
+                    // Drop the entry.
+                } else {
+                    // Note: reuse of n requires a clonable type
+                    names.insert(n.val().clone());
+                    map.insert(n, o);
+                }
             } else {
                 end = true;
             }
@@ -728,6 +735,24 @@ mod test_pdf_obj {
         let d = LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 10, 46);
         let o = PDFObjT::Indirect(IndirectT::new(1, 0));
         assert_eq!(val, Ok(LocatedVal::new(o, 0, 53)));
+        assert_eq!(ctxt.lookup_obj((1,0)), Some(&d));
+    }
+
+    #[test]
+    fn test_dict_null_value() {
+        let mut ctxt = PDFObjContext::new();
+        let mut p = PDFObjP::new(&mut ctxt);
+//                                    1         2          3         4           5         6
+//                         012345678 9012345678901234567 89012345678901 234 5678901234567890123
+        let v = Vec::from("1 0 obj  \n<<  /Type /Catalog\n  /Pages null\n>>\nendobj".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let val = p.parse(&mut pb);
+        let mut map = HashMap::new();
+        map.insert(LocatedVal::new(Vec::from("Type".as_bytes()), 14, 19),
+                   LocatedVal::new(PDFObjT::Name(Vec::from("Catalog".as_bytes())), 20, 28));
+        let d = LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 10, 45);
+        let o = PDFObjT::Indirect(IndirectT::new(1, 0));
+        assert_eq!(val, Ok(LocatedVal::new(o, 0, 52)));
         assert_eq!(ctxt.lookup_obj((1,0)), Some(&d));
     }
 
