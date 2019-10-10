@@ -375,7 +375,7 @@ impl ParsleyParser for StartXrefP {
 
 #[cfg(test)]
 mod test_pdf_file {
-    use std::collections::{HashMap};
+    use std::collections::{BTreeMap};
     use super::super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal, ErrorKind};
     use super::super::super::pdf_lib::pdf_obj::{PDFObjContext, PDFObjT, ReferenceT, DictT};
     use super::super::super::pdf_lib::pdf_prim::{IntegerT};
@@ -671,7 +671,7 @@ endobj".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
 
-        let mut map = HashMap::new();
+        let mut map = BTreeMap::new();
         map.insert(LocatedVal::new(Vec::from("Size".as_bytes()), 12, 17),
                    LocatedVal::new(PDFObjT::Integer(IntegerT::new(8)), 18, 19));
         map.insert(LocatedVal::new(Vec::from("Root".as_bytes()), 21, 26),
