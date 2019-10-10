@@ -7,7 +7,7 @@ use std::env;
 use std::process;
 use std::convert::TryInto;
 use parsley_rust::pcore::parsebuffer::{ParseBuffer, ParsleyParser, Location};
-use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, XrefSectP, XrefEntT};
+use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, XrefSectP, XrefEntT, TrailerP};
 use parsley_rust::pdf_lib::pdf_obj::{PDFObjT, PDFObjP, PDFObjContext};
 
 fn parse_file(test_file: &str) {
@@ -121,7 +121,35 @@ fn parse_file(test_file: &str) {
         }
     }
 
-    // Now create a context and get the objects at each offset.
+    // Create the pdf object context.
+    let mut ctxt = PDFObjContext::new();
+
+    // Get trailer following the xref table, which should give us the
+    // id of the Root object.
+    match pb.scan("trailer".as_bytes()) {
+        Ok(nbytes) =>
+            println!("Found trailer {} bytes from end of xref table.", nbytes),
+        Err(e)     => {
+            println!("Cannot find trailer: {}", e);
+            process::exit(1)
+        }
+    }
+    let mut p = TrailerP::new(&mut ctxt);
+    let trlr  = p.parse(&mut pb);
+    if let Err(e) = trlr {
+        println!("Cannot parse trailer: {}", e);
+        process::exit(1)
+    }
+    let trlr = trlr.unwrap().unwrap();
+    let _root = match trlr.dict().get("Root".as_bytes()) {
+        Some(rt) => rt,
+        None     => {
+            println!("No root reference found!");
+            process::exit(1)
+        }
+    };
+
+    // Now get the outermost objects at each offset in the xref table.
     let mut ctxt = PDFObjContext::new();
     let mut objs = Vec::new();
     for o in offsets.iter() {
@@ -141,6 +169,8 @@ fn parse_file(test_file: &str) {
             println!("found non-indirect object at offset {}!", o)
         }
     }
+
+    // TODO: Perform a breadth-first traversal of the root object.
 }
 
 fn print_usage(code: i32) {

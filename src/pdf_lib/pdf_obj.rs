@@ -109,6 +109,14 @@ impl DictT {
     pub fn map(&self) -> &HashMap<<RawName as ParsleyParser>::T, LocatedVal<PDFObjT>> {
         &self.map
     }
+    // Helper for type-impedance mismatch:
+    //   map.get("Root".as_bytes())
+    // |     ^^^ the trait `std::borrow::Borrow<[u8]>` is not implemented for `parsley_rust::pcore::parsebuffer::LocatedVal<std::vec::Vec<u8>>`
+    // FIXME: is there is a cleaner way, ideally by adjusting the Borrow impl of LocatedVal?
+    // Otherwise, detecting that such helpers are needed is likely to require a deep model of the Rust trait system.
+    pub fn get(&self, k: &[u8]) -> Option<&LocatedVal<PDFObjT>> {
+        self.map.get(&Vec::from(k))
+    }
 }
 
 pub struct DictP<'a> {
