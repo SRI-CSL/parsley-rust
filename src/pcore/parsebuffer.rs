@@ -1,7 +1,7 @@
 /// Basic parsing buffer manager, and the traits defining the parsing interface.
 
 use std::error::Error;
-use std::cmp::PartialEq;
+use std::cmp::{PartialEq, PartialOrd, Ordering};
 use std::borrow::Borrow;
 use std::hash::{Hash, Hasher};
 use std::fmt;
@@ -44,11 +44,27 @@ where T : PartialEq
 impl<T> PartialEq for LocatedVal<T>
 where T : PartialEq
 {
-    fn eq(&self, other: &Self) -> bool { self.val == other.val }
+    fn eq(&self, other: &Self) -> bool {
+        PartialEq::eq(&self.val, &other.val)
+    }
 }
 impl<T> Eq for LocatedVal<T>
 where T : PartialEq
 {}
+impl<T> PartialOrd for LocatedVal<T>
+where T : PartialOrd
+{
+    fn partial_cmp(&self, other: &LocatedVal<T>) -> Option<Ordering> {
+        PartialOrd::partial_cmp(&self.val, &other.val)
+    }
+}
+impl<T> Ord for LocatedVal<T>
+where T : Ord
+{
+    fn cmp(&self, other: &LocatedVal<T>) -> Ordering {
+        Ord::cmp(&self.val, &other.val)
+    }
+}
 impl<T> Hash for LocatedVal<T>
 where T : PartialEq, T : Hash
 {
