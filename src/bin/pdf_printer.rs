@@ -204,13 +204,13 @@ fn parse_file(test_file: &str) {
         if o.is_none() { break };
         let (o, depth) = o.unwrap();
 
-        processed.insert(Rc::clone(&o));
         match o.val() {
             PDFObjT::Array(a) => {
                 log_obj::<LocatedVal<_>>("array", &o, depth);
                 for elem in a.objs() {
                     if !processed.contains(elem) {
-                        obj_queue.push_back((Rc::clone(elem), depth + 1))
+                        obj_queue.push_back((Rc::clone(elem), depth + 1));
+                        processed.insert(Rc::clone(elem));
                     }
                 }
             },
@@ -218,7 +218,8 @@ fn parse_file(test_file: &str) {
                 log_obj::<LocatedVal<_>>("dict", &o, depth);
                 for (_, v) in d.map().iter() {
                     if !processed.contains(v) {
-                        obj_queue.push_back((Rc::clone(v), depth + 1))
+                        obj_queue.push_back((Rc::clone(v), depth + 1));
+                        processed.insert(Rc::clone(v));
                     }
                 }
             },
@@ -227,14 +228,16 @@ fn parse_file(test_file: &str) {
                 for (_, v) in s.dict().val().map().iter() {
                     // TODO: print key names
                     if !processed.contains(v) {
-                        obj_queue.push_back((Rc::clone(v), depth + 1))
+                        obj_queue.push_back((Rc::clone(v), depth + 1));
+                        processed.insert(Rc::clone(v));
                     }
                 }
             },
             PDFObjT::Indirect(i) => {
                 log_obj::<LocatedVal<_>>("indirect", &o, depth);
                 if !processed.contains(i.obj()) {
-                    obj_queue.push_back((Rc::clone(i.obj()), depth + 1))
+                    obj_queue.push_back((Rc::clone(i.obj()), depth + 1));
+                    processed.insert(Rc::clone(i.obj()));
                 }
             },
             PDFObjT::Reference(r) => {
@@ -242,7 +245,8 @@ fn parse_file(test_file: &str) {
                 match ctxt.lookup_obj(r.id()) {
                     Some(obj) => {
                         if !processed.contains(obj) {
-                            obj_queue.push_back((Rc::clone(obj), depth + 1))
+                            obj_queue.push_back((Rc::clone(obj), depth + 1));
+                            processed.insert(Rc::clone(obj));
                         }
                     },
                     None      => {
