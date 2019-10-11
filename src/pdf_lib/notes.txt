@@ -1,0 +1,24 @@
+There is a need for specifying what a 'safe subset' of PDF is, and how
+to parse a document in an unsafe subset.  For now, the Rust
+implementation parses our notion of the safe subset.  This notion and
+its accompanying rationale are below.
+
+- It does not allow object references as dictionary keys, only names.
+  The rationale for excluding this from a 'safe subset' is that the
+  decision as to whether a dictionary with such a key is valid does
+  not depend on local information; the target of the object reference
+  might be an arbitrary distance away (if present at all) in the
+  document.  This potentially delays the validity check of such a
+  dictionary until the full document is parsed.
+
+- It does not allow missing values in dictionaries, as it is not clear
+  from the specification whether such an entry is legal. (To handle
+  this, we would need to manufacture a default value to use for the
+  key, which is a potentially complex context-sensitive decision.)
+
+  It is possible that we would need to handle missing entries in a
+  dictionary of a specific type.  Here, there would be a
+  transformation from one complete syntactic object (dictionary) to
+  another.  This is different from the above case, where we would have
+  to transform a syntactically incomplete object into a syntactically
+  complete one.

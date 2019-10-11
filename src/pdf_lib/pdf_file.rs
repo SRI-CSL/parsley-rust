@@ -4,7 +4,7 @@ use std::io::Read; // for read_to_string()
 use std::convert::TryFrom;
 use super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal, ParseResult, ErrorKind};
 use super::pdf_prim::{IntegerP, WhitespaceEOL, WhitespaceNoEOL, Comment};
-use super::pdf_obj::{PDFObjP, PDFObjT, DictT, DictP};
+use super::pdf_obj::{PDFObjContext, PDFObjP, PDFObjT, DictT, DictP};
 
 // This doesn't yet fully specify a legal version string.
 //
@@ -258,8 +258,17 @@ impl BodyT {
     pub fn objs(&self) -> &[LocatedVal<PDFObjT>] { self.objs.as_slice() }
 }
 
-pub struct BodyP;
-impl ParsleyParser for BodyP {
+pub struct BodyP<'a> {
+    ctxt: &'a mut PDFObjContext
+}
+
+impl BodyP<'_> {
+    pub fn new<'a>(ctxt: &'a mut PDFObjContext) -> BodyP<'a> {
+        BodyP { ctxt }
+    }
+}
+
+impl ParsleyParser for BodyP<'_> {
     type T = LocatedVal<BodyT>;
 
     // PDF documents will almost never be parsed in this linear
@@ -268,7 +277,7 @@ impl ParsleyParser for BodyP {
     // be used with simple files for debugging purposes.
     fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
-        let mut op = PDFObjP;
+        let mut op = PDFObjP::new(&mut self.ctxt);
         // The outermost objects should all be indirect objects.  In
         // the simplest case, we just terminate when we can't parse
         // any more objects.
@@ -297,8 +306,17 @@ impl TrailerT {
     pub fn dict(&self) -> &DictT { &self.dict }
 }
 
-pub struct TrailerP;
-impl ParsleyParser for TrailerP {
+pub struct TrailerP<'a> {
+    ctxt: &'a mut PDFObjContext
+}
+
+impl TrailerP<'_> {
+    pub fn new<'a>(ctxt: &'a mut PDFObjContext) -> TrailerP<'a> {
+        TrailerP { ctxt }
+    }
+}
+
+impl ParsleyParser for TrailerP<'_> {
     type T = LocatedVal<TrailerT>;
 
     // This assumes we are positioned at 'trailer'.
@@ -310,7 +328,7 @@ impl ParsleyParser for TrailerP {
         let mut ws = WhitespaceEOL::new(false); // need to consume an EOL
         ws.parse(buf)?;
 
-        let dp = DictP;
+        let mut dp = DictP::new(&mut self.ctxt);
         let dict = dp.parse(buf);
         if let Err(_) = dict {
             return Err(ErrorKind::GuardError("error parsing trailer dictionary"))
@@ -357,9 +375,9 @@ impl ParsleyParser for StartXrefP {
 
 #[cfg(test)]
 mod test_pdf_file {
-    use std::collections::{HashMap};
+    use std::collections::{BTreeMap};
     use super::super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal, ErrorKind};
-    use super::super::super::pdf_lib::pdf_obj::{PDFObjT, ReferenceT, DictT};
+    use super::super::super::pdf_lib::pdf_obj::{PDFObjContext, PDFObjT, ReferenceT, DictT};
     use super::super::super::pdf_lib::pdf_prim::{IntegerT};
     use super::{HeaderT, HeaderP, BodyT, BodyP, StartXrefT, StartXrefP, TrailerT, TrailerP};
     use super::{XrefT, XrefEntT, XrefEntP, XrefSubSectT, XrefSubSectP, XrefSectT, XrefSectP};
@@ -497,7 +515,8 @@ mod test_pdf_file {
 
     #[test]
     fn test_body_without_comments() {
-        let mut p = BodyP;
+        let mut ctxt = PDFObjContext::new();
+        let mut p = BodyP::new(&mut ctxt);
         // body snippet from hello world, but with embedded comments removed
         let v = Vec::from(
 "1 0 obj
@@ -566,7 +585,8 @@ endobj
 
     #[test]
     fn test_body_with_comments() {
-        let mut p = BodyP;
+        let mut ctxt = PDFObjContext::new();
+        let mut p = BodyP::new(&mut ctxt);
         // original body snippet from hello world (with embedded comments)
         let v = Vec::from(
 "1 0 obj  % entry point
@@ -634,7 +654,8 @@ endobj".as_bytes());
 
     #[test]
     fn test_trailer() {
-        let mut p = TrailerP;
+        let mut ctxt = PDFObjContext::new();
+        let mut p = TrailerP::new(&mut ctxt);
 //01234567
 //890
 //123456789
@@ -650,7 +671,7 @@ endobj".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
 
-        let mut map = HashMap::new();
+        let mut map = BTreeMap::new();
         map.insert(LocatedVal::new(Vec::from("Size".as_bytes()), 12, 17),
                    LocatedVal::new(PDFObjT::Integer(IntegerT::new(8)), 18, 19));
         map.insert(LocatedVal::new(Vec::from("Root".as_bytes()), 21, 26),

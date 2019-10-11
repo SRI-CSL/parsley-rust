@@ -1,7 +1,7 @@
 /// Basic parsing buffer manager, and the traits defining the parsing interface.
 
 use std::error::Error;
-use std::cmp::PartialEq;
+use std::cmp::{PartialEq, PartialOrd, Ordering};
 use std::borrow::Borrow;
 use std::hash::{Hash, Hasher};
 use std::fmt;
@@ -15,8 +15,8 @@ pub struct ParseBuffer {
 
 // Location information for objects returned by parsers.
 pub trait Location {
-    fn parsebuf_start(&self) -> usize;
-    fn parsebuf_end(&self)   -> usize;
+    fn loc_start(&self) -> usize;
+    fn loc_end(&self)   -> usize;
 }
 
 // Values returned by parsers should provide location annotations.
@@ -44,11 +44,27 @@ where T : PartialEq
 impl<T> PartialEq for LocatedVal<T>
 where T : PartialEq
 {
-    fn eq(&self, other: &Self) -> bool { self.val == other.val }
+    fn eq(&self, other: &Self) -> bool {
+        PartialEq::eq(&self.val, &other.val)
+    }
 }
 impl<T> Eq for LocatedVal<T>
 where T : PartialEq
 {}
+impl<T> PartialOrd for LocatedVal<T>
+where T : PartialOrd
+{
+    fn partial_cmp(&self, other: &LocatedVal<T>) -> Option<Ordering> {
+        PartialOrd::partial_cmp(&self.val, &other.val)
+    }
+}
+impl<T> Ord for LocatedVal<T>
+where T : Ord
+{
+    fn cmp(&self, other: &LocatedVal<T>) -> Ordering {
+        Ord::cmp(&self.val, &other.val)
+    }
+}
 impl<T> Hash for LocatedVal<T>
 where T : PartialEq, T : Hash
 {
@@ -65,8 +81,8 @@ where T : PartialEq
 impl<T> Location for LocatedVal<T>
 where T : PartialEq
 {
-    fn parsebuf_start(&self) -> usize { self.start }
-    fn parsebuf_end(&self)   -> usize { self.end }
+    fn loc_start(&self) -> usize { self.start }
+    fn loc_end(&self)   -> usize { self.end }
 }
 
 #[derive(Debug, PartialEq)]
@@ -96,7 +112,7 @@ pub trait ParsleyPrimitive {
 
     // Parses a single value from the provided buffer, and returns the
     // value and the number of bytes consumed from the buffer.
-    fn parse(buf: &[u8]) -> ParseResult<(Self::T,usize)>;
+    fn parse(buf: &[u8]) -> ParseResult<(Self::T, usize)>;
 }
 
 // The trait defining a general Parsley parser.  This trait is
@@ -309,6 +325,13 @@ impl ParseBuffer {
             Ok(ret)
         }
     }
+
+    // Destructive modification of parsing buffer by dropping content
+    // before the cursor.  The cursor will then have offset 0.
+    pub fn drop_upto(&mut self) {
+        self.buf = self.buf.split_off(self.ofs);
+        self.ofs = 0
+    }
 }
 
 #[cfg(test)]
@@ -349,5 +372,15 @@ mod test_parsebuffer {
         let mut map = HashMap::new();
         map.insert(v, 0);
         assert!(map.contains_key(&1));
+    }
+
+    #[test]
+    fn test_drop_upto() {
+        let v = Vec::from("0123456789".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(pb.scan("56".as_bytes()), Ok(5));
+        pb.drop_upto();
+        assert_eq!(pb.get_cursor(), 0);
+        assert_eq!(pb.scan("56".as_bytes()), Ok(0));
     }
 }
