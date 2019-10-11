@@ -8,11 +8,15 @@ Cargo package manager (included with Rust)
 
 Install on Mac OS X with homebrew:
 
-    $ brew install rust
+    $ brew uninstall rust  # if you used `brew install rust` before
+    $ brew install rustup
+    $ rustup-init
+    [... use default configuration... ]
+    $ source $HOME/.cargo/env
     $ rustc --version
-    rustc 1.37.0
+    rustc 1.38.0 (625451e37 2019-09-23)
     $ cargo --version
-    cargo 1.37.0
+    cargo 1.38.0 (23ef9a4ef 2019-08-20)
 
 ## Building with Cargo
 
