@@ -5,8 +5,10 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::env;
 use std::process;
+use std::rc::Rc;
 use std::convert::TryInto;
-use parsley_rust::pcore::parsebuffer::{ParseBuffer, ParsleyParser, Location};
+use std::collections::{VecDeque, BTreeSet};
+use parsley_rust::pcore::parsebuffer::{ParseBuffer, ParsleyParser, Location, LocatedVal};
 use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, XrefSectP, XrefEntT, TrailerP};
 use parsley_rust::pdf_lib::pdf_obj::{PDFObjT, PDFObjP, PDFObjContext};
 
@@ -141,7 +143,7 @@ fn parse_file(test_file: &str) {
         process::exit(1)
     }
     let trlr = trlr.unwrap().unwrap();
-    let _root = match trlr.dict().get("Root".as_bytes()) {
+    let root_ref = match trlr.dict().get("Root".as_bytes()) {
         Some(rt) => rt,
         None     => {
             println!("No root reference found!");
@@ -161,8 +163,7 @@ fn parse_file(test_file: &str) {
                      o, display, lobj);
             process::exit(1)
         }
-        let lobj = lobj.unwrap();
-        let obj = lobj.unwrap();
+        let obj = lobj.unwrap().unwrap();
         if let PDFObjT::Indirect(_) = obj {
             objs.push(obj)
         } else {
@@ -170,7 +171,109 @@ fn parse_file(test_file: &str) {
         }
     }
 
-    // TODO: Perform a breadth-first traversal of the root object.
+    let root_obj : &Rc<LocatedVal<PDFObjT>> =
+        if let PDFObjT::Reference(r) = root_ref.val() {
+            match ctxt.lookup_obj(r.id()) {
+                Some(obj) => obj,
+                None      => {
+                    println!("Root object not found from reference!");
+                    process::exit(1)
+                }
+            }
+        } else {
+            // Is there any case where this is not the case?  Should
+            // this constraint be part of the safe subset specification?
+            println!("Root object is not a reference!");
+            process::exit(1);
+        };
+
+    // Perform a breadth-first traversal of the root object, logging
+    // each object type and location as we go.
+
+    fn log_obj<L: Location>(t: &str, loc: &L, depth: u32) {
+        println!(" depth:{} type:{} start:{} end:{}  ",
+                 depth, t, loc.loc_start(), loc.loc_end())
+    };
+
+    let mut obj_queue = VecDeque::new();
+    obj_queue.push_back((Rc::clone(root_obj), 0));  // depth 0
+    let mut processed = BTreeSet::new();
+    processed.insert(Rc::clone(root_obj));
+    while obj_queue.len() > 0 {
+        let o = obj_queue.pop_front();
+        if o.is_none() { break };
+        let (o, depth) = o.unwrap();
+
+        processed.insert(Rc::clone(&o));
+        match o.val() {
+            PDFObjT::Array(a) => {
+                log_obj::<LocatedVal<_>>("array", &o, depth);
+                for elem in a.objs() {
+                    if !processed.contains(elem) {
+                        obj_queue.push_back((Rc::clone(elem), depth + 1))
+                    }
+                }
+            },
+            PDFObjT::Dict(d)  => {
+                log_obj::<LocatedVal<_>>("dict", &o, depth);
+                for (_, v) in d.map().iter() {
+                    if !processed.contains(v) {
+                        obj_queue.push_back((Rc::clone(v), depth + 1))
+                    }
+                }
+            },
+            PDFObjT::Stream(s) => {
+                log_obj::<LocatedVal<_>>("dict", &o, depth);
+                for (_, v) in s.dict().val().map().iter() {
+                    // TODO: print key names
+                    if !processed.contains(v) {
+                        obj_queue.push_back((Rc::clone(v), depth + 1))
+                    }
+                }
+            },
+            PDFObjT::Indirect(i) => {
+                log_obj::<LocatedVal<_>>("indirect", &o, depth);
+                if !processed.contains(i.obj()) {
+                    obj_queue.push_back((Rc::clone(i.obj()), depth + 1))
+                }
+            },
+            PDFObjT::Reference(r) => {
+                log_obj::<LocatedVal<_>>("ref", &o, depth);
+                match ctxt.lookup_obj(r.id()) {
+                    Some(obj) => {
+                        if !processed.contains(obj) {
+                            obj_queue.push_back((Rc::clone(obj), depth + 1))
+                        }
+                    },
+                    None      => {
+                        println!(" ref ({},{}) does not point to a defined object!",
+                                 r.num(), r.gen())
+                    }
+                }
+            },
+            PDFObjT::Boolean(_) => {
+                log_obj::<LocatedVal<_>>("boolean", &o, depth)
+            },
+            PDFObjT::String(_) => {
+                log_obj::<LocatedVal<_>>("string", &o, depth)
+            },
+            PDFObjT::Name(_) => {
+                log_obj::<LocatedVal<_>>("name", &o, depth)
+            },
+            PDFObjT::Null(_) => {
+                log_obj::<LocatedVal<_>>("null", &o, depth)
+            },
+            PDFObjT::Comment(_) => {
+                log_obj::<LocatedVal<_>>("comment", &o, depth)
+            },
+            PDFObjT::Integer(_) => {
+                log_obj::<LocatedVal<_>>("number<integer>", &o, depth)
+            },
+            PDFObjT::Real(_) => {
+                log_obj::<LocatedVal<_>>("number<real>", &o, depth)
+            }
+        }
+    }
 }
 
 fn print_usage(code: i32) {
