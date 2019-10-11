@@ -136,7 +136,7 @@ impl ParsleyParser for Null {
 
 // Integer objects.
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct IntegerT(i64);
 impl IntegerT {
     pub fn new(i: i64) -> IntegerT {
@@ -187,7 +187,7 @@ impl ParsleyParser for IntegerP {
 
 // Real objects.
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct RealT(i64, i64); // rational number representation: (numerator, denominator)
 
 impl RealT {
