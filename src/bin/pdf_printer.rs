@@ -46,9 +46,12 @@ fn parse_file(test_file: &str) {
     let mut pb = ParseBuffer::new(Vec::from(s.as_bytes()));
 
     // Handle leading garbage.
+    let mut pdf_header_offset = 0;
     match pb.scan("%PDF-".as_bytes()) {
         Ok(nbytes) => {
-            println!("Found {} bytes of leading garbage, dropping ...", nbytes);
+            println!("Found {} bytes of leading garbage, dropping {}..{} bytes.",
+                     nbytes, pdf_header_offset, nbytes);
+            pdf_header_offset = nbytes;
             pb.drop_upto()
         },
         Err(e) => {
@@ -190,9 +193,9 @@ fn parse_file(test_file: &str) {
     // Perform a breadth-first traversal of the root object, logging
     // each object type and location as we go.
 
-    fn log_obj<L: Location>(t: &str, loc: &L, depth: u32) {
+    fn log_obj<L: Location>(t: &str, loc: &L, depth: u32, ofs: usize) {
         println!(" depth:{} type:{} start:{} end:{}  ",
-                 depth, t, loc.loc_start(), loc.loc_end())
+                 depth, t, loc.loc_start() + ofs, loc.loc_end() + ofs)
     };
 
     let mut obj_queue = VecDeque::new();
@@ -206,7 +209,7 @@ fn parse_file(test_file: &str) {
 
         match o.val() {
             PDFObjT::Array(a) => {
-                log_obj::<LocatedVal<_>>("array", &o, depth);
+                log_obj::<LocatedVal<_>>("array", &o, depth, pdf_header_offset);
                 for elem in a.objs() {
                     if !processed.contains(elem) {
                         obj_queue.push_back((Rc::clone(elem), depth + 1));
@@ -215,7 +218,7 @@ fn parse_file(test_file: &str) {
                 }
             },
             PDFObjT::Dict(d)  => {
-                log_obj::<LocatedVal<_>>("dict", &o, depth);
+                log_obj::<LocatedVal<_>>("dict", &o, depth, pdf_header_offset);
                 for (_, v) in d.map().iter() {
                     if !processed.contains(v) {
                         obj_queue.push_back((Rc::clone(v), depth + 1));
@@ -224,7 +227,7 @@ fn parse_file(test_file: &str) {
                 }
             },
             PDFObjT::Stream(s) => {
-                log_obj::<LocatedVal<_>>("dict", &o, depth);
+                log_obj::<LocatedVal<_>>("dict", &o, depth, pdf_header_offset);
                 for (_, v) in s.dict().val().map().iter() {
                     // TODO: print key names
                     if !processed.contains(v) {
@@ -234,14 +237,14 @@ fn parse_file(test_file: &str) {
                 }
             },
             PDFObjT::Indirect(i) => {
-                log_obj::<LocatedVal<_>>("indirect", &o, depth);
+                log_obj::<LocatedVal<_>>("indirect", &o, depth, pdf_header_offset);
                 if !processed.contains(i.obj()) {
                     obj_queue.push_back((Rc::clone(i.obj()), depth + 1));
                     processed.insert(Rc::clone(i.obj()));
                 }
             },
             PDFObjT::Reference(r) => {
-                log_obj::<LocatedVal<_>>("ref", &o, depth);
+                log_obj::<LocatedVal<_>>("ref", &o, depth, pdf_header_offset);
                 match ctxt.lookup_obj(r.id()) {
                     Some(obj) => {
                         if !processed.contains(obj) {
@@ -256,25 +259,25 @@ fn parse_file(test_file: &str) {
                 }
             },
             PDFObjT::Boolean(_) => {
-                log_obj::<LocatedVal<_>>("boolean", &o, depth)
+                log_obj::<LocatedVal<_>>("boolean", &o, depth, pdf_header_offset)
             },
             PDFObjT::String(_) => {
-                log_obj::<LocatedVal<_>>("string", &o, depth)
+                log_obj::<LocatedVal<_>>("string", &o, depth, pdf_header_offset)
             },
             PDFObjT::Name(_) => {
-                log_obj::<LocatedVal<_>>("name", &o, depth)
+                log_obj::<LocatedVal<_>>("name", &o, depth, pdf_header_offset)
             },
             PDFObjT::Null(_) => {
-                log_obj::<LocatedVal<_>>("null", &o, depth)
+                log_obj::<LocatedVal<_>>("null", &o, depth, pdf_header_offset)
             },
             PDFObjT::Comment(_) => {
-                log_obj::<LocatedVal<_>>("comment", &o, depth)
+                log_obj::<LocatedVal<_>>("comment", &o, depth, pdf_header_offset)
             },
             PDFObjT::Integer(_) => {
-                log_obj::<LocatedVal<_>>("number<integer>", &o, depth)
+                log_obj::<LocatedVal<_>>("number<integer>", &o, depth, pdf_header_offset)
             },
             PDFObjT::Real(_) => {
-                log_obj::<LocatedVal<_>>("number<real>", &o, depth)
+                log_obj::<LocatedVal<_>>("number<real>", &o, depth, pdf_header_offset)
             }
         }
     }
