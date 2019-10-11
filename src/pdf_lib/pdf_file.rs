@@ -375,6 +375,7 @@ impl ParsleyParser for StartXrefP {
 
 #[cfg(test)]
 mod test_pdf_file {
+    use std::rc::Rc;
     use std::collections::{BTreeMap};
     use super::super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal, ErrorKind};
     use super::super::super::pdf_lib::pdf_obj::{PDFObjContext, PDFObjT, ReferenceT, DictT};
@@ -673,9 +674,9 @@ endobj".as_bytes());
 
         let mut map = BTreeMap::new();
         map.insert(LocatedVal::new(Vec::from("Size".as_bytes()), 12, 17),
-                   LocatedVal::new(PDFObjT::Integer(IntegerT::new(8)), 18, 19));
+                   Rc::new(LocatedVal::new(PDFObjT::Integer(IntegerT::new(8)), 18, 19)));
         map.insert(LocatedVal::new(Vec::from("Root".as_bytes()), 21, 26),
-                   LocatedVal::new(PDFObjT::Reference(ReferenceT::new(1, 0)), 27, 32));
+                   Rc::new(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(1, 0)), 27, 32)));
         let dict = DictT::new(map);
         assert_eq!(val, Ok(LocatedVal::new(TrailerT{ dict }, 0, 35)));
     }

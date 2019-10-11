@@ -35,26 +35,23 @@ impl PDFObjContext {
     pub fn register_obj(&mut self, p: &IndirectT, o: Rc<LocatedVal<PDFObjT>>) -> Option<Rc<LocatedVal<PDFObjT>>> {
         self.defns.insert((p.num(), p.gen()), o)
     }
-    pub fn lookup_obj(&self, oid: (i64, i64)) -> Option<&LocatedVal<PDFObjT>> {
-        match self.defns.get(&oid) {
-            Some(v) => Some(&v),
-            None    => None
-        }
+    pub fn lookup_obj(&self, oid: (i64, i64)) -> Option<&Rc<LocatedVal<PDFObjT>>> {
+        self.defns.get(&oid)
     }
 }
 
 
 // Array a { objs : [PDFObj] } := '[' ( o=PDFObj { a.objs.append(o) } )* ']'
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ArrayT {
-    objs: Vec<LocatedVal<PDFObjT>>
+    objs: Vec<Rc<LocatedVal<PDFObjT>>>
 }
 impl ArrayT {
-    pub fn new(objs: Vec<LocatedVal<PDFObjT>>) -> ArrayT {
+    pub fn new(objs: Vec<Rc<LocatedVal<PDFObjT>>>) -> ArrayT {
         ArrayT { objs }
     }
-    pub fn objs(&self) -> &[LocatedVal<PDFObjT>] {
+    pub fn objs(&self) -> &[Rc<LocatedVal<PDFObjT>>] {
         self.objs.as_slice()
     }
 }
@@ -84,7 +81,7 @@ impl ArrayP<'_> {
             if let Err(_) = buf.exact("]".as_bytes()) {
                 let mut p = PDFObjP::new(&mut self.ctxt);
                 let o = p.parse(buf)?;
-                objs.push(o);
+                objs.push(Rc::new(o));
             } else {
                 end = true;
             }
@@ -98,15 +95,15 @@ impl ArrayP<'_> {
 //  { names : set<typeof(NameObj.val)> }
 //  '<<' ( n=NameObj [ !names.contains(n.val) "Unique dictionary key" ] o=PDFObj { d.map[n.val] := o; names.add(n.val) } )* '>>' ;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DictT {
-    map: BTreeMap<<RawName as ParsleyParser>::T, LocatedVal<PDFObjT>>
+    map: BTreeMap<<RawName as ParsleyParser>::T, Rc<LocatedVal<PDFObjT>>>
 }
 impl DictT {
-    pub fn new(map: BTreeMap<<RawName as ParsleyParser>::T, LocatedVal<PDFObjT>>) -> DictT {
+    pub fn new(map: BTreeMap<<RawName as ParsleyParser>::T, Rc<LocatedVal<PDFObjT>>>) -> DictT {
         DictT { map }
     }
-    pub fn map(&self) -> &BTreeMap<<RawName as ParsleyParser>::T, LocatedVal<PDFObjT>> {
+    pub fn map(&self) -> &BTreeMap<<RawName as ParsleyParser>::T, Rc<LocatedVal<PDFObjT>>> {
         &self.map
     }
     // Helper for type-impedance mismatch:
@@ -114,7 +111,7 @@ impl DictT {
     // |     ^^^ the trait `std::borrow::Borrow<[u8]>` is not implemented for `parsley_rust::pcore::parsebuffer::LocatedVal<std::vec::Vec<u8>>`
     // FIXME: is there is a cleaner way, ideally by adjusting the Borrow impl of LocatedVal?
     // Otherwise, detecting that such helpers are needed is likely to require a deep model of the Rust trait system.
-    pub fn get(&self, k: &[u8]) -> Option<&LocatedVal<PDFObjT>> {
+    pub fn get(&self, k: &[u8]) -> Option<&Rc<LocatedVal<PDFObjT>>> {
         self.map.get(&Vec::from(k))
     }
 }
@@ -162,7 +159,7 @@ impl DictP<'_> {
                 } else {
                     // Note: reuse of n requires a clonable type
                     names.insert(n.val().clone());
-                    map.insert(n, o);
+                    map.insert(n, Rc::new(o));
                 }
             } else {
                 end = true;
@@ -199,20 +196,20 @@ impl DictP<'_> {
 //     }
 
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct StreamT {
-    dict:   LocatedVal<DictT>,
-    stream: LocatedVal<Vec<u8>>,
+    dict:   Rc<LocatedVal<DictT>>,
+    stream: LocatedVal<Vec<u8>>
 }
 impl StreamT {
-    pub fn new(dict: LocatedVal<DictT>, stream: LocatedVal<Vec<u8>>) -> StreamT {
+    pub fn new(dict: Rc<LocatedVal<DictT>>, stream: LocatedVal<Vec<u8>>) -> StreamT {
         StreamT { dict, stream }
     }
-    pub fn dict(&self)   -> &LocatedVal<DictT>   { &self.dict }
-    pub fn stream(&self) -> &LocatedVal<Vec<u8>> { &self.stream }
+    pub fn dict(&self)   -> &Rc<LocatedVal<DictT>>  { &self.dict }
+    pub fn stream(&self) -> &LocatedVal<Vec<u8>>    { &self.stream }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct IndirectT {
     num: i64,
     gen: i64,
@@ -224,7 +221,7 @@ impl IndirectT {
     }
     pub fn num(&self) -> i64 { self.num }
     pub fn gen(&self) -> i64 { self.gen }
-    pub fn obj(&self) -> &LocatedVal<PDFObjT> { &self.obj }
+    pub fn obj(&self) -> &Rc<LocatedVal<PDFObjT>> { &self.obj }
 }
 
 struct IndirectP<'a> {
@@ -278,7 +275,8 @@ impl IndirectP<'_> {
                         let stream = s.parse(buf)?;
                         let start = dict_start;
                         let end = stream.loc_end();
-                        LocatedVal::new(PDFObjT::Stream(StreamT { dict, stream }), start, end)
+                        let obj = PDFObjT::Stream(StreamT { dict: Rc::new(dict), stream });
+                        LocatedVal::new(obj, start, end)
                     } else {
                         panic!("can never happen")
                     }
@@ -317,7 +315,7 @@ impl IndirectP<'_> {
 //       refs[(n.val, g.val)] := $location();
 //     } ;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ReferenceT {
     num: i64,
     gen: i64
@@ -328,6 +326,7 @@ impl ReferenceT {
     }
     pub fn num(&self) -> i64 { self.num }
     pub fn gen(&self) -> i64 { self.gen }
+    pub fn id(&self)  -> (i64, i64) { (self.num, self.gen) }
 }
 
 struct ReferenceP;
@@ -362,7 +361,7 @@ impl ReferenceP {
 }
 
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PDFObjT {
     Array(ArrayT),
     Dict(DictT),
@@ -613,7 +612,7 @@ mod test_pdf_obj {
         let v = Vec::from("[ 1 0 R ] \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let mut objs = Vec::new();
-        objs.push(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(1, 0)), 2, 7));
+        objs.push(Rc::new(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(1, 0)), 2, 7)));
         let val = PDFObjT::Array(ArrayT::new(objs));
         assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 0, 9)));
         assert_eq!(pb.get_cursor(), 9);
@@ -622,7 +621,7 @@ mod test_pdf_obj {
         let v = Vec::from("[ 1 \r 0 \n R ] \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let mut objs = Vec::new();
-        objs.push(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(1, 0)), 2, 11));
+        objs.push(Rc::new(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(1, 0)), 2, 11)));
         let val = PDFObjT::Array(ArrayT::new(objs));
         assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 0, 13)));
         assert_eq!(pb.get_cursor(), 13);
@@ -643,10 +642,10 @@ mod test_pdf_obj {
         let vlen = v.len();
         let mut pb = ParseBuffer::new(v);
         let mut objs = Vec::new();
-        objs.push(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(1, 0)), 12, 17));
+        objs.push(Rc::new(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(1, 0)), 12, 17)));
         let entval = LocatedVal::new(PDFObjT::Array(ArrayT::new(objs)), 10, 19);
         let mut map = BTreeMap::new();
-        map.insert(LocatedVal::new(Vec::from("Entry".as_bytes()), 3, 9), entval);
+        map.insert(LocatedVal::new(Vec::from("Entry".as_bytes()), 3, 9), Rc::new(entval));
         let val = PDFObjT::Dict(DictT::new(map));
         assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 0, 25)));
         assert_eq!(pb.get_cursor(), vlen);
@@ -658,10 +657,10 @@ mod test_pdf_obj {
         let vlen = v.len();
         let mut pb = ParseBuffer::new(v);
         let mut objs = Vec::new();
-        objs.push(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(1, 0)), 10, 15));
+        objs.push(Rc::new(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(1, 0)), 10, 15)));
         let entval = LocatedVal::new(PDFObjT::Array(ArrayT::new(objs)), 9, 16);
         let mut map = BTreeMap::new();
-        map.insert(LocatedVal::new(Vec::from("Entry".as_bytes()), 2, 8), entval);
+        map.insert(LocatedVal::new(Vec::from("Entry".as_bytes()), 2, 8), Rc::new(entval));
         let val = PDFObjT::Dict(DictT::new(map));
         assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 0, 18)));
         assert_eq!(pb.get_cursor(), vlen);
@@ -675,7 +674,7 @@ mod test_pdf_obj {
     fn dict_lookup() {
         let entval = LocatedVal::new(PDFObjT::Null(()), 9, 16);
         let mut map = BTreeMap::new();
-        map.insert(LocatedVal::new(Vec::from("Entry".as_bytes()), 2, 8), entval);
+        map.insert(LocatedVal::new(Vec::from("Entry".as_bytes()), 2, 8), Rc::new(entval));
         let val = PDFObjT::Dict(DictT::new(map));
         if let PDFObjT::Dict(d) = val {
             // the same located key
@@ -697,10 +696,10 @@ mod test_pdf_obj {
         let vlen = v.len();
         let mut pb = ParseBuffer::new(v);
         let mut objs = Vec::new();
-        objs.push(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(1, 0)), 20, 25));
+        objs.push(Rc::new(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(1, 0)), 20, 25)));
         let entval = LocatedVal::new(PDFObjT::Array(ArrayT::new(objs)), 18, 27);
         let mut map = BTreeMap::new();
-        map.insert(LocatedVal::new(Vec::from("Entry".as_bytes()), 11, 17), entval);
+        map.insert(LocatedVal::new(Vec::from("Entry".as_bytes()), 11, 17), Rc::new(entval));
         let dict = Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 8, 33));
         let obj = PDFObjT::Indirect(IndirectT::new(1, 0, Rc::clone(&dict)));
         assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(obj, 0, 40)));
@@ -718,11 +717,11 @@ mod test_pdf_obj {
         let vlen = v.len();
         let mut pb = ParseBuffer::new(v);
         let mut objs = Vec::new();
-        objs.push(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(1, 0)), 20, 25));
+        objs.push(Rc::new(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(1, 0)), 20, 25)));
         let entval = LocatedVal::new(PDFObjT::Array(ArrayT::new(objs)), 18, 27);
         let mut map = BTreeMap::new();
-        map.insert(LocatedVal::new(Vec::from("Entry".as_bytes()), 11, 17), entval);
-        let dict = LocatedVal::new(DictT::new(map), 8, 30);
+        map.insert(LocatedVal::new(Vec::from("Entry".as_bytes()), 11, 17), Rc::new(entval));
+        let dict = Rc::new(LocatedVal::new(DictT::new(map), 8, 30));
         let content = LocatedVal::new(Vec::from(" junk ".as_bytes()), 31, 54);
         let stream = Rc::new(LocatedVal::new(PDFObjT::Stream(StreamT::new(dict, content)), 8, 54));
         let obj = PDFObjT::Indirect(IndirectT::new(1, 0, Rc::clone(&stream)));
@@ -742,9 +741,9 @@ mod test_pdf_obj {
         let val = p.parse(&mut pb);
         let mut map = BTreeMap::new();
         map.insert(LocatedVal::new(Vec::from("Type".as_bytes()), 14, 19),
-                   LocatedVal::new(PDFObjT::Name(Vec::from("Catalog".as_bytes())), 20, 28));
+                   Rc::new(LocatedVal::new(PDFObjT::Name(Vec::from("Catalog".as_bytes())), 20, 28)));
         map.insert(LocatedVal::new(Vec::from("Pages".as_bytes()), 31, 37),
-                   LocatedVal::new(PDFObjT::Reference(ReferenceT::new(2, 0)), 38, 43));
+                   Rc::new(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(2, 0)), 38, 43)));
         let d = Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 10, 46));
         let o = PDFObjT::Indirect(IndirectT::new(1, 0, Rc::clone(&d)));
         assert_eq!(val, Ok(LocatedVal::new(o, 0, 53)));
@@ -762,7 +761,7 @@ mod test_pdf_obj {
         let val = p.parse(&mut pb);
         let mut map = BTreeMap::new();
         map.insert(LocatedVal::new(Vec::from("Type".as_bytes()), 14, 19),
-                   LocatedVal::new(PDFObjT::Name(Vec::from("Catalog".as_bytes())), 20, 28));
+                   Rc::new(LocatedVal::new(PDFObjT::Name(Vec::from("Catalog".as_bytes())), 20, 28)));
         let d = Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 10, 45));
         let o = PDFObjT::Indirect(IndirectT::new(1, 0, Rc::clone(&d)));
         assert_eq!(val, Ok(LocatedVal::new(o, 0, 52)));
@@ -780,9 +779,9 @@ mod test_pdf_obj {
         let val = p.parse(&mut pb);
         let mut map = BTreeMap::new();
         map.insert(LocatedVal::new(Vec::from("Type".as_bytes()), 27, 32),
-                   LocatedVal::new(PDFObjT::Name(Vec::from("Catalog".as_bytes())), 33, 41));
+                   Rc::new(LocatedVal::new(PDFObjT::Name(Vec::from("Catalog".as_bytes())), 33, 41)));
         map.insert(LocatedVal::new(Vec::from("Pages".as_bytes()), 44, 50),
-                   LocatedVal::new(PDFObjT::Reference(ReferenceT::new(2, 0)), 51, 56));
+                   Rc::new(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(2, 0)), 51, 56)));
         let d = Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 23, 59));
         let o = PDFObjT::Indirect(IndirectT::new(1, 0, Rc::clone(&d)));
         assert_eq!(val, Ok(LocatedVal::new(o, 0, 66)));
@@ -813,17 +812,17 @@ mod test_pdf_obj {
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
         let mut objs = Vec::new();
-        objs.push(LocatedVal::new(PDFObjT::Name(Vec::from("")), 10, 11));
-        objs.push(LocatedVal::new(PDFObjT::String(Vec::from("")), 11, 13));
+        objs.push(Rc::new(LocatedVal::new(PDFObjT::Name(Vec::from("")), 10, 11)));
+        objs.push(Rc::new(LocatedVal::new(PDFObjT::String(Vec::from("")), 11, 13)));
         let mut map = BTreeMap::new();
         map.insert(LocatedVal::new(Vec::from(""), 15, 16),
-                   LocatedVal::new(PDFObjT::Array(ArrayT::new(Vec::new())), 16, 18));
-        objs.push(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 13, 20));
-        objs.push(LocatedVal::new(PDFObjT::String(Vec::from("")), 20, 22));
-        let ea = LocatedVal::new(PDFObjT::Array(ArrayT::new(Vec::new())), 23, 25);
-        objs.push(LocatedVal::new(PDFObjT::Array(ArrayT::new(vec![ea])), 22, 26));
-        objs.push(LocatedVal::new(PDFObjT::Real(RealT::new(-1, 10)), 26, 29));
-        objs.push(LocatedVal::new(PDFObjT::Name(Vec::from("+0")), 29, 32));
+                   Rc::new(LocatedVal::new(PDFObjT::Array(ArrayT::new(Vec::new())), 16, 18)));
+        objs.push(Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 13, 20)));
+        objs.push(Rc::new(LocatedVal::new(PDFObjT::String(Vec::from("")), 20, 22)));
+        let ea = Rc::new(LocatedVal::new(PDFObjT::Array(ArrayT::new(Vec::new())), 23, 25));
+        objs.push(Rc::new(LocatedVal::new(PDFObjT::Array(ArrayT::new(vec![ea])), 22, 26)));
+        objs.push(Rc::new(LocatedVal::new(PDFObjT::Real(RealT::new(-1, 10)), 26, 29)));
+        objs.push(Rc::new(LocatedVal::new(PDFObjT::Name(Vec::from("+0")), 29, 32)));
         let a = Rc::new(LocatedVal::new(PDFObjT::Array(ArrayT::new(objs)), 9, 33));
         let o = PDFObjT::Indirect(IndirectT::new(10, 0, Rc::clone(&a)));
         assert_eq!(pb.get_cursor(), vlen);
@@ -839,7 +838,7 @@ mod test_pdf_obj {
         let val = p.parse(&mut pb);
         let mut map = BTreeMap::new();
         map.insert(LocatedVal::new(Vec::from("".as_bytes()), 10, 11),
-                   LocatedVal::new(PDFObjT::Name(Vec::from("".as_bytes())), 11, 12));
+                   Rc::new(LocatedVal::new(PDFObjT::Name(Vec::from("".as_bytes())), 11, 12)));
         let d = Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 8, 14));
         let o = PDFObjT::Indirect(IndirectT::new(10, 0, Rc::clone(&d)));
         assert_eq!(pb.get_cursor(), vlen);
@@ -855,7 +854,7 @@ mod test_pdf_obj {
         let val = p.parse(&mut pb);
         let mut map = BTreeMap::new();
         map.insert(LocatedVal::new(Vec::from("".as_bytes()), 10, 11),
-                   LocatedVal::new(PDFObjT::String(Vec::from("".as_bytes())), 11, 13));
+                   Rc::new(LocatedVal::new(PDFObjT::String(Vec::from("".as_bytes())), 11, 13)));
         let d = Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 8, 15));
         let o = PDFObjT::Indirect(IndirectT::new(11, 0, Rc::clone(&d)));
         assert_eq!(pb.get_cursor(), vlen);
