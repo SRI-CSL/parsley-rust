@@ -62,6 +62,8 @@ fn parse_file(test_file: &str) {
             }
         };
 
+    let file_offset = |o: usize| { o + pdf_hdr_ofs };
+
     let buflen = pb.remaining();
     let mut p = HeaderP;
     let hdr = p.parse(&mut pb);
@@ -79,7 +81,7 @@ fn parse_file(test_file: &str) {
         process::exit(1)
     }
     let eof_ofs = buflen - eof.unwrap();
-    println!("Found %%EOF at offset {}.", eof_ofs);
+    println!("Found %%EOF at offset {}.", file_offset(eof_ofs));
 
     // Scan backward for startxref.
     let sxref = pb.backward_scan("startxref".as_bytes());
@@ -88,18 +90,20 @@ fn parse_file(test_file: &str) {
         process::exit(1)
     }
     let sxref_ofs = buflen - sxref.unwrap();
-    println!("Found startxref at offset {}.", sxref_ofs);
+    println!("Found startxref at offset {}.", file_offset(sxref_ofs));
     let mut p = StartXrefP;
     let sxref = p.parse(&mut pb);
     if let Err(_) = sxref {
         println!("Could not parse startxref in {} at pos {}: {:?}",
-                 display, pb.get_cursor(), sxref);
+                 display, file_offset(pb.get_cursor()), sxref);
         process::exit(1)
     }
     let sxref = sxref.unwrap();
-    println!(" startxref span: {}..{}.", sxref.loc_start(), sxref.loc_end());
+    println!(" startxref span: {}..{}.",
+             file_offset(sxref.loc_start()), file_offset(sxref.loc_end()));
     let sxref = sxref.unwrap();
-    println!("startxref points to offset {} for xref", sxref.offset());
+    println!("startxref points to offset {} for xref",
+             file_offset(sxref.offset().try_into().unwrap()));
 
     // Parse xref at that offset.
     pb.set_cursor(sxref.offset().try_into().unwrap());
@@ -107,11 +111,11 @@ fn parse_file(test_file: &str) {
     let xref = p.parse(&mut pb);
     if let Err(_) = xref {
         println!("Could not parse xref in {} at pos {}: {:?}",
-                 display, pb.get_cursor(), xref);
+                 display, file_offset(pb.get_cursor()), xref);
         process::exit(1)
     }
     let xref = xref.unwrap().unwrap();
-    let mut offsets = Vec::new();
+    let mut offsets : Vec<usize> = Vec::new();
     for ls in xref.sects().iter() {
         let s = ls.val();
         println!("Found {} objects starting at {}:", s.count(), s.start());
@@ -119,7 +123,7 @@ fn parse_file(test_file: &str) {
             match o.val() {
                 XrefEntT::Inuse(x) => {
                     println!("   inuse object at {}.", x.info());
-                    offsets.push(x.info())
+                    offsets.push(x.info().try_into().unwrap())
                 },
                 XrefEntT::Free(x)  => {
                     println!("   free object (next is {}).", x.info())
@@ -165,14 +169,15 @@ fn parse_file(test_file: &str) {
         let lobj = p.parse(&mut pb);
         if let Err(_) = lobj {
             println!("Cannot parse object at offset {} in {}: {:?}",
-                     o, display, lobj);
+                     file_offset(*o), display, lobj);
             process::exit(1)
         }
         let obj = lobj.unwrap().unwrap();
         if let PDFObjT::Indirect(_) = obj {
             objs.push(obj)
         } else {
-            println!("found non-indirect object at offset {}!", o)
+            println!("found non-indirect object at offset {}!",
+                     file_offset(*o))
         }
     }
 
@@ -199,7 +204,7 @@ fn parse_file(test_file: &str) {
 
     let log_obj = |t: &str, loc: &dyn Location, depth: u32| {
            println!(" depth:{} type:{} start:{} end:{}  ",
-                    depth, t, loc.loc_start() + pdf_hdr_ofs, loc.loc_end() + pdf_hdr_ofs)
+                    depth, t, file_offset(loc.loc_start()), file_offset(loc.loc_end()))
     };
 
     let mut obj_queue = VecDeque::new();
