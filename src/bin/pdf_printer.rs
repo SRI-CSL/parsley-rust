@@ -169,7 +169,7 @@ fn parse_file(test_file: &str) {
         let lobj = p.parse(&mut pb);
         if let Err(_) = lobj {
             println!("Cannot parse object at offset {} in {}: {:?}",
-                     o, display, lobj);
+                     file_offset(*o), display, lobj);
             process::exit(1)
         }
         let obj = lobj.unwrap().unwrap();
