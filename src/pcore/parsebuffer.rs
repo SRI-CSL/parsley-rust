@@ -83,14 +83,6 @@ where T : PartialEq
     fn loc_start(&self) -> usize { self.start }
     fn loc_end(&self)   -> usize { self.end }
 }
-// Provide a formatter
-impl<T> fmt::Display for LocatedVal<T>
-where T : fmt::Display
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} at location<{}, {}> ", self.val, self.start, self.end)
-    }
-}
 
 #[derive(Debug, PartialEq)]
 pub struct ParseError {
