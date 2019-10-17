@@ -105,7 +105,7 @@ impl ParsleyParser for BinaryBuffer {
 #[cfg(test)]
 mod test_binary {
     use super::{BinaryScanner, BinaryMatcher, BinaryBuffer};
-    use super::super::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal, ErrorKind};
+    use super::super::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal, ErrorKind, make_error};
 
     #[test]
     fn scan() {
@@ -123,7 +123,8 @@ mod test_binary {
         assert_eq!(pb.get_cursor(), 8);
 
         let mut pb = ParseBuffer::new(Vec::from("".as_bytes()));
-        assert_eq!(s.parse(&mut pb), Err(ErrorKind::EndOfBuffer));
+        let e = make_error(ErrorKind::EndOfBuffer, 0, 0);
+        assert_eq!(s.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
     }
 
@@ -133,7 +134,8 @@ mod test_binary {
         let mut s = BinaryMatcher::new("%PDF-".as_bytes());
 
         let mut pb = ParseBuffer::new(Vec::from("".as_bytes()));
-        assert_eq!(s.parse(&mut pb), Err(ErrorKind::GuardError("match")));
+        let e = make_error(ErrorKind::GuardError("match"), 0, 0);
+        assert_eq!(s.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
         let mut pb = ParseBuffer::new(Vec::from("%PDF-".as_bytes()));
@@ -141,7 +143,8 @@ mod test_binary {
         assert_eq!(pb.get_cursor(), 5);
 
         let mut pb = ParseBuffer::new(Vec::from(" %PDF-".as_bytes()));
-        assert_eq!(s.parse(&mut pb), Err(ErrorKind::GuardError("match")));
+        let e = make_error(ErrorKind::GuardError("match"), 0, 0);
+        assert_eq!(s.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
     }
 
@@ -149,7 +152,8 @@ mod test_binary {
     fn buffer() {
         let mut s = BinaryBuffer::new(3);
         let mut pb = ParseBuffer::new(Vec::from("".as_bytes()));
-        assert_eq!(s.parse(&mut pb), Err(ErrorKind::EndOfBuffer));
+        let e = make_error(ErrorKind::EndOfBuffer, 0, 0);
+        assert_eq!(s.parse(&mut pb), Err(e));
 
         let mut s = BinaryBuffer::new(3);
         let mut pb = ParseBuffer::new(Vec::from("%PDF-".as_bytes()));

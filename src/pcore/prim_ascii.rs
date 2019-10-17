@@ -10,13 +10,21 @@ impl ParsleyPrimitive for AsciiCharPrimitive {
     fn name() -> &'static str { "ascii-prim" }
 
     fn parse(buf: &[u8]) -> ParseResult<(Self::T, usize)> {
-        if buf.len() < 1 { return Err(ErrorKind::EndOfBuffer) }
+        if buf.len() < 1 {
+            return Err(LocatedVal::new(ErrorKind::EndOfBuffer, 0, 0))
+        }
         let c = char::try_from(buf[0]);
         // check this: we should never get the below error from
         // non-empty buffers, as all u8 should be convertible to char.
-        if c.is_err() { return Err(ErrorKind::PrimitiveError(ParseError::new("ascii-prim: invalid character"))) }
+        if c.is_err() {
+            let err = ErrorKind::PrimitiveError(ParseError::new("ascii-prim: invalid character"));
+            return Err(LocatedVal::new(err, 0, 0))
+        }
         let c = c.unwrap();
-        if !c.is_ascii() { return Err(ErrorKind::PrimitiveError(ParseError::new("ascii-prim: invalid ascii character"))) }
+        if !c.is_ascii() {
+            let err = ErrorKind::PrimitiveError(ParseError::new("ascii-prim: invalid ascii character"));
+            return Err(LocatedVal::new(err, 0, 0))
+        }
         Ok((c, 1))
     }
 }
@@ -56,7 +64,7 @@ impl ParsleyParser for AsciiChar {
 #[cfg(test)]
 mod test_prim_ascii {
     use super::AsciiCharPrimitive;
-    use super::super::parsebuffer::{ParseBuffer, ParsleyPrimitive, ErrorKind, ParseError};
+    use super::super::parsebuffer::{ParseBuffer, ParsleyPrimitive, ErrorKind, ParseError, make_error};
 
     // this raw interface would not normally be used; we would be
     // going via the ParseBuffer as in the remaining tests.
@@ -66,6 +74,7 @@ mod test_prim_ascii {
         v.push(255);
         let r = <AsciiCharPrimitive as ParsleyPrimitive>::parse(&v);
         let pe = ErrorKind::PrimitiveError(ParseError::new("ascii-prim: invalid ascii character"));
+        let pe = make_error(pe, 0, 0);
         assert_eq!(r, Err(pe));
 
         let mut w = Vec::new();
@@ -78,7 +87,8 @@ mod test_prim_ascii {
     fn empty() {
         let mut pb = ParseBuffer::new(Vec::new());
         assert_eq!(pb.get_cursor(), 0);
-        assert_eq!(pb.parse_prim::<AsciiCharPrimitive>(), Err(ErrorKind::EndOfBuffer));
+        let e = make_error(ErrorKind::EndOfBuffer, 0, 0);
+        assert_eq!(pb.parse_prim::<AsciiCharPrimitive>(), Err(e));
         assert_eq!(pb.get_cursor(), 0);
     }
 
@@ -97,7 +107,8 @@ mod test_prim_ascii {
 
         let r = pb.parse_prim::<AsciiCharPrimitive>();
         let pe = ParseError::new("ascii-prim: invalid ascii character");
-        let e = Err(ErrorKind::PrimitiveError(pe));
+        let pe = make_error(ErrorKind::PrimitiveError(pe), 1, 1);
+        let e = Err(pe);
         assert_eq!(r, e);
         // the cursor should not advance over the invalid char.
         assert_eq!(pb.get_cursor(), 1);
@@ -107,7 +118,8 @@ mod test_prim_ascii {
         let r = pb.parse_prim::<AsciiCharPrimitive>();
         assert_eq!(r, Ok('\u{0}'));
         assert_eq!(pb.get_cursor(), 3);
-        assert_eq!(pb.parse_prim::<AsciiCharPrimitive>(), Err(ErrorKind::EndOfBuffer))
+        let e = make_error(ErrorKind::EndOfBuffer, 3, 3);
+        assert_eq!(pb.parse_prim::<AsciiCharPrimitive>(), Err(e))
     }
 
     #[test]
@@ -123,7 +135,8 @@ mod test_prim_ascii {
         assert_eq!(pb.get_cursor(), 1);
 
         let r = pb.parse_guarded::<AsciiCharPrimitive>(&mut |c: &char| {*c == 'A'});
-        let e = Err(ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name()));
+        let e = ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name());
+        let e = Err(make_error(e, 1, 1));
         assert_eq!(r, e);
         // the cursor should not advance if the guard fails
         assert_eq!(pb.get_cursor(), 1);
@@ -134,14 +147,16 @@ mod test_prim_ascii {
 #[cfg(test)]
 mod test_ascii {
     use super::{AsciiCharPrimitive, AsciiChar};
-    use super::super::parsebuffer::{ParseBuffer, ParsleyPrimitive, ParsleyParser, ParseError, LocatedVal, ErrorKind};
+    use super::super::parsebuffer::{ParseBuffer, ParsleyPrimitive, ParsleyParser, ParseError,
+                                    LocatedVal, ErrorKind, make_error};
 
     #[test]
     fn empty() {
         let mut ascii_parser = AsciiChar::new();
         let mut pb = ParseBuffer::new(Vec::new());
         assert_eq!(pb.get_cursor(), 0);
-        assert_eq!(ascii_parser.parse(&mut pb), Err(ErrorKind::EndOfBuffer));
+        let e = Err(make_error(ErrorKind::EndOfBuffer, 0, 0));
+        assert_eq!(ascii_parser.parse(&mut pb), e);
         assert_eq!(pb.get_cursor(), 0);
     }
 
@@ -161,7 +176,8 @@ mod test_ascii {
 
         let r = ascii_parser.parse(&mut pb);
         let pe = ParseError::new("ascii-prim: invalid ascii character");
-        let e = Err(ErrorKind::PrimitiveError(pe));
+        let pe = make_error(ErrorKind::PrimitiveError(pe), 1, 1);
+        let e = Err(pe);
         assert_eq!(r, e);
         // the cursor should not advance over the invalid char.
         assert_eq!(pb.get_cursor(), 1);
@@ -170,13 +186,15 @@ mod test_ascii {
         pb.set_cursor(2);
         let r = ascii_parser.parse(&mut pb);
         // nul fails the guard test
-        let e = Err(ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name()));
+        let e = ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name());
+        let e = Err(make_error(e, 2, 2));
         assert_eq!(r, e);
         // the cursor should not advance over the failed guard
         assert_eq!(pb.get_cursor(), 2);
 
         // forcibly advance
         pb.set_cursor(3);
-        assert_eq!(ascii_parser.parse(&mut pb), Err(ErrorKind::EndOfBuffer))
+        let e = Err(make_error(ErrorKind::EndOfBuffer, 3, 3));
+        assert_eq!(ascii_parser.parse(&mut pb), e)
     }
 }

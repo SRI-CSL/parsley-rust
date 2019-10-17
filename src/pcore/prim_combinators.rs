@@ -1,6 +1,6 @@
 /// Basic combinators (sequence, alternation, and Kleene/star closure).
 
-use super::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal, ParseResult, ErrorKind};
+use super::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal, ParseResult, ErrorKind, make_error};
 
 pub struct Sequence<'a, P1: ParsleyParser, P2: ParsleyParser> {
     p1: &'a mut P1,
@@ -145,10 +145,11 @@ where P::T : PartialEq
     fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let r     = self.p.parse(buf);
+        let end   = buf.get_cursor();
         buf.set_cursor(start);
 
         if let Ok(_) = r {
-            Err(ErrorKind::GuardError("not"))
+            Err(make_error(ErrorKind::GuardError("not"), start, end))
         } else {
             Ok(LocatedVal::new((), start, start))
         }
@@ -159,7 +160,8 @@ where P::T : PartialEq
 
 #[cfg(test)]
 mod test_sequence {
-    use super::super::parsebuffer::{ParseBuffer, ParsleyPrimitive, ParsleyParser, ErrorKind};
+    use super::super::parsebuffer::{ParseBuffer, ParsleyPrimitive, ParsleyParser,
+                                    ErrorKind, make_error};
     use super::super::prim_ascii::{AsciiChar, AsciiCharPrimitive};
     use super::{Sequence};
 
@@ -172,7 +174,7 @@ mod test_sequence {
         // empty
         let mut pb  = ParseBuffer::new(Vec::new());
         let r = seq.parse(&mut pb);
-        let e = Err(ErrorKind::EndOfBuffer);
+        let e = Err(make_error(ErrorKind::EndOfBuffer, 0, 0));
         assert_eq!(r, e);
         assert_eq!(pb.get_cursor(), 0);
 
@@ -181,7 +183,8 @@ mod test_sequence {
         v.extend_from_slice("C".as_bytes());
         let mut pb  = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
-        let e = Err(ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name()));
+        let e = ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name());
+        let e = Err(make_error(e, 0, 0));
         assert_eq!(r, e);
         assert_eq!(pb.get_cursor(), 0);
 
@@ -190,7 +193,8 @@ mod test_sequence {
         v.extend_from_slice("AC".as_bytes());
         let mut pb  = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
-        let e = Err(ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name()));
+        let e = ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name());
+        let e = Err(make_error(e, 1, 1));
         assert_eq!(r, e);
         // the cursor should not advance for partial matches
         assert_eq!(pb.get_cursor(), 0);
@@ -209,7 +213,8 @@ mod test_sequence {
 
 #[cfg(test)]
 mod test_alternate {
-    use super::super::parsebuffer::{ParseBuffer, ParsleyPrimitive, ParsleyParser, LocatedVal, ErrorKind};
+    use super::super::parsebuffer::{ParseBuffer, ParsleyPrimitive, ParsleyParser, LocatedVal,
+                                    ErrorKind, make_error};
     use super::super::prim_ascii::{AsciiChar, AsciiCharPrimitive};
     use super::{Alternate, Alt};
 
@@ -222,7 +227,7 @@ mod test_alternate {
         // empty
         let mut pb  = ParseBuffer::new(Vec::new());
         let r = seq.parse(&mut pb);
-        let e = Err(ErrorKind::EndOfBuffer);
+        let e = Err(make_error(ErrorKind::EndOfBuffer, 0, 0));
         assert_eq!(r, e);
         assert_eq!(pb.get_cursor(), 0);
 
@@ -231,7 +236,8 @@ mod test_alternate {
         v.extend_from_slice("CA".as_bytes());
         let mut pb  = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
-        let e = Err(ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name()));
+        let e = ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name());
+        let e = Err(make_error(e, 0, 0));
         assert_eq!(r, e);
         assert_eq!(pb.get_cursor(), 0);
 
@@ -315,7 +321,8 @@ mod test_star {
 
 #[cfg(test)]
 mod test_combined {
-    use super::super::parsebuffer::{ParseBuffer, ParsleyParser, ParsleyPrimitive, LocatedVal, ErrorKind};
+    use super::super::parsebuffer::{ParseBuffer, ParsleyParser, ParsleyPrimitive, LocatedVal,
+                                    ErrorKind, make_error};
     use super::super::prim_ascii::{AsciiChar, AsciiCharPrimitive};
     use super::{Star, Sequence, Alternate, Alt, Not};
 
@@ -518,7 +525,8 @@ mod test_combined {
         assert_eq!(r, Ok(LocatedVal::new(v, 2, 4)));
         assert_eq!(pb.get_cursor(), 4);
         let r = p.parse(&mut pb);
-        let e = Err(ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name()));
+        let e = ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name());
+        let e = Err(make_error(e, 4, 4));
         assert_eq!(r, e);
         assert_eq!(pb.get_cursor(), 4);
 
@@ -538,7 +546,8 @@ mod test_combined {
         assert_eq!(r, Ok(LocatedVal::new(v, 2, 4)));
         assert_eq!(pb.get_cursor(), 4);
         let r = p.parse(&mut pb);
-        let e = Err(ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name()));
+        let e = ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name());
+        let e = Err(make_error(e, 4, 4));
         assert_eq!(r, e);
         assert_eq!(pb.get_cursor(), 4);
     }
@@ -561,7 +570,7 @@ mod test_combined {
         v.extend_from_slice("B".as_bytes());
         let mut pb  = ParseBuffer::new(v);
         let r = not.parse(&mut pb);
-        let e = Err(ErrorKind::GuardError("not"));
+        let e = Err(make_error(ErrorKind::GuardError("not"), 0, 0));
         assert_eq!(r, e);
         assert_eq!(pb.get_cursor(), 0);
 
