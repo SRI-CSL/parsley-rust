@@ -2,7 +2,8 @@
 
 use std::rc::Rc;
 use std::collections::{HashSet, BTreeMap};
-use super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, Location, LocatedVal, ParseResult, ErrorKind};
+use super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, Location, LocatedVal,
+                                       ParseResult, ErrorKind, make_error, make_error_with_loc};
 
 use super::pdf_prim::{WhitespaceEOL, Comment};
 use super::pdf_prim::{Boolean, Null, IntegerT, IntegerP, RealT, RealP, HexString, RawLiteralString};
@@ -32,7 +33,8 @@ impl PDFObjContext {
     pub fn new() -> PDFObjContext {
         PDFObjContext { defns: BTreeMap::new() }
     }
-    pub fn register_obj(&mut self, p: &IndirectT, o: Rc<LocatedVal<PDFObjT>>) -> Option<Rc<LocatedVal<PDFObjT>>> {
+    pub fn register_obj(&mut self, p: &IndirectT, o: Rc<LocatedVal<PDFObjT>>)
+                        -> Option<Rc<LocatedVal<PDFObjT>>> {
         self.defns.insert((p.num(), p.gen()), o)
     }
     pub fn lookup_obj(&self, oid: (i64, i64)) -> Option<&Rc<LocatedVal<PDFObjT>>> {
@@ -67,7 +69,9 @@ impl ArrayP<'_> {
     fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<LocatedVal<ArrayT>> {
         let start = buf.get_cursor();
         if let Err(_) = buf.exact("[".as_bytes()) {
-            return Err(ErrorKind::GuardError("not at array object"))
+            let err = ErrorKind::GuardError("not at array object");
+            let end = buf.get_cursor();
+            return Err(make_error(err, start, end))
         }
         let mut objs = Vec::new();
         let mut end = false;
@@ -100,7 +104,8 @@ pub struct DictT {
     map: BTreeMap<<RawName as ParsleyParser>::T, Rc<LocatedVal<PDFObjT>>>
 }
 impl DictT {
-    pub fn new(map: BTreeMap<<RawName as ParsleyParser>::T, Rc<LocatedVal<PDFObjT>>>) -> DictT {
+    pub fn new(map: BTreeMap<<RawName as ParsleyParser>::T, Rc<LocatedVal<PDFObjT>>>)
+               -> DictT {
         DictT { map }
     }
     pub fn map(&self) -> &BTreeMap<<RawName as ParsleyParser>::T, Rc<LocatedVal<PDFObjT>>> {
@@ -141,8 +146,9 @@ impl DictP<'_> {
                 let mut p = RawName;
                 let n = p.parse(buf)?;
                 if names.contains(n.val()) {
+                    let err = ErrorKind::GuardError("non-unique dictionary key");
                     // TODO: need extensible error reporting
-                    return Err(ErrorKind::GuardError("non-unique dictionary key"))
+                    return Err(make_error_with_loc(err, &n))
                 }
 
                 // do not require whitespace between key/value pairs
@@ -236,22 +242,26 @@ impl IndirectP<'_> {
         let mut int = IntegerP;
         let mut ws = WhitespaceEOL::new(true);
 
-        let mut cursor = buf.get_cursor();
+        let start = buf.get_cursor();
+        let mut cursor = start;
         let num = int.parse(buf)?;
         if !num.val().is_positive() {
+            let err = ErrorKind::GuardError("invalid object id");
             buf.set_cursor(cursor);
-            return Err(ErrorKind::GuardError("invalid object id"))
+            return Err(make_error_with_loc(err, &num))
         }
         ws.parse(buf)?;
         cursor = buf.get_cursor();
         let gen = int.parse(buf)?;
         if ! (gen.val().is_zero() || gen.val().is_positive()) {
+            let err = ErrorKind::GuardError("invalid object generation");
             buf.set_cursor(cursor);
-            return Err(ErrorKind::GuardError("invalid object generation"))
+            return Err(make_error_with_loc(err, &gen))
         }
         ws.parse(buf)?;
-        if let Err(_) = buf.exact("obj".as_bytes()) {
-            return Err(ErrorKind::GuardError("invalid object tag"))
+        if let Err(e) = buf.exact("obj".as_bytes()) {
+            let err = ErrorKind::GuardError("invalid object tag");
+            return Err(make_error_with_loc(err, &e))
         }
         ws.parse(buf)?;
 
@@ -288,15 +298,20 @@ impl IndirectP<'_> {
             };
 
         ws.parse(buf)?;
-        if let Err(_) = buf.exact("endobj".as_bytes()) {
-            return Err(ErrorKind::GuardError("invalid endobject tag"))
+        if let Err(e) = buf.exact("endobj".as_bytes()) {
+            let err = ErrorKind::GuardError("invalid endobject tag");
+            return Err(make_error_with_loc(err, &e))
         }
 
         let obj = Rc::new(obj);
         let ind = IndirectT::new(num.val().int_val(), gen.val().int_val(), Rc::clone(&obj));
         match self.ctxt.register_obj(&ind, Rc::clone(&obj)) {
             None    => Ok(ind),
-            Some(_) => Err(ErrorKind::GuardError("non-unique object id"))
+            Some(_) => {
+                let err = ErrorKind::GuardError("non-unique object id");
+                let end = buf.get_cursor();
+                Err(make_error(err, start, end))
+            }
         }
     }
 }
@@ -338,20 +353,25 @@ impl ReferenceP {
         let mut cursor = buf.get_cursor();
         let num = int.parse(buf)?;
         if !num.val().is_positive() {
+            let err = ErrorKind::GuardError("invalid ref-object id");
+            let end = buf.get_cursor();
             buf.set_cursor(cursor);
-            return Err(ErrorKind::GuardError("invalid ref-object id"))
+            return Err(make_error(err, cursor, end))
         }
         ws.parse(buf)?;
 
         cursor = buf.get_cursor();
         let gen = int.parse(buf)?;
         if ! (gen.val().is_zero() || gen.val().is_positive()) {
+            let err = ErrorKind::GuardError("invalid ref-object generation");
+            let end = buf.get_cursor();
             buf.set_cursor(cursor);
-            return Err(ErrorKind::GuardError("invalid ref-object generation"))
+            return Err(make_error(err, cursor, end))
         }
         ws.parse(buf)?;
-        if let Err(_) = buf.exact("R".as_bytes()) {
-            return Err(ErrorKind::GuardError("invalid reference tag"))
+        if let Err(e) = buf.exact("R".as_bytes()) {
+            let err = ErrorKind::GuardError("invalid reference tag");
+            return Err(make_error_with_loc(err, &e))
         }
 
         // TODO: update refs
@@ -389,7 +409,11 @@ impl PDFObjP<'_> {
     fn parse_internal(&mut self, buf: &mut ParseBuffer) -> ParseResult<PDFObjT> {
         let c = buf.peek();
         match c {
-            None      => Err(ErrorKind::EndOfBuffer),
+            None      => {
+                let start = buf.get_cursor();
+                let err = ErrorKind::EndOfBuffer;
+                Err(make_error(err, start, start))
+            },
 
             Some(116) | Some(102) => { // 't' | 'f'
                 let mut bp = Boolean;
@@ -444,7 +468,9 @@ impl PDFObjP<'_> {
             },
             Some(b)   => {
                 if !b.is_ascii_digit() && b != 45 { // '-' to handle negative numbers
-                    return Err(ErrorKind::GuardError("not at PDF object"))
+                    let start = buf.get_cursor();
+                    let err = ErrorKind::GuardError("not at PDF object");
+                    return Err(make_error(err, start, start))
                 }
                 let cursor = buf.get_cursor();
 
@@ -551,7 +577,8 @@ mod test_pdf_obj {
     use std::rc::Rc;
     use std::borrow::Borrow;
     use std::collections::{BTreeMap};
-    use super::super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal, ErrorKind};
+    use super::super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal,
+                                                  ErrorKind, make_error};
     use super::super::pdf_prim::{RealT};
     use super::{PDFObjContext, PDFObjP, PDFObjT, ReferenceT, ArrayT, DictT, IndirectT, StreamT};
 
@@ -562,7 +589,8 @@ mod test_pdf_obj {
 
         let v = Vec::from("".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(p.parse(&mut pb), Err(ErrorKind::EndOfBuffer));
+        let e = make_error(ErrorKind::EndOfBuffer, 0, 0);
+        assert_eq!(p.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
     }
 
@@ -574,7 +602,8 @@ mod test_pdf_obj {
         // Comments are essentially whitespace.
         let v = Vec::from("\r\n %PDF-1.0 \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(p.parse(&mut pb), Err(ErrorKind::EndOfBuffer));
+        let e = make_error(ErrorKind::EndOfBuffer, 0, 14);
+        assert_eq!(p.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 14);
     }
 
@@ -593,13 +622,15 @@ mod test_pdf_obj {
 //                         012345678901234567890
         let v = Vec::from("\r\n -1 0 R \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(p.parse(&mut pb), Err(ErrorKind::GuardError("invalid ref-object id")));
+        let e = make_error(ErrorKind::GuardError("invalid ref-object id"), 5, 7);
+        assert_eq!(p.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 3);
 
 //                         012345678901234567890
         let v = Vec::from("\r\n 1 -1 R \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(p.parse(&mut pb), Err(ErrorKind::GuardError("invalid ref-object generation")));
+        let e = make_error(ErrorKind::GuardError("invalid ref-object generation"), 7, 9);
+        assert_eq!(p.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 5);
     }
 
@@ -628,7 +659,8 @@ mod test_pdf_obj {
 
         let v = Vec::from("[ -1 0 R ] \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(p.parse(&mut pb), Err(ErrorKind::GuardError("invalid ref-object id")));
+        let e = make_error(ErrorKind::GuardError("invalid ref-object id"), 2, 4);
+        assert_eq!(p.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 2);
     }
 
@@ -665,9 +697,12 @@ mod test_pdf_obj {
         assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 0, 18)));
         assert_eq!(pb.get_cursor(), vlen);
 
+//                                   1         2         3         4         5         6
+//                         0123456789012345678901234567890123456789012345678901234567890123
         let v = Vec::from("<< /Entry [ 1 0 R ] /Entry \r\n >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(p.parse(&mut pb), Err(ErrorKind::GuardError("non-unique dictionary key")));
+        let e = make_error(ErrorKind::GuardError("non-unique dictionary key"), 20, 26);
+        assert_eq!(p.parse(&mut pb), Err(e));
     }
 
     #[test]
@@ -797,7 +832,8 @@ mod test_pdf_obj {
         let v = Vec::from("1 0 obj  \n<<  /Type 1 0 obj true endobj>>\nendobj".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
-        assert_eq!(val, Err(ErrorKind::GuardError("non-unique object id")));
+        let e = make_error(ErrorKind::GuardError("non-unique object id"), 0, 0);
+        assert_eq!(val, Err(e));
     }
 
     #[test]

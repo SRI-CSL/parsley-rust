@@ -22,7 +22,6 @@ pub trait Location {
 // Values returned by parsers should provide location annotations.
 #[derive(Debug)]
 pub struct LocatedVal<T>
-where T : PartialEq
 {
     val:   T,
     start: usize,
@@ -97,7 +96,7 @@ impl ParseError {
 }
 
 // Convenience alias.
-pub type ParseResult<T> = std::result::Result<T, ErrorKind>;
+pub type ParseResult<T> = std::result::Result<T, LocatedVal<ErrorKind>>;
 
 // The trait defining the interface for parsing a primitive type of
 // unknown size.  The parsers implementing this trait are usually
@@ -138,6 +137,18 @@ pub enum ErrorKind {
     PrimitiveError(ParseError),
     // Errors during guarded primitive parsing.
     GuardError(&'static str),
+}
+
+// function to report located errors with sensible location
+pub fn make_error(val: ErrorKind, s: usize, e: usize) -> LocatedVal<ErrorKind> {
+    if s < e {
+        LocatedVal::new(val, s, e)
+    } else {
+        LocatedVal::new(val, e, s)
+    }
+}
+pub fn make_error_with_loc(val: ErrorKind, l: &dyn Location) -> LocatedVal<ErrorKind> {
+    LocatedVal::new(val, l.loc_start(), l.loc_end())
 }
 
 impl fmt::Display for ErrorKind {
@@ -220,8 +231,13 @@ impl ParseBuffer {
     pub fn parse_guarded<P : ParsleyPrimitive>(&mut self, guard: &mut dyn FnMut(&P::T) -> bool) ->
         ParseResult<P::T>
     {
+        let start = self.get_cursor();
         let (t, consumed) = P::parse(&self.buf[self.ofs..])?;
-        if !guard(&t) { return Err(ErrorKind::GuardError(P::name())) };
+        if !guard(&t) {
+            let end = self.get_cursor();
+            let err = ErrorKind::GuardError(P::name());
+            return Err(make_error(err, start, end))
+        };
         self.ofs += consumed;
         Ok(t)
     }
@@ -275,6 +291,7 @@ impl ParseBuffer {
     // positioned at the tag.  This is a primitive since low-level
     // access to the parse buffer is needed.
     pub fn scan(&mut self, tag: &[u8]) -> ParseResult<usize> {
+        let start = self.get_cursor();
         let mut skip = 0;
         for w in self.buf[self.ofs..].windows(tag.len()) {
             if w.starts_with(tag) {
@@ -283,7 +300,7 @@ impl ParseBuffer {
             }
             skip += 1;
         }
-        Err(ErrorKind::EndOfBuffer)
+        Err(make_error(ErrorKind::EndOfBuffer, start, start))
     }
 
     // Scan backwards for a tag. As above, the cursor is set to the
@@ -291,6 +308,7 @@ impl ParseBuffer {
     // position, the returned relative offset (if any) is always
     // positive.
     pub fn backward_scan(&mut self, tag: &[u8]) -> ParseResult<usize> {
+        let start = self.get_cursor();
         let mut skip = 1;
         for w in self.buf[..self.ofs].windows(tag.len()).rev() {
             if w.starts_with(tag) {
@@ -300,25 +318,27 @@ impl ParseBuffer {
             }
             skip += 1;
         }
-        Err(ErrorKind::EndOfBuffer)
+        Err(make_error(ErrorKind::EndOfBuffer, start, start))
     }
 
     // Exact match on a tag at the current cursor location.  On
     // success, cursor is advanced past the exact match, but not moved
     // on failure.
     pub fn exact(&mut self, tag: &[u8]) -> ParseResult<bool> {
+        let start = self.get_cursor();
         if self.buf[self.ofs..].starts_with(tag) {
             self.ofs = self.ofs + tag.len();
             Ok(true)
         } else {
-            Err(ErrorKind::GuardError("match"))
+            Err(make_error(ErrorKind::GuardError("match"), start, start))
         }
     }
 
     // Extract binary stream of specified length.
     pub fn extract<'a>(&'a mut self, len: usize) -> ParseResult<&'a [u8]> {
         if self.buf[self.ofs..].len() < len {
-            Err(ErrorKind::EndOfBuffer)
+            let start = self.get_cursor();
+            Err(make_error(ErrorKind::EndOfBuffer, start, start))
         } else {
             let ret = &self.buf[self.ofs..(self.ofs+len)];
             self.ofs += len;
@@ -337,7 +357,7 @@ impl ParseBuffer {
 #[cfg(test)]
 mod test_parsebuffer {
     use std::collections::HashMap;
-    use super::{ParseBuffer, LocatedVal, ErrorKind};
+    use super::{ParseBuffer, LocatedVal, ErrorKind, make_error};
 
     #[test]
     fn test_scan() {
@@ -347,7 +367,8 @@ mod test_parsebuffer {
         assert_eq!(pb.get_cursor(), 5);
         assert_eq!(pb.scan("56".as_bytes()), Ok(0));
         assert_eq!(pb.get_cursor(), 5);
-        assert_eq!(pb.scan("0".as_bytes()), Err(ErrorKind::EndOfBuffer));
+        assert_eq!(pb.scan("0".as_bytes()),
+                   Err(make_error(ErrorKind::EndOfBuffer, 5, 5)));
         assert_eq!(pb.get_cursor(), 5);
     }
 
@@ -357,7 +378,8 @@ mod test_parsebuffer {
         let mut pb = ParseBuffer::new(v);
         assert_eq!(pb.scan("56".as_bytes()), Ok(5));
         assert_eq!(pb.get_cursor(), 5);
-        assert_eq!(pb.backward_scan("56".as_bytes()), Err(ErrorKind::EndOfBuffer));
+        assert_eq!(pb.backward_scan("56".as_bytes()),
+                   Err(make_error(ErrorKind::EndOfBuffer, 5, 5)));
         assert_eq!(pb.get_cursor(), 5);
         assert_eq!(pb.backward_scan("012".as_bytes()), Ok(5));
         assert_eq!(pb.get_cursor(), 0);

@@ -57,7 +57,7 @@ fn parse_file(test_file: &str) {
                 nbytes
             },
             Err(e) => {
-                println!("Cannot find header: {}", e);
+                println!("Cannot find header: {}", e.val());
                 process::exit(1)
             }
         };
@@ -141,14 +141,14 @@ fn parse_file(test_file: &str) {
         Ok(nbytes) =>
             println!("Found trailer {} bytes from end of xref table.", nbytes),
         Err(e)     => {
-            println!("Cannot find trailer: {}", e);
+            println!("Cannot find trailer: {}", e.val());
             process::exit(1)
         }
     }
     let mut p = TrailerP::new(&mut ctxt);
     let trlr  = p.parse(&mut pb);
     if let Err(e) = trlr {
-        println!("Cannot parse trailer: {}", e);
+        println!("Cannot parse trailer: {}", e.val());
         process::exit(1)
     }
     let trlr = trlr.unwrap().unwrap();
