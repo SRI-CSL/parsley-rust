@@ -5,3 +5,6 @@ authors = ["Prashanth Mundkur <prashanth.mundkur@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+chrono = "0.4.9"
+log = "0.4.8"
+env_logger = "0.7.0"

@@ -1,9 +1,16 @@
 // A very basic PDF parser.
 
+#[macro_use]
+extern crate log;
+extern crate env_logger;
+
+use env_logger::Builder;
+use log::{Level, LevelFilter};
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
 use std::env;
+use std::panic;
 use std::process;
 use std::rc::Rc;
 use std::convert::TryInto;
@@ -27,8 +34,7 @@ fn parse_file(test_file: &str) {
         // The `description` method of `io::Error` returns a string that
         // describes the error
         Err(why) => {
-            println!("couldn't open {}: {}", display, why.description());
-            process::exit(1)
+            panic!("couldn't open {}: {}", display, why.description());
         },
         Ok(file) => file,
     };
@@ -37,8 +43,7 @@ fn parse_file(test_file: &str) {
     let mut s = String::new();
     match file.read_to_string(&mut s) {
         Err(why) => {
-            println!("couldn't read {}: {}", display, why.description());
-            process::exit(1)
+            panic!("couldn't read {}: {}", display, why.description());
         },
         Ok(_)    => ()
     }
@@ -50,15 +55,14 @@ fn parse_file(test_file: &str) {
         match pb.scan("%PDF-".as_bytes()) {
             Ok(nbytes) => {
                 if nbytes != 0 {
-                    println!("Found {} bytes of leading garbage, dropping from buffer.",
-                             nbytes);
+                    info!("Found {} bytes of leading garbage, dropping from buffer.",
+                          nbytes);
                     pb.drop_upto()
                 };
                 nbytes
             },
             Err(e) => {
-                println!("Cannot find header: {}", e.val());
-                process::exit(1)
+                panic!("Cannot find header: {}", e.val());
             }
         };
 
@@ -68,8 +72,7 @@ fn parse_file(test_file: &str) {
     let mut p = HeaderP;
     let hdr = p.parse(&mut pb);
     if let Err(_) = hdr {
-        println!("Unable to parse header from {}: {:?}", display, hdr);
-        process::exit(1)
+        panic!("Unable to parse header from {}: {:?}", display, hdr);
     }
     // Todo: some sanity check of header.
 
@@ -77,56 +80,52 @@ fn parse_file(test_file: &str) {
     pb.set_cursor(buflen);
     let eof = pb.backward_scan("%%EOF".as_bytes());
     if let Err(_) = eof {
-        println!("Could not find %%EOF in {}: {:?}", display, eof);
-        process::exit(1)
+        panic!("Could not find %%EOF in {}: {:?}", display, eof);
     }
     let eof_ofs = buflen - eof.unwrap();
-    println!("Found %%EOF at offset {}.", file_offset(eof_ofs));
+    info!("Found %%EOF at offset {}.", file_offset(eof_ofs));
 
     // Scan backward for startxref.
     let sxref = pb.backward_scan("startxref".as_bytes());
     if let Err(_) = sxref {
-        println!("Could not find startxref in {}: {:?}", display, sxref);
-        process::exit(1)
+        panic!("Could not find startxref in {}: {:?}", display, sxref);
     }
     let sxref_ofs = buflen - sxref.unwrap();
-    println!("Found startxref at offset {}.", file_offset(sxref_ofs));
+    info!("Found startxref at offset {}.", file_offset(sxref_ofs));
     let mut p = StartXrefP;
     let sxref = p.parse(&mut pb);
     if let Err(_) = sxref {
-        println!("Could not parse startxref in {} at pos {}: {:?}",
-                 display, file_offset(pb.get_cursor()), sxref);
-        process::exit(1)
+        panic!("Could not parse startxref in {} at pos {}: {:?}",
+               display, file_offset(pb.get_cursor()), sxref);
     }
     let sxref = sxref.unwrap();
-    println!(" startxref span: {}..{}.",
-             file_offset(sxref.loc_start()), file_offset(sxref.loc_end()));
+    info!(" startxref span: {}..{}.",
+          file_offset(sxref.loc_start()), file_offset(sxref.loc_end()));
     let sxref = sxref.unwrap();
-    println!("startxref points to offset {} for xref",
-             file_offset(sxref.offset().try_into().unwrap()));
+    info!("startxref points to offset {} for xref",
+          file_offset(sxref.offset().try_into().unwrap()));
 
     // Parse xref at that offset.
     pb.set_cursor(sxref.offset().try_into().unwrap());
     let mut p = XrefSectP;
     let xref = p.parse(&mut pb);
     if let Err(_) = xref {
-        println!("Could not parse xref in {} at pos {}: {:?}",
-                 display, file_offset(pb.get_cursor()), xref);
-        process::exit(1)
+        panic!("Could not parse xref in {} at pos {}: {:?}",
+               display, file_offset(pb.get_cursor()), xref);
     }
     let xref = xref.unwrap().unwrap();
     let mut offsets : Vec<usize> = Vec::new();
     for ls in xref.sects().iter() {
         let s = ls.val();
-        println!("Found {} objects starting at {}:", s.count(), s.start());
+        info!("Found {} objects starting at {}:", s.count(), s.start());
         for o in s.ents() {
             match o.val() {
                 XrefEntT::Inuse(x) => {
-                    println!("   inuse object at {}.", x.info());
+                    debug!("   inuse object at {}.", x.info());
                     offsets.push(x.info().try_into().unwrap())
                 },
                 XrefEntT::Free(x)  => {
-                    println!("   free object (next is {}).", x.info())
+                    debug!("   free object (next is {}).", x.info())
                 }
             }
         }
@@ -139,24 +138,21 @@ fn parse_file(test_file: &str) {
     // id of the Root object.
     match pb.scan("trailer".as_bytes()) {
         Ok(nbytes) =>
-            println!("Found trailer {} bytes from end of xref table.", nbytes),
+            info!("Found trailer {} bytes from end of xref table.", nbytes),
         Err(e)     => {
-            println!("Cannot find trailer: {}", e.val());
-            process::exit(1)
+            panic!("Cannot find trailer: {}", e.val());
         }
     }
     let mut p = TrailerP::new(&mut ctxt);
     let trlr  = p.parse(&mut pb);
     if let Err(e) = trlr {
-        println!("Cannot parse trailer: {}", e.val());
-        process::exit(1)
+        panic!("Cannot parse trailer: {}", e.val());
     }
     let trlr = trlr.unwrap().unwrap();
     let root_ref = match trlr.dict().get("Root".as_bytes()) {
         Some(rt) => rt,
         None     => {
-            println!("No root reference found!");
-            process::exit(1)
+            panic!("No root reference found!");
         }
     };
 
@@ -168,16 +164,15 @@ fn parse_file(test_file: &str) {
         pb.set_cursor((*o).try_into().unwrap());
         let lobj = p.parse(&mut pb);
         if let Err(_) = lobj {
-            println!("Cannot parse object at offset {} in {}: {:?}",
-                     file_offset(*o), display, lobj);
-            process::exit(1)
+            panic!("Cannot parse object at offset {} in {}: {:?}",
+                   file_offset(*o), display, lobj);
         }
         let obj = lobj.unwrap().unwrap();
         if let PDFObjT::Indirect(_) = obj {
             objs.push(obj)
         } else {
-            println!("found non-indirect object at offset {}!",
-                     file_offset(*o))
+            info!("found non-indirect object at offset {}!",
+                  file_offset(*o))
         }
     }
 
@@ -186,25 +181,23 @@ fn parse_file(test_file: &str) {
             match ctxt.lookup_obj(r.id()) {
                 Some(obj) => obj,
                 None      => {
-                    println!("Root object not found from reference!");
-                    process::exit(1)
+                    panic!("Root object not found from reference!");
                 }
             }
         } else {
             // Is there any case where this is not the case?  Should
             // this constraint be part of the safe subset specification?
-            println!("Root object is not a reference!");
-            process::exit(1);
+            panic!("Root object is not a reference!");
         };
 
     // Perform a breadth-first traversal of the root object, logging
     // each object type and location as we go.
 
-    println!("Beginning breadth-first traversal of root object:");
+    debug!("Beginning breadth-first traversal of root object:");
 
     let log_obj = |t: &str, loc: &dyn Location, depth: u32| {
-           println!(" depth:{} type:{} start:{} end:{}  ",
-                    depth, t, file_offset(loc.loc_start()), file_offset(loc.loc_end()))
+           info!(" depth:{} type:{} start:{} end:{}  ",
+                 depth, t, file_offset(loc.loc_start()), file_offset(loc.loc_end()))
     };
 
     let mut obj_queue = VecDeque::new();
@@ -262,8 +255,8 @@ fn parse_file(test_file: &str) {
                         }
                     },
                     None      => {
-                        println!(" ref ({},{}) does not point to a defined object!",
-                                 r.num(), r.gen())
+                        warn!(" ref ({},{}) does not point to a defined object!",
+                              r.num(), r.gen())
                     }
                 }
             },
@@ -298,6 +291,25 @@ fn print_usage(code: i32) {
 }
 
 fn main() {
+    Builder::new()
+        .format(|buf, record| {
+            if record.level() == Level::Trace {
+                writeln!(buf,
+                         "{} - {}",
+                         record.level(),
+                         record.args()
+                )
+            } else {
+                writeln!(buf,
+                         "{:5} - <File Name> at <File Offset> - {}",
+                         record.level(),
+                         record.args()
+                )
+            }
+        })
+        .filter(None, LevelFilter::Trace)
+        .init();
+
     // TODO: add useful cli options
     match (env::args().nth(1), env::args().len()) {
         (Some(s), 2) => parse_file(&s),
