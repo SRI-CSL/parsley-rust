@@ -28,8 +28,15 @@ or
        Compiling parsley-rust v0.1.0 (/Users/linda/git/GitHub/Parsley_repos/parsley-rust)
         Finished dev [unoptimized + debuginfo] target(s) in 1.92s
 
+To create a stand-alone binary:
+
+    $ cargo build --release
+    $ ls -la target/release/pdf_printer
+    -rwxr-xr-x  2 linda  staff  690124 Nov 12 16:13 target/release/pdf_printer
 
 ## Running the PDF Parser
+
+With cargo:
 
     $ cargo run <PDF_file>
 
@@ -53,7 +60,14 @@ for example:
     DEBUG - <File Name> at <File Offset> - Beginning breadth-first traversal of root object:
     [...]
     
+Or the stand-alone binary:
 
+    $ target/release/pdf_printer
+    Usage:
+    	target/release/pdf_printer <pdf-file>
+
+etc.
+    
 ## Installing a static binary
 
     $ cargo install --path .

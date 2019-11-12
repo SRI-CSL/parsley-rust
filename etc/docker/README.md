@@ -9,8 +9,33 @@ Dockerizing our Rust application
     $ cd ../..
     $ docker build -t 'docker-pdf_printer' -f etc/docker/Dockerfile .
 
+# Running container and checking things...
+
+    $ cd etc/docker  # if in top-level directory
+
+Interactive shell:
+
+    $ docker run -it docker-pdf_printer /bin/sh
+    / # ls -la pdf_printer
+    -rwxr-xr-x    1 root     root       3064872 Nov 12 21:43 pdf_printer
+    / # exit
+
+# Housekeeping
+
+To see docker images and all (even stopped) containers:
+
+    $ docker images
+    $ docker ps --all
+    
+To clean up dangling (e.g., intermediate builder containers) use:
+
+    $ docker rmi $(docker images -q -f dangling=true)
 
 # Links
 
+Rust and Docker:
 * [https://dev.to/gruberb/web-programming-in-rust-02x-deploy-your-first-app-1k05]
 * [https://www.fpcomplete.com/blog/2018/07/deploying-rust-with-docker-and-kubernetes]
+
+Alpine Linux and Docker:
+* [http://containertutorials.com/alpine/get_started.html]
