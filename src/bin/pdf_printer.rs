@@ -11,6 +11,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::env;
 use std::panic;
+use std::path::Path;
 use std::process;
 use std::rc::Rc;
 use std::convert::TryInto;
@@ -291,28 +292,34 @@ fn print_usage(code: i32) {
 }
 
 fn main() {
-    Builder::new()
-        .format(|buf, record| {
-            if record.level() == Level::Trace {
-                writeln!(buf,
-                         "{} - {}",
-                         record.level(),
-                         record.args()
-                )
-            } else {
-                writeln!(buf,
-                         "{:5} - <File Name> at <File Offset> - {}",
-                         record.level(),
-                         record.args()
-                )
-            }
-        })
-        .filter(None, LevelFilter::Trace)
-        .init();
-
     // TODO: add useful cli options
     match (env::args().nth(1), env::args().len()) {
-        (Some(s), 2) => parse_file(&s),
-        (_, _)       => print_usage(1)
+        (Some(s), 2) => {
+            // set up log format with file name (if > TRACE):
+            let filename = Path::new(&s).file_name().unwrap().to_str().unwrap().to_string();
+            Builder::new()
+                .format(move |buf, record| {
+                    if record.level() == Level::Trace {
+                        writeln!(buf,
+                                 "{} - {}",
+                                 record.level(),
+                                 record.args()
+                        )
+                    } else {
+                        writeln!(buf,
+                                 "{:5} - {} at {:>10} - {}",
+                                 record.level(),
+                                 filename,
+                                 "123456",
+                                 record.args()
+                        )
+                    }
+                })
+                .filter(None, LevelFilter::Trace)
+                .init();
+
+            parse_file(&s)
+        },
+        (_, _) => print_usage(1)
     }
 }
