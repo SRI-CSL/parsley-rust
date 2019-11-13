@@ -20,6 +20,33 @@ use parsley_rust::pcore::parsebuffer::{ParseBuffer, ParsleyParser, Location, Loc
 use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, XrefSectP, XrefEntT, TrailerP};
 use parsley_rust::pdf_lib::pdf_obj::{PDFObjT, PDFObjP, PDFObjContext};
 
+/* from: https://osr.jpl.nasa.gov/wiki/pages/viewpage.action?spaceKey=SD&title=TA2+PDF+Safe+Parser+Evaluation
+
+CRITICAL	This error level must be used when the TA2 parser is going to terminate parsing based on
+            unexpected input.
+            => panic!
+ERROR       This error level must be used when the TA2 parser has found invalid data to parse, but
+            intends to continue parsing. ERROR or CRITICAL must be used to flag any "unsafe parsing
+            events"
+            => error!
+WARNING     This error level can be used when the TA2 parser has found unexpected data to parse.
+            This error level can be used to flag safe, but unexpected parsing events.
+            => warn!
+INFO    	This error level must be used to instrument components being parsed by the PDF parser.
+            Each component should have some INFO parser output.
+            => info!
+DEBUG   	Any messages that the TA2 parser needs to output for debug information should use this
+            error level.
+            => debug!
+
+Note: Rust level trace! is not included.  Those messages will print without the TA3 preamble.
+*/
+macro_rules! ta3_log {
+    ($lvl:expr, $pos:expr, $($arg:tt)+) => ({
+        log!($lvl, "at {:>10} - {}", $pos, format_args!($($arg)+))
+    })
+}
+
 fn parse_file(test_file: &str) {
     // Print current path
     let path = env::current_dir();
@@ -56,8 +83,9 @@ fn parse_file(test_file: &str) {
         match pb.scan("%PDF-".as_bytes()) {
             Ok(nbytes) => {
                 if nbytes != 0 {
-                    info!("Found {} bytes of leading garbage, dropping from buffer.",
-                          nbytes);
+                    ta3_log!(Level::Info, nbytes,
+                             "Found {} bytes of leading garbage, dropping from buffer.",
+                             nbytes);
                     pb.drop_upto()
                 };
                 nbytes
@@ -84,7 +112,7 @@ fn parse_file(test_file: &str) {
         panic!("Could not find %%EOF in {}: {:?}", display, eof);
     }
     let eof_ofs = buflen - eof.unwrap();
-    info!("Found %%EOF at offset {}.", file_offset(eof_ofs));
+    ta3_log!(Level::Info, file_offset(eof_ofs), "Found %%EOF at offset {}.", file_offset(eof_ofs));
 
     // Scan backward for startxref.
     let sxref = pb.backward_scan("startxref".as_bytes());
@@ -92,7 +120,7 @@ fn parse_file(test_file: &str) {
         panic!("Could not find startxref in {}: {:?}", display, sxref);
     }
     let sxref_ofs = buflen - sxref.unwrap();
-    info!("Found startxref at offset {}.", file_offset(sxref_ofs));
+    ta3_log!(Level::Info, file_offset(sxref_ofs), "Found startxref at offset {}.", file_offset(sxref_ofs));
     let mut p = StartXrefP;
     let sxref = p.parse(&mut pb);
     if let Err(_) = sxref {
@@ -100,11 +128,12 @@ fn parse_file(test_file: &str) {
                display, file_offset(pb.get_cursor()), sxref);
     }
     let sxref = sxref.unwrap();
-    info!(" startxref span: {}..{}.",
+    ta3_log!(Level::Info, file_offset(sxref.loc_start()), " startxref span: {}..{}.",
           file_offset(sxref.loc_start()), file_offset(sxref.loc_end()));
     let sxref = sxref.unwrap();
-    info!("startxref points to offset {} for xref",
-          file_offset(sxref.offset().try_into().unwrap()));
+    ta3_log!(Level::Info, file_offset(sxref.offset().try_into().unwrap()),
+        "startxref points to offset {} for xref",
+        file_offset(sxref.offset().try_into().unwrap()));
 
     // Parse xref at that offset.
     pb.set_cursor(sxref.offset().try_into().unwrap());
@@ -118,7 +147,9 @@ fn parse_file(test_file: &str) {
     let mut offsets : Vec<usize> = Vec::new();
     for ls in xref.sects().iter() {
         let s = ls.val();
-        info!("Found {} objects starting at {}:", s.count(), s.start());
+        // TODO: for logging in TA3 format, need more accurate position:
+        //  is this ls.loc_start()??
+        ta3_log!(Level::Info, ls.loc_start(), "Found {} objects starting at {}:", s.count(), s.start());
         for o in s.ents() {
             match o.val() {
                 XrefEntT::Inuse(x) => {
@@ -139,7 +170,9 @@ fn parse_file(test_file: &str) {
     // id of the Root object.
     match pb.scan("trailer".as_bytes()) {
         Ok(nbytes) =>
-            info!("Found trailer {} bytes from end of xref table.", nbytes),
+            // TODO: for logging in TA3 format, need more accurate position:
+            //  nbytes + pos(end of xref table) as second argument?
+            ta3_log!(Level::Info, nbytes, "Found trailer {} bytes from end of xref table.", nbytes),
         Err(e)     => {
             panic!("Cannot find trailer: {}", e.val());
         }
@@ -172,8 +205,9 @@ fn parse_file(test_file: &str) {
         if let PDFObjT::Indirect(_) = obj {
             objs.push(obj)
         } else {
-            info!("found non-indirect object at offset {}!",
-                  file_offset(*o))
+            ta3_log!(Level::Info, file_offset(*o),
+                "found non-indirect object at offset {}!",
+                file_offset(*o))
         }
     }
 
@@ -197,8 +231,9 @@ fn parse_file(test_file: &str) {
     debug!("Beginning breadth-first traversal of root object:");
 
     let log_obj = |t: &str, loc: &dyn Location, depth: u32| {
-           info!(" depth:{} type:{} start:{} end:{}  ",
-                 depth, t, file_offset(loc.loc_start()), file_offset(loc.loc_end()))
+        ta3_log!(Level::Info, file_offset(loc.loc_start()),
+            "depth:{} type:{} start:{} end:{}  ",
+            depth, t, file_offset(loc.loc_start()), file_offset(loc.loc_end()))
     };
 
     let mut obj_queue = VecDeque::new();
@@ -256,8 +291,11 @@ fn parse_file(test_file: &str) {
                         }
                     },
                     None      => {
-                        warn!(" ref ({},{}) does not point to a defined object!",
-                              r.num(), r.gen())
+                        // TODO: for logging in TA3 format, need more accurate position:
+                        //  maybe report location of 'o'???
+                        ta3_log!(Level::Warn, "NaN",
+                            " ref ({},{}) does not point to a defined object!",
+                            r.num(), r.gen())
                     }
                 }
             },
@@ -307,10 +345,9 @@ fn main() {
                         )
                     } else {
                         writeln!(buf,
-                                 "{:5} - {} at {:>10} - {}",
+                                 "{:5} - {} {}",
                                  record.level(),
                                  filename,
-                                 "123456",
                                  record.args()
                         )
                     }
