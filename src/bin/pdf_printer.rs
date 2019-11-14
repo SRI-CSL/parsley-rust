@@ -3,6 +3,7 @@
 #[macro_use]
 extern crate log;
 extern crate env_logger;
+extern crate log_panics;
 
 use env_logger::Builder;
 use log::{Level, LevelFilter};
@@ -41,6 +42,7 @@ DEBUG   	Any messages that the TA2 parser needs to output for debug information 
 
 Note: Rust level trace! is not included.  Those messages will print without the TA3 preamble.
 */
+// use this macro to log messages with position argument:
 macro_rules! ta3_log {
     ($lvl:expr, $pos:expr, $($arg:tt)+) => ({
         log!($lvl, "at {:>10} - {}", $pos, format_args!($($arg)+))
@@ -62,7 +64,7 @@ fn parse_file(test_file: &str) {
         // The `description` method of `io::Error` returns a string that
         // describes the error
         Err(why) => {
-            panic!("couldn't open {}: {}", display, why.description());
+            panic!("Couldn't open {}: {}", display, why.description());
         },
         Ok(file) => file,
     };
@@ -71,7 +73,7 @@ fn parse_file(test_file: &str) {
     let mut s = String::new();
     match file.read_to_string(&mut s) {
         Err(why) => {
-            panic!("couldn't read {}: {}", display, why.description());
+            panic!("Couldn't read {}: {}", display, why.description());
         },
         Ok(_)    => ()
     }
@@ -344,16 +346,26 @@ fn main() {
                                  record.args()
                         )
                     } else {
-                        writeln!(buf,
-                                 "{:5} - {} {}",
-                                 record.level(),
-                                 filename,
-                                 record.args()
-                        )
+                        if format!("{}", record.args()).contains("panicked") {
+                            // hacking a panic! log message (usually at level Error)
+                            writeln!(buf,
+                                     "CRITICAL - {} at NaN - {}",
+                                     filename,
+                                     record.args()
+                            )
+                        } else {
+                            writeln!(buf,
+                                     "{:8} - {} {}",
+                                     record.level(),
+                                     filename,
+                                     record.args()
+                            )
+                        }
                     }
                 })
                 .filter(None, LevelFilter::Trace)
                 .init();
+            log_panics::init();  // cause panic! to log errors instead of simply printing them
 
             parse_file(&s)
         },

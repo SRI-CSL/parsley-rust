@@ -43,21 +43,22 @@ With cargo:
 for example:
 
     $ cargo run tests/test_files/minimal_leading_garbage.pdf
-        Finished dev [unoptimized + debuginfo] target(s) in 0.09s
+       Compiling parsley-rust v0.1.0 (/Users/linda/git/GitHub/Parsley_repos/parsley-rust)
+        Finished dev [unoptimized + debuginfo] target(s) in 2.71s
          Running `target/debug/pdf_printer tests/test_files/minimal_leading_garbage.pdf`
-    INFO  - <File Name> at <File Offset> - Found 21 bytes of leading garbage, dropping from buffer.
-    INFO  - <File Name> at <File Offset> - Found %%EOF at offset 754.
-    INFO  - <File Name> at <File Offset> - Found startxref at offset 746.
-    INFO  - <File Name> at <File Offset> -  startxref span: 740..753.
-    INFO  - <File Name> at <File Offset> - startxref points to offset 586 for xref
-    INFO  - <File Name> at <File Offset> - Found 5 objects starting at 0:
-    DEBUG - <File Name> at <File Offset> -    free object (next is 0).
-    DEBUG - <File Name> at <File Offset> -    inuse object at 18.
-    DEBUG - <File Name> at <File Offset> -    inuse object at 77.
-    DEBUG - <File Name> at <File Offset> -    inuse object at 178.
-    DEBUG - <File Name> at <File Offset> -    inuse object at 457.
-    INFO  - <File Name> at <File Offset> - Found trailer 0 bytes from end of xref table.
-    DEBUG - <File Name> at <File Offset> - Beginning breadth-first traversal of root object:
+    INFO     - minimal_leading_garbage.pdf at         21 - Found 21 bytes of leading garbage, dropping from buffer.
+    INFO     - minimal_leading_garbage.pdf at        754 - Found %%EOF at offset 754.
+    INFO     - minimal_leading_garbage.pdf at        746 - Found startxref at offset 746.
+    INFO     - minimal_leading_garbage.pdf at        740 -  startxref span: 740..753.
+    INFO     - minimal_leading_garbage.pdf at        586 - startxref points to offset 586 for xref
+    INFO     - minimal_leading_garbage.pdf at        570 - Found 5 objects starting at 0:
+    DEBUG    - minimal_leading_garbage.pdf    free object (next is 0).
+    DEBUG    - minimal_leading_garbage.pdf    inuse object at 18.
+    DEBUG    - minimal_leading_garbage.pdf    inuse object at 77.
+    DEBUG    - minimal_leading_garbage.pdf    inuse object at 178.
+    DEBUG    - minimal_leading_garbage.pdf    inuse object at 457.
+    INFO     - minimal_leading_garbage.pdf at          0 - Found trailer 0 bytes from end of xref table.
+    DEBUG    - minimal_leading_garbage.pdf Beginning breadth-first traversal of root object:
     [...]
     
 Or the stand-alone binary:
