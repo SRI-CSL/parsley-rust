@@ -7,7 +7,7 @@ Dockerizing our Rust application
 # Building the image
 
     $ cd ../..
-    $ docker build -t 'docker-pdf_printer' -f etc/docker/Dockerfile .
+    $ docker build -t 'pdf_printer' -f etc/docker/Dockerfile .
 
 # Running container and checking things...
 
@@ -15,9 +15,9 @@ Dockerizing our Rust application
 
 Interactive shell:
 
-    $ docker run -it docker-pdf_printer /bin/sh
-    / # ls -la pdf_printer
-    -rwxr-xr-x    1 root     root       3064872 Nov 12 21:43 pdf_printer
+    $ docker run -it pdf_printer /bin/sh
+    / # ls -la /pdf_printer
+    -rwxr-xr-x    1 root     root       3080320 Nov 14 15:03 /pdf_printer
     / # exit
 
 # Housekeeping

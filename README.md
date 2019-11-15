@@ -34,6 +34,10 @@ To create a stand-alone binary:
     $ ls -la target/release/pdf_printer
     -rwxr-xr-x  2 linda  staff  690124 Nov 12 16:13 target/release/pdf_printer
 
+or use:
+
+    $ make release
+
 ## Running the PDF Parser
 
 With cargo:
@@ -102,4 +106,6 @@ or
 
 ## Dockerizing Rust binary
 
-See `etc/docker/README.md` for instructions and details.
+    $ make docker
+
+See `etc/docker/README.md` for more details.
