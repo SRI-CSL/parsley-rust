@@ -70,15 +70,15 @@ fn parse_file(test_file: &str) {
     };
 
     // Read the file contents into a string, returns `io::Result<usize>`
-    let mut s = String::new();
-    match file.read_to_string(&mut s) {
+    let mut v = Vec::new();
+    match file.read_to_end(&mut v) {
         Err(why) => {
             panic!("Couldn't read {}: {}", display, why.description());
         },
         Ok(_)    => ()
-    }
+    };
 
-    let mut pb = ParseBuffer::new(Vec::from(s.as_bytes()));
+    let mut pb = ParseBuffer::new(v);
 
     // Handle leading garbage.
     let pdf_hdr_ofs =
