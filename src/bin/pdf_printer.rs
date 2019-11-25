@@ -107,14 +107,15 @@ fn parse_file(test_file: &str) {
     }
     // Todo: some sanity check of header.
 
-    // From end of buffer, scan backwards for %EOF.
+    // From end of buffer, scan backwards for %EOF, if present.
     pb.set_cursor(buflen);
     let eof = pb.backward_scan("%%EOF".as_bytes());
     if let Err(_) = eof {
-        panic!("Could not find %%EOF in {}: {:?}", display, eof);
+        ta3_log!(Level::Info, file_offset(0), "No %%EOF in {}: {:?}", display, eof);
+    } else {
+        let eof_ofs = buflen - eof.unwrap();
+        ta3_log!(Level::Info, file_offset(eof_ofs), "Found %%EOF at offset {}.", file_offset(eof_ofs));
     }
-    let eof_ofs = buflen - eof.unwrap();
-    ta3_log!(Level::Info, file_offset(eof_ofs), "Found %%EOF at offset {}.", file_offset(eof_ofs));
 
     // Scan backward for startxref.
     let sxref = pb.backward_scan("startxref".as_bytes());
