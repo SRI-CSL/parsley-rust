@@ -35,6 +35,8 @@ where T : PartialEq
     }
     pub fn val(&self)   -> &T { &self.val }
     pub fn unwrap(self) -> T  { self.val }
+    pub fn start(&self) -> usize { self.start }
+    pub fn end(&self)   -> usize { self.end }
 }
 // Equality for LocatedVal<T> should not take into account the
 // location.  Similarly, when a LocatedVal<T> is placed into a map
@@ -156,7 +158,7 @@ impl fmt::Display for ErrorKind {
         match self {
             ErrorKind::EndOfBuffer => write!(f, "end of buffer"),
             ErrorKind::PrimitiveError(ParseError{msg}) => write!(f, "primitive parse failure: {}", msg),
-            ErrorKind::GuardError(prim) => write!(f, "primitive guard error on {}", prim),
+            ErrorKind::GuardError(prim) => write!(f, "primitive guard error: {}", prim),
         }
     }
 }

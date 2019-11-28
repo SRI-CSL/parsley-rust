@@ -102,16 +102,16 @@ fn parse_file(test_file: &str) {
     let buflen = pb.remaining();
     let mut p = HeaderP;
     let hdr = p.parse(&mut pb);
-    if let Err(_) = hdr {
-        panic!("Unable to parse header from {}: {:?}", display, hdr);
+    if let Err(e) = hdr {
+        panic!("Unable to parse header from {}: {}", display, e.val());
     }
     // Todo: some sanity check of header.
 
     // From end of buffer, scan backwards for %EOF, if present.
     pb.set_cursor(buflen);
     let eof = pb.backward_scan("%%EOF".as_bytes());
-    if let Err(_) = eof {
-        ta3_log!(Level::Info, file_offset(0), "No %%EOF in {}: {:?}", display, eof);
+    if let Err(e) = eof {
+        ta3_log!(Level::Info, file_offset(0), "No %%EOF in {}: {}", display, e.val());
     } else {
         let eof_ofs = buflen - eof.unwrap();
         ta3_log!(Level::Info, file_offset(eof_ofs), "Found %%EOF at offset {}.", file_offset(eof_ofs));
@@ -119,16 +119,16 @@ fn parse_file(test_file: &str) {
 
     // Scan backward for startxref.
     let sxref = pb.backward_scan("startxref".as_bytes());
-    if let Err(_) = sxref {
-        panic!("Could not find startxref in {}: {:?}", display, sxref);
+    if let Err(e) = sxref {
+        panic!("Could not find startxref in {}: {}", display, e.val());
     }
     let sxref_ofs = buflen - sxref.unwrap();
     ta3_log!(Level::Info, file_offset(sxref_ofs), "Found startxref at offset {}.", file_offset(sxref_ofs));
     let mut p = StartXrefP;
     let sxref = p.parse(&mut pb);
-    if let Err(_) = sxref {
-        panic!("Could not parse startxref in {} at pos {}: {:?}",
-               display, file_offset(pb.get_cursor()), sxref);
+    if let Err(e) = sxref {
+        panic!("Could not parse startxref in {} at pos {}: {}",
+               display, file_offset(e.start()), e.val());
     }
     let sxref = sxref.unwrap();
     ta3_log!(Level::Info, file_offset(sxref.loc_start()), " startxref span: {}..{}.",
@@ -142,9 +142,9 @@ fn parse_file(test_file: &str) {
     pb.set_cursor(sxref.offset().try_into().unwrap());
     let mut p = XrefSectP;
     let xref = p.parse(&mut pb);
-    if let Err(_) = xref {
-        panic!("Could not parse xref in {} at pos {}: {:?}",
-               display, file_offset(pb.get_cursor()), xref);
+    if let Err(e) = xref {
+        panic!("Could not parse xref in {} at pos {}: {}",
+               display, file_offset(e.start()), e.val());
     }
     let xref = xref.unwrap().unwrap();
     let mut offsets : Vec<usize> = Vec::new();
@@ -200,9 +200,9 @@ fn parse_file(test_file: &str) {
         let mut p = PDFObjP::new(&mut ctxt);
         pb.set_cursor((*o).try_into().unwrap());
         let lobj = p.parse(&mut pb);
-        if let Err(_) = lobj {
-            panic!("Cannot parse object at offset {} in {}: {:?}",
-                   file_offset(*o), display, lobj);
+        if let Err(e) = lobj {
+            panic!("Cannot parse object at offset {} in {}: {}",
+                   file_offset(e.start()), display, e.val());
         }
         let obj = lobj.unwrap().unwrap();
         if let PDFObjT::Indirect(_) = obj {
