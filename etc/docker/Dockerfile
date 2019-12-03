@@ -1,24 +1,31 @@
-# An example Dockerfile showing how to build a Rust executable using this
-# image, and deploy it with a tiny Alpine Linux container.
-
 FROM rust AS builder
 
-# Copy our source code
-COPY ./ ./
+# build time optimization from:
+# http://whitfin.io/speeding-up-rust-docker-builds/
 
-# Fix permissions on source code.
-#RUN sudo chown -R rust:rust /home/rust
+# create a new empty shell project
+RUN USER=root cargo new --bin parsley
+WORKDIR /parsley
 
-# Build our application.
+# copy over your manifests
+COPY ./Cargo.lock ./Cargo.lock
+COPY ./Cargo.toml ./Cargo.toml
+
+# this build step will cache your dependencies
 RUN cargo build --release
+RUN rm src/*.rs
+
+COPY ./src ./src
+
+# build for release
+RUN rm ./target/release/deps/parsley*
+RUN cargo build --release
+
 RUN mkdir -p /build-out
 RUN cp target/release/pdf_printer /build-out/
 
-# Now, we need to build our _real_ Docker container, copying in our executable.
-FROM alpine
-
-RUN apk --no-cache add ca-certificates
+FROM debian:stretch-slim
 
 COPY --from=builder /build-out/pdf_printer /
 
-# No command since we are using this to just deploy the binary!
+# No command or entrypoint since we are using this to just deploy the binary!
