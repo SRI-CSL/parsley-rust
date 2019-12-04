@@ -190,8 +190,22 @@ impl ParsleyParser for IntegerP {
         }
         let mut num : i64 = 0;
         for c in num_str.iter() {
-            // TODO: used checked_* operations to check for overflow.
-            num = num * 10 + i64::from(c - 48);
+            let tmp = i64::checked_mul(num, 10);
+            if let None = tmp {
+                let end = buf.get_cursor();
+                let err = ErrorKind::GuardError("numerical overflow");
+                buf.set_cursor(start);
+                return Err(make_error(err, start, end));
+            }
+            num = tmp.unwrap();
+            let tmp = i64::checked_add(num, i64::from(c - 48));
+            if let None = tmp {
+                let end = buf.get_cursor();
+                let err = ErrorKind::GuardError("numerical overflow");
+                buf.set_cursor(start);
+                return Err(make_error(err, start, end));
+            }
+            num = tmp.unwrap();
         }
         if minus { num *= -1; }
         let end = buf.get_cursor();
@@ -250,7 +264,22 @@ impl ParsleyParser for RealP {
         }
         let mut num : i64 = 0;
         for c in num_str.iter() {
-            num = num * 10 + i64::from(c - 48);
+            let tmp = i64::checked_mul(num, 10);
+            if let None = tmp {
+                let end = buf.get_cursor();
+                let err = ErrorKind::GuardError("numerical overflow");
+                buf.set_cursor(start);
+                return Err(make_error(err, start, end));
+            }
+            num = tmp.unwrap();
+            let tmp = i64::checked_add(num, i64::from(c - 48));
+            if let None = tmp {
+                let end = buf.get_cursor();
+                let err = ErrorKind::GuardError("numerical overflow");
+                buf.set_cursor(start);
+                return Err(make_error(err, start, end));
+            }
+            num = tmp.unwrap();
         }
         if buf.peek() == Some(46) {            // '.'
             let mut den : i64 = 1;
@@ -258,8 +287,29 @@ impl ParsleyParser for RealP {
             let s = buf.parse_allowed_bytes("0123456789".as_bytes());
             if let Ok(den_str) = s {
                 for c in den_str.iter() {
-                    num = num * 10 + i64::from(c - 48);
-                    den *= 10;
+                    let tmp = i64::checked_mul(num, 10);
+                    if let None = tmp {
+                        let end = buf.get_cursor();
+                        let err = ErrorKind::GuardError("numerical overflow");
+                        buf.set_cursor(start);
+                        return Err(make_error(err, start, end));
+                    }
+                    let num = tmp.unwrap();
+                    let tmp = i64::checked_add(num, i64::from(c - 48));
+                    if let None = tmp {
+                        let end = buf.get_cursor();
+                        let err = ErrorKind::GuardError("numerical overflow");
+                        buf.set_cursor(start);
+                        return Err(make_error(err, start, end));
+                    }
+                    let tmp = i64::checked_mul(den, 10);
+                    if let None = tmp {
+                        let end = buf.get_cursor();
+                        let err = ErrorKind::GuardError("numerical overflow");
+                        buf.set_cursor(start);
+                        return Err(make_error(err, start, end));
+                    }
+                    den = tmp.unwrap();
                 }
             }
             if minus { num *= -1; }
