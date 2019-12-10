@@ -247,6 +247,12 @@ impl ParsleyParser for XrefSectP {
     fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
 
+        // First, consume possibly empty whitespace.  TODO: Check with
+        // the upcoming update to the standard, intimated at the
+        // hackathon.
+        let mut ws = WhitespaceEOL::new(true);
+        ws.parse(buf)?;
+
         if let Err(_) = buf.exact("xref".as_bytes()) {
             let err = ErrorKind::GuardError("not at xref");
             let end = buf.get_cursor();
