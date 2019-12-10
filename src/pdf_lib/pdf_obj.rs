@@ -298,9 +298,13 @@ impl IndirectP<'_> {
             };
 
         ws.parse(buf)?;
-        if let Err(e) = buf.exact("endobj".as_bytes()) {
-            let err = ErrorKind::GuardError("invalid endobject tag");
-            return Err(make_error_with_loc(err, &e))
+
+        // Accept either 'endobj' or 'objend'.
+        if let Err(_) = buf.exact("endobj".as_bytes()) {
+            if let Err(e) = buf.exact("objend".as_bytes()) {
+                let err = ErrorKind::GuardError("invalid endobject tag");
+                return Err(make_error_with_loc(err, &e))
+            }
         }
 
         let obj = Rc::new(obj);
