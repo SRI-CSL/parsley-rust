@@ -285,7 +285,8 @@ fn parse_file(test_file: &str) {
                 }
             },
             PDFObjT::Reference(r) => {
-                log_obj("ref", o.as_ref() as (&dyn Location), depth);
+                let loc = o.as_ref() as &dyn Location;
+                log_obj("ref", loc, depth);
                 match ctxt.lookup_obj(r.id()) {
                     Some(obj) => {
                         if !processed.contains(obj) {
@@ -294,9 +295,7 @@ fn parse_file(test_file: &str) {
                         }
                     },
                     None      => {
-                        // TODO: for logging in TA3 format, need more accurate position:
-                        //  maybe report location of 'o'???
-                        ta3_log!(Level::Warn, "NaN",
+                        ta3_log!(Level::Warn, file_offset(loc.loc_start()),
                             " ref ({},{}) does not point to a defined object!",
                             r.num(), r.gen())
                     }
