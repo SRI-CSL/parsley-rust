@@ -1,3 +1,21 @@
+// Copyright (c) 2019-2020 SRI International.
+// All rights reserved.
+//
+//    This file is part of the Parsley parser.
+//
+//    Parsley is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    Parsley is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 use std::convert::TryFrom;
 use super::parsebuffer::{ParsleyPrimitive, ParsleyParser, ParseBuffer,
                          ParseResult, ParseError, LocatedVal, ErrorKind};
@@ -11,19 +29,19 @@ impl ParsleyPrimitive for AsciiCharPrimitive {
 
     fn parse(buf: &[u8]) -> ParseResult<(Self::T, usize)> {
         if buf.len() < 1 {
-            return Err(LocatedVal::new(ErrorKind::EndOfBuffer, 0, 0))
+            return Err(LocatedVal::new(ErrorKind::EndOfBuffer, 0, 0));
         }
         let c = char::try_from(buf[0]);
         // check this: we should never get the below error from
         // non-empty buffers, as all u8 should be convertible to char.
         if c.is_err() {
             let err = ErrorKind::PrimitiveError(ParseError::new("ascii-prim: invalid character"));
-            return Err(LocatedVal::new(err, 0, 0))
+            return Err(LocatedVal::new(err, 0, 0));
         }
         let c = c.unwrap();
         if !c.is_ascii() {
             let err = ErrorKind::PrimitiveError(ParseError::new("ascii-prim: invalid ascii character"));
-            return Err(LocatedVal::new(err, 0, 0))
+            return Err(LocatedVal::new(err, 0, 0));
         }
         Ok((c, 1))
     }
@@ -52,7 +70,7 @@ impl ParsleyParser for AsciiChar {
     fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let c = match &mut self.guard {
-            None    => buf.parse_prim::<AsciiCharPrimitive>()?,
+            None => buf.parse_prim::<AsciiCharPrimitive>()?,
             Some(b) => buf.parse_guarded::<AsciiCharPrimitive>(b)?
         };
         let end = buf.get_cursor();
@@ -94,7 +112,7 @@ mod test_prim_ascii {
 
     #[test]
     fn ascii() {
-        let mut v : Vec<u8> = Vec::new();
+        let mut v: Vec<u8> = Vec::new();
         v.extend_from_slice("A".as_bytes());
         v.push(128);  // non-ascii
         v.push(0);    // nul; ascii
@@ -124,17 +142,17 @@ mod test_prim_ascii {
 
     #[test]
     fn guard() {
-        let mut v : Vec<u8> = Vec::new();
+        let mut v: Vec<u8> = Vec::new();
         v.extend_from_slice("AB".as_bytes());
         v.push(128); // non-ascii
         let mut pb = ParseBuffer::new(v);
         assert_eq!(pb.get_cursor(), 0);
 
-        let r = pb.parse_guarded::<AsciiCharPrimitive>(&mut |c: &char| {*c == 'A'});
+        let r = pb.parse_guarded::<AsciiCharPrimitive>(&mut |c: &char| { *c == 'A' });
         assert_eq!(r, Ok('A'));
         assert_eq!(pb.get_cursor(), 1);
 
-        let r = pb.parse_guarded::<AsciiCharPrimitive>(&mut |c: &char| {*c == 'A'});
+        let r = pb.parse_guarded::<AsciiCharPrimitive>(&mut |c: &char| { *c == 'A' });
         let e = ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name());
         let e = Err(make_error(e, 1, 1));
         assert_eq!(r, e);
@@ -163,7 +181,7 @@ mod test_ascii {
     #[test]
     fn ascii() {
         let mut ascii_parser = AsciiChar::new_guarded(Box::new(|c: &char| *c == 'A'));
-        let mut v : Vec<u8> = Vec::new();
+        let mut v: Vec<u8> = Vec::new();
         v.extend_from_slice("A".as_bytes());
         v.push(128);  // non-ascii
         v.push(0);    // nul; ascii

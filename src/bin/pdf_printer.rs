@@ -1,4 +1,40 @@
-// A very basic PDF parser.
+// Copyright (c) 2019-2020 SRI International.
+// All rights reserved.
+//
+//    This file is part of the Parsley parser.
+//
+//    Parsley is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    Parsley is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+ Copyright (c) 2019-2020 SRI International.
+ All rights reserved.
+
+    This file is part of the Parsley parser.
+
+    Parsley is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Parsley is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+/// A very basic PDF parser.
 
 #[macro_use]
 extern crate log;
@@ -65,7 +101,7 @@ fn parse_file(test_file: &str) {
         // describes the error
         Err(why) => {
             panic!("Couldn't open {}: {}", display, why.description());
-        },
+        }
         Ok(file) => file,
     };
 
@@ -74,8 +110,8 @@ fn parse_file(test_file: &str) {
     match file.read_to_end(&mut v) {
         Err(why) => {
             panic!("Couldn't read {}: {}", display, why.description());
-        },
-        Ok(_)    => ()
+        }
+        Ok(_) => ()
     };
 
     let mut pb = ParseBuffer::new(v);
@@ -91,7 +127,7 @@ fn parse_file(test_file: &str) {
                     pb.drop_upto()
                 };
                 nbytes
-            },
+            }
             Err(e) => {
                 panic!("Cannot find header: {}", e.val());
             }
@@ -147,7 +183,7 @@ fn parse_file(test_file: &str) {
                display, file_offset(e.start()), e.val());
     }
     let xref = xref.unwrap().unwrap();
-    let mut offsets : Vec<usize> = Vec::new();
+    let mut offsets: Vec<usize> = Vec::new();
     for ls in xref.sects().iter() {
         let s = ls.val();
         // TODO: for logging in TA3 format, need more accurate position:
@@ -158,8 +194,8 @@ fn parse_file(test_file: &str) {
                 XrefEntT::Inuse(x) => {
                     debug!("   inuse object at {}.", x.info());
                     offsets.push(x.info().try_into().unwrap())
-                },
-                XrefEntT::Free(x)  => {
+                }
+                XrefEntT::Free(x) => {
                     debug!("   free object (next is {}).", x.info())
                 }
             }
@@ -173,22 +209,22 @@ fn parse_file(test_file: &str) {
     // id of the Root object.
     match pb.scan("trailer".as_bytes()) {
         Ok(nbytes) =>
-            // TODO: for logging in TA3 format, need more accurate position:
-            //  nbytes + pos(end of xref table) as second argument?
+        // TODO: for logging in TA3 format, need more accurate position:
+        //  nbytes + pos(end of xref table) as second argument?
             ta3_log!(Level::Info, nbytes, "Found trailer {} bytes from end of xref table.", nbytes),
-        Err(e)     => {
+        Err(e) => {
             panic!("Cannot find trailer: {}", e.val());
         }
     }
     let mut p = TrailerP::new(&mut ctxt);
-    let trlr  = p.parse(&mut pb);
+    let trlr = p.parse(&mut pb);
     if let Err(e) = trlr {
         panic!("Cannot parse trailer: {}", e.val());
     }
     let trlr = trlr.unwrap().unwrap();
     let root_ref = match trlr.dict().get("Root".as_bytes()) {
         Some(rt) => rt,
-        None     => {
+        None => {
             panic!("No root reference found!");
         }
     };
@@ -214,11 +250,11 @@ fn parse_file(test_file: &str) {
         }
     }
 
-    let root_obj : &Rc<LocatedVal<PDFObjT>> =
+    let root_obj: &Rc<LocatedVal<PDFObjT>> =
         if let PDFObjT::Reference(r) = root_ref.val() {
             match ctxt.lookup_obj(r.id()) {
                 Some(obj) => obj,
-                None      => {
+                None => {
                     panic!("Root object not found from reference!");
                 }
             }
@@ -245,7 +281,7 @@ fn parse_file(test_file: &str) {
     processed.insert(Rc::clone(root_obj));
     while obj_queue.len() > 0 {
         let o = obj_queue.pop_front();
-        if o.is_none() { break };
+        if o.is_none() { break; };
         let (o, depth) = o.unwrap();
 
         match o.val() {
@@ -257,8 +293,8 @@ fn parse_file(test_file: &str) {
                         processed.insert(Rc::clone(elem));
                     }
                 }
-            },
-            PDFObjT::Dict(d)  => {
+            }
+            PDFObjT::Dict(d) => {
                 log_obj("dict", o.as_ref() as (&dyn Location), depth);
                 for (_, v) in d.map().iter() {
                     if !processed.contains(v) {
@@ -266,7 +302,7 @@ fn parse_file(test_file: &str) {
                         processed.insert(Rc::clone(v));
                     }
                 }
-            },
+            }
             PDFObjT::Stream(s) => {
                 log_obj("dict", o.as_ref() as (&dyn Location), depth);
                 for (_, v) in s.dict().val().map().iter() {
@@ -276,14 +312,14 @@ fn parse_file(test_file: &str) {
                         processed.insert(Rc::clone(v));
                     }
                 }
-            },
+            }
             PDFObjT::Indirect(i) => {
                 log_obj("indirect", o.as_ref() as (&dyn Location), depth);
                 if !processed.contains(i.obj()) {
                     obj_queue.push_back((Rc::clone(i.obj()), depth + 1));
                     processed.insert(Rc::clone(i.obj()));
                 }
-            },
+            }
             PDFObjT::Reference(r) => {
                 let loc = o.as_ref() as &dyn Location;
                 log_obj("ref", loc, depth);
@@ -293,32 +329,32 @@ fn parse_file(test_file: &str) {
                             obj_queue.push_back((Rc::clone(obj), depth + 1));
                             processed.insert(Rc::clone(obj));
                         }
-                    },
-                    None      => {
+                    }
+                    None => {
                         ta3_log!(Level::Warn, file_offset(loc.loc_start()),
                             " ref ({},{}) does not point to a defined object!",
                             r.num(), r.gen())
                     }
                 }
-            },
+            }
             PDFObjT::Boolean(_) => {
                 log_obj("boolean", o.as_ref() as (&dyn Location), depth)
-            },
+            }
             PDFObjT::String(_) => {
                 log_obj("string", o.as_ref() as (&dyn Location), depth)
-            },
+            }
             PDFObjT::Name(_) => {
                 log_obj("name", o.as_ref() as (&dyn Location), depth)
-            },
+            }
             PDFObjT::Null(_) => {
                 log_obj("null", o.as_ref() as (&dyn Location), depth)
-            },
+            }
             PDFObjT::Comment(_) => {
                 log_obj("comment", o.as_ref() as (&dyn Location), depth)
-            },
+            }
             PDFObjT::Integer(_) => {
                 log_obj("number<integer>", o.as_ref() as (&dyn Location), depth)
-            },
+            }
             PDFObjT::Real(_) => {
                 log_obj("number<real>", o.as_ref() as (&dyn Location), depth)
             }
@@ -368,7 +404,7 @@ fn main() {
             log_panics::init();  // cause panic! to log errors instead of simply printing them
 
             parse_file(&s)
-        },
+        }
         (_, _) => print_usage(1)
     }
 }

@@ -1,3 +1,21 @@
+// Copyright (c) 2019-2020 SRI International.
+// All rights reserved.
+//
+//    This file is part of the Parsley parser.
+//
+//    Parsley is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    Parsley is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 /// Basic parsing buffer manager, and the traits defining the parsing interface.
 
 use std::error::Error;
@@ -16,74 +34,82 @@ pub struct ParseBuffer {
 // Location information for objects returned by parsers.
 pub trait Location {
     fn loc_start(&self) -> usize;
-    fn loc_end(&self)   -> usize;
+    fn loc_end(&self) -> usize;
 }
 
 // Values returned by parsers should provide location annotations.
 #[derive(Debug)]
 pub struct LocatedVal<T>
 {
-    val:   T,
+    val: T,
     start: usize,
-    end:   usize,
+    end: usize,
 }
+
 impl<T> LocatedVal<T>
-where T : PartialEq
+    where T: PartialEq
 {
     pub fn new(val: T, start: usize, end: usize) -> LocatedVal<T> {
         LocatedVal { val, start, end }
     }
-    pub fn val(&self)   -> &T { &self.val }
-    pub fn unwrap(self) -> T  { self.val }
+    pub fn val(&self) -> &T { &self.val }
+    pub fn unwrap(self) -> T { self.val }
     pub fn start(&self) -> usize { self.start }
-    pub fn end(&self)   -> usize { self.end }
+    pub fn end(&self) -> usize { self.end }
 }
+
 // Equality for LocatedVal<T> should not take into account the
 // location.  Similarly, when a LocatedVal<T> is placed into a map
 // (i.e. HashMap) as the key-type, the matching should be performed
 // over the T.
 impl<T> PartialEq for LocatedVal<T>
-where T : PartialEq
+    where T: PartialEq
 {
     fn eq(&self, other: &Self) -> bool {
         PartialEq::eq(&self.val, &other.val)
     }
 }
+
 impl<T> Eq for LocatedVal<T>
-where T : PartialEq
+    where T: PartialEq
 {}
+
 impl<T> PartialOrd for LocatedVal<T>
-where T : PartialOrd
+    where T: PartialOrd
 {
     fn partial_cmp(&self, other: &LocatedVal<T>) -> Option<Ordering> {
         PartialOrd::partial_cmp(&self.val, &other.val)
     }
 }
+
 impl<T> Ord for LocatedVal<T>
-where T : Ord
+    where T: Ord
 {
     fn cmp(&self, other: &LocatedVal<T>) -> Ordering {
         Ord::cmp(&self.val, &other.val)
     }
 }
+
 impl<T> Hash for LocatedVal<T>
-where T : PartialEq, T : Hash
+    where T: PartialEq, T: Hash
 {
-    fn hash<H : Hasher>(&self, state: &mut H) { self.val.hash(state) }
+    fn hash<H: Hasher>(&self, state: &mut H) { self.val.hash(state) }
 }
+
 // This allows HashMap lookup using T even when the HashMap is keyed
 // by LocatedVal<T>.
 impl<T> Borrow<T> for LocatedVal<T>
-where T : PartialEq
+    where T: PartialEq
 {
     fn borrow(&self) -> &T { &self.val }
 }
+
 // Provide location information.
 impl<T> Location for LocatedVal<T>
-where T : PartialEq
+    where T: PartialEq
 {
     fn loc_start(&self) -> usize { self.start }
-    fn loc_end(&self)   -> usize { self.end }
+    fn loc_end(&self) -> usize { self.end }
 }
 
 #[derive(Debug, PartialEq)]
@@ -125,7 +151,7 @@ pub trait ParsleyPrimitive {
 // general parsers do not have a defined name.
 pub trait ParsleyParser {
     // The Rust type for the parsed value
-    type T : Location;
+    type T: Location;
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T>;
 }
@@ -149,6 +175,7 @@ pub fn make_error(val: ErrorKind, s: usize, e: usize) -> LocatedVal<ErrorKind> {
         LocatedVal::new(val, e, s)
     }
 }
+
 pub fn make_error_with_loc(val: ErrorKind, l: &dyn Location) -> LocatedVal<ErrorKind> {
     LocatedVal::new(val, l.loc_start(), l.loc_end())
 }
@@ -157,7 +184,7 @@ impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ErrorKind::EndOfBuffer => write!(f, "end of buffer"),
-            ErrorKind::PrimitiveError(ParseError{msg}) => write!(f, "primitive parse failure: {}", msg),
+            ErrorKind::PrimitiveError(ParseError { msg }) => write!(f, "primitive parse failure: {}", msg),
             ErrorKind::GuardError(prim) => write!(f, "primitive guard error: {}", prim),
         }
     }
@@ -167,7 +194,7 @@ impl Error for ErrorKind {
     fn description(&self) -> &str {
         match self {
             ErrorKind::EndOfBuffer => "end of buffer",
-            ErrorKind::PrimitiveError(ParseError{msg}) => msg,
+            ErrorKind::PrimitiveError(ParseError { msg }) => msg,
             ErrorKind::GuardError(_prim) => "primitive guard error",
         }
     }
@@ -181,7 +208,7 @@ impl From<ParseError> for ErrorKind {
 
 impl ParseBuffer {
     pub fn new(buf: Vec<u8>) -> ParseBuffer {
-        ParseBuffer { buf, ofs : 0 }
+        ParseBuffer { buf, ofs: 0 }
     }
 
     pub fn remaining(&self) -> usize {
@@ -218,7 +245,7 @@ impl ParseBuffer {
 
     // Parsing a single element of the Parsley primitive type P; it
     // returns a value of the Rust representation type P::T when successful.
-    pub fn parse_prim<P : ParsleyPrimitive>(&mut self) -> ParseResult<P::T>
+    pub fn parse_prim<P: ParsleyPrimitive>(&mut self) -> ParseResult<P::T>
     {
         let (t, consumed) = P::parse(&self.buf[self.ofs..])?;
         self.ofs += consumed;
@@ -230,15 +257,15 @@ impl ParseBuffer {
     // the Rust representation type P::T when successful.  The 'guard'
     // is specified in terms of the values of the representation type
     // P::T.
-    pub fn parse_guarded<P : ParsleyPrimitive>(&mut self, guard: &mut dyn FnMut(&P::T) -> bool) ->
-        ParseResult<P::T>
+    pub fn parse_guarded<P: ParsleyPrimitive>(&mut self, guard: &mut dyn FnMut(&P::T) -> bool) ->
+    ParseResult<P::T>
     {
         let start = self.get_cursor();
         let (t, consumed) = P::parse(&self.buf[self.ofs..])?;
         if !guard(&t) {
             let end = self.get_cursor();
             let err = ErrorKind::GuardError(P::name());
-            return Err(make_error(err, start, end))
+            return Err(make_error(err, start, end));
         };
         self.ofs += consumed;
         Ok(t)
@@ -298,7 +325,7 @@ impl ParseBuffer {
         for w in self.buf[self.ofs..].windows(tag.len()) {
             if w.starts_with(tag) {
                 self.ofs = self.ofs + skip;
-                return Ok(skip)
+                return Ok(skip);
             }
             skip += 1;
         }
@@ -316,7 +343,7 @@ impl ParseBuffer {
             if w.starts_with(tag) {
                 skip = skip + tag.len() - 1;
                 self.ofs = self.ofs - skip;
-                return Ok(skip)
+                return Ok(skip);
             }
             skip += 1;
         }
@@ -342,7 +369,7 @@ impl ParseBuffer {
             let start = self.get_cursor();
             Err(make_error(ErrorKind::EndOfBuffer, start, start))
         } else {
-            let ret = &self.buf[self.ofs..(self.ofs+len)];
+            let ret = &self.buf[self.ofs..(self.ofs + len)];
             self.ofs += len;
             Ok(ret)
         }

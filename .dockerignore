@@ -1,5 +1,2 @@
 etc/docker/
 target/
-
-# TODO: when custom crate ta3_logger is done, comment this out:
-src/ta3_log/
