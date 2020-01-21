@@ -16,8 +16,11 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+extern crate byteorder; // 1.3.1
+use byteorder::{ByteOrder, BigEndian};
 /// Primitives for handling binary data.
 use super::parsebuffer::{ParsleyParser, ParseBuffer, ParseResult, LocatedVal};
+use std::slice;
 
 pub struct BinaryScanner {
     tag: Vec<u8>
@@ -75,25 +78,80 @@ impl ParsleyParser for BinaryMatcher {
    For now, just do the inefficient thing and copy the data, until
    we properly grok lifetimes and traits.
 
-pub struct BinaryBuffer {
-    len: usize,
-    phantom: PhantomData<&'a [u8]>
+   pub struct BinaryBuffer {
+   len: usize,
+   phantom: PhantomData<&'a [u8]>
+   }
+
+   impl<'a> BinaryBuffer<'a> {
+   pub fn new(len: usize) -> BinaryBuffer<'a> {
+   BinaryBuffer { len, phantom: PhantomData }
+   }
+   }
+
+   impl<'a> ParsleyParser for BinaryBuffer<'a> {
+   type T<'a> = &'a [u8];
+
+   fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
+   buf.extract(self.len)
+   }
+   }
+   */
+
+pub struct IntObj32 {
 }
 
-impl<'a> BinaryBuffer<'a> {
-    pub fn new(len: usize) -> BinaryBuffer<'a> {
-        BinaryBuffer { len, phantom: PhantomData }
+impl IntObj32 {
+    pub fn new() -> IntObj32 {
+        IntObj32 {}
     }
 }
 
-impl<'a> ParsleyParser for BinaryBuffer<'a> {
-    type T<'a> = &'a [u8];
+impl ParsleyParser for IntObj32 {
+    type T = LocatedVal<Vec<u32>>;
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
-        buf.extract(self.len)
+        let start = buf.get_cursor();
+        let mut bytes = buf.extract(4)?;
+        let mut result: Vec<u32> = Vec::new();
+        // Convert and extract a 32 bit integer?
+        for i in (0..4).step_by(4) {
+            result.push(BigEndian::read_u32(&bytes[i..]));
+        }
+        //println!("{:?}", result);
+        let end = buf.get_cursor();
+
+        Ok(LocatedVal::new(result, start, end))
     }
 }
-*/
+
+pub struct IntObj16 {
+}
+
+impl IntObj16 {
+    pub fn new() -> IntObj16 {
+        IntObj16 {}
+    }
+}
+
+impl ParsleyParser for IntObj16 {
+    type T = LocatedVal<Vec<u16>>;
+
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let mut bytes = buf.extract(2)?;
+        let mut result: Vec<u16> = Vec::new();
+        let mut dst = [0; 1];
+        // Convert and extract a 16 bit integer?
+        for i in (0..2).step_by(2) {
+            result.push(BigEndian::read_u16(&bytes[i..]));
+        }
+        //println!("{:?}", result);
+        let end = buf.get_cursor();
+
+        Ok(LocatedVal::new(result, start, end))
+    }
+}
 
 pub struct BinaryBuffer {
     len: usize
