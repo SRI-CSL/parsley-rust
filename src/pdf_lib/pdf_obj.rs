@@ -1,4 +1,22 @@
-// Basic PDF objects (simple and compound).
+// Copyright (c) 2019-2020 SRI International.
+// All rights reserved.
+//
+//    This file is part of the Parsley parser.
+//
+//    Parsley is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    Parsley is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+/// Basic PDF objects (simple and compound).
 
 use std::rc::Rc;
 use std::collections::{HashSet, BTreeMap};
@@ -14,12 +32,12 @@ use super::pdf_prim::{RawName, StreamContent};
 
 pub struct PDFLocation {
     start: usize,
-    end:   usize
+    end: usize,
 }
 
 impl Location for PDFLocation {
     fn loc_start(&self) -> usize { self.start }
-    fn loc_end(&self)   -> usize { self.end }
+    fn loc_end(&self) -> usize { self.end }
 }
 
 // PDF object parsing context.
@@ -49,6 +67,7 @@ impl PDFObjContext {
 pub struct ArrayT {
     objs: Vec<Rc<LocatedVal<PDFObjT>>>
 }
+
 impl ArrayT {
     pub fn new(objs: Vec<Rc<LocatedVal<PDFObjT>>>) -> ArrayT {
         ArrayT { objs }
@@ -71,7 +90,7 @@ impl ArrayP<'_> {
         if let Err(_) = buf.exact("[".as_bytes()) {
             let err = ErrorKind::GuardError("not at array object");
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end))
+            return Err(make_error(err, start, end));
         }
         let mut objs = Vec::new();
         let mut end = false;
@@ -103,6 +122,7 @@ impl ArrayP<'_> {
 pub struct DictT {
     map: BTreeMap<<RawName as ParsleyParser>::T, Rc<LocatedVal<PDFObjT>>>
 }
+
 impl DictT {
     pub fn new(map: BTreeMap<<RawName as ParsleyParser>::T, Rc<LocatedVal<PDFObjT>>>)
                -> DictT {
@@ -131,8 +151,8 @@ impl DictP<'_> {
     }
     pub fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<DictT> {
         buf.exact("<<".as_bytes())?;
-        let mut end   = false;
-        let mut map   = BTreeMap::new();
+        let mut end = false;
+        let mut map = BTreeMap::new();
         let mut names = HashSet::new();
         while !end {
             // Need more precise handling of whitespace to
@@ -148,7 +168,7 @@ impl DictP<'_> {
                 if names.contains(n.val()) {
                     let err = ErrorKind::GuardError("non-unique dictionary key");
                     // TODO: need extensible error reporting
-                    return Err(make_error_with_loc(err, &n))
+                    return Err(make_error_with_loc(err, &n));
                 }
 
                 // do not require whitespace between key/value pairs
@@ -204,23 +224,25 @@ impl DictP<'_> {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct StreamT {
-    dict:   Rc<LocatedVal<DictT>>,
-    stream: LocatedVal<Vec<u8>>
+    dict: Rc<LocatedVal<DictT>>,
+    stream: LocatedVal<Vec<u8>>,
 }
+
 impl StreamT {
     pub fn new(dict: Rc<LocatedVal<DictT>>, stream: LocatedVal<Vec<u8>>) -> StreamT {
         StreamT { dict, stream }
     }
-    pub fn dict(&self)   -> &Rc<LocatedVal<DictT>>  { &self.dict }
-    pub fn stream(&self) -> &LocatedVal<Vec<u8>>    { &self.stream }
+    pub fn dict(&self) -> &Rc<LocatedVal<DictT>> { &self.dict }
+    pub fn stream(&self) -> &LocatedVal<Vec<u8>> { &self.stream }
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct IndirectT {
     num: i64,
     gen: i64,
-    obj: Rc<LocatedVal<PDFObjT>>
+    obj: Rc<LocatedVal<PDFObjT>>,
 }
+
 impl IndirectT {
     pub fn new(num: i64, gen: i64, obj: Rc<LocatedVal<PDFObjT>>) -> IndirectT {
         IndirectT { num, gen, obj }
@@ -248,20 +270,20 @@ impl IndirectP<'_> {
         if !num.val().is_positive() {
             let err = ErrorKind::GuardError("invalid object id");
             buf.set_cursor(cursor);
-            return Err(make_error_with_loc(err, &num))
+            return Err(make_error_with_loc(err, &num));
         }
         ws.parse(buf)?;
         cursor = buf.get_cursor();
         let gen = int.parse(buf)?;
-        if ! (gen.val().is_zero() || gen.val().is_positive()) {
+        if !(gen.val().is_zero() || gen.val().is_positive()) {
             let err = ErrorKind::GuardError("invalid object generation");
             buf.set_cursor(cursor);
-            return Err(make_error_with_loc(err, &gen))
+            return Err(make_error_with_loc(err, &gen));
         }
         ws.parse(buf)?;
         if let Err(e) = buf.exact("obj".as_bytes()) {
             let err = ErrorKind::GuardError("invalid object tag");
-            return Err(make_error_with_loc(err, &e))
+            return Err(make_error_with_loc(err, &e));
         }
         ws.parse(buf)?;
 
@@ -278,7 +300,7 @@ impl IndirectP<'_> {
                 if buf.check_prefix("stream".as_bytes())? {
                     // This is indeed a stream object.
                     let dict_start = o.loc_start();
-                    let dict_end   = o.loc_end();
+                    let dict_end = o.loc_end();
                     if let PDFObjT::Dict(dict) = o.unwrap() {
                         let dict = LocatedVal::new(dict, dict_start, dict_end);
                         let mut s = StreamContent;
@@ -298,15 +320,19 @@ impl IndirectP<'_> {
             };
 
         ws.parse(buf)?;
-        if let Err(e) = buf.exact("endobj".as_bytes()) {
-            let err = ErrorKind::GuardError("invalid endobject tag");
-            return Err(make_error_with_loc(err, &e))
+
+        // Accept either 'endobj' or 'objend'.
+        if let Err(_) = buf.exact("endobj".as_bytes()) {
+            if let Err(e) = buf.exact("objend".as_bytes()) {
+                let err = ErrorKind::GuardError("invalid endobject tag");
+                return Err(make_error_with_loc(err, &e));
+            }
         }
 
         let obj = Rc::new(obj);
         let ind = IndirectT::new(num.val().int_val(), gen.val().int_val(), Rc::clone(&obj));
         match self.ctxt.register_obj(&ind, Rc::clone(&obj)) {
-            None    => Ok(ind),
+            None => Ok(ind),
             Some(_) => {
                 let err = ErrorKind::GuardError("non-unique object id");
                 let end = buf.get_cursor();
@@ -333,18 +359,20 @@ impl IndirectP<'_> {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ReferenceT {
     num: i64,
-    gen: i64
+    gen: i64,
 }
+
 impl ReferenceT {
     pub fn new(num: i64, gen: i64) -> ReferenceT {
         ReferenceT { num, gen }
     }
     pub fn num(&self) -> i64 { self.num }
     pub fn gen(&self) -> i64 { self.gen }
-    pub fn id(&self)  -> (i64, i64) { (self.num, self.gen) }
+    pub fn id(&self) -> (i64, i64) { (self.num, self.gen) }
 }
 
 struct ReferenceP;
+
 impl ReferenceP {
     fn parse(self, buf: &mut ParseBuffer) -> ParseResult<ReferenceT> {
         let mut int = IntegerP;
@@ -356,22 +384,22 @@ impl ReferenceP {
             let err = ErrorKind::GuardError("invalid ref-object id");
             let end = buf.get_cursor();
             buf.set_cursor(cursor);
-            return Err(make_error(err, cursor, end))
+            return Err(make_error(err, cursor, end));
         }
         ws.parse(buf)?;
 
         cursor = buf.get_cursor();
         let gen = int.parse(buf)?;
-        if ! (gen.val().is_zero() || gen.val().is_positive()) {
+        if !(gen.val().is_zero() || gen.val().is_positive()) {
             let err = ErrorKind::GuardError("invalid ref-object generation");
             let end = buf.get_cursor();
             buf.set_cursor(cursor);
-            return Err(make_error(err, cursor, end))
+            return Err(make_error(err, cursor, end));
         }
         ws.parse(buf)?;
         if let Err(e) = buf.exact("R".as_bytes()) {
             let err = ErrorKind::GuardError("invalid reference tag");
-            return Err(make_error_with_loc(err, &e))
+            return Err(make_error_with_loc(err, &e));
         }
 
         // TODO: update refs
@@ -394,7 +422,7 @@ pub enum PDFObjT {
     Null(()),
     Comment(Vec<u8>),
     Integer(IntegerT),
-    Real(RealT)
+    Real(RealT),
 }
 
 pub struct PDFObjP<'a> {
@@ -409,43 +437,43 @@ impl PDFObjP<'_> {
     fn parse_internal(&mut self, buf: &mut ParseBuffer) -> ParseResult<PDFObjT> {
         let c = buf.peek();
         match c {
-            None      => {
+            None => {
                 let start = buf.get_cursor();
                 let err = ErrorKind::EndOfBuffer;
                 Err(make_error(err, start, start))
-            },
+            }
 
             Some(116) | Some(102) => { // 't' | 'f'
                 let mut bp = Boolean;
                 let b = bp.parse(buf)?;
                 Ok(PDFObjT::Boolean(b.unwrap()))
-            },
+            }
             Some(110) => { // 'n'
                 let mut np = Null;
                 let n = np.parse(buf)?;
                 Ok(PDFObjT::Null(n.unwrap()))
-            },
-            Some(40)  => { // '('
+            }
+            Some(40) => { // '('
                 let mut rp = RawLiteralString;
                 let r = rp.parse(buf)?;
                 Ok(PDFObjT::String(r.unwrap()))
-            },
-            Some(37)  => { // '%'
+            }
+            Some(37) => { // '%'
                 let mut cp = Comment;
                 let c = cp.parse(buf)?;
                 Ok(PDFObjT::Comment(c.unwrap()))
-            },
-            Some(47)  => { // '/'
+            }
+            Some(47) => { // '/'
                 let mut np = RawName;
                 let n = np.parse(buf)?;
                 Ok(PDFObjT::Name(n.unwrap()))
-            },
-            Some(91)  => { // '['
+            }
+            Some(91) => { // '['
                 let mut ap = ArrayP::new(&mut self.ctxt);
                 let a = ap.parse(buf)?;
                 Ok(PDFObjT::Array(a.unwrap()))
-            },
-            Some(60)  => { // '<'
+            }
+            Some(60) => { // '<'
                 // We need to distinguish between a hex-string and a
                 // dictionary object.  So peek ahead.
                 let cursor = buf.get_cursor();
@@ -458,19 +486,19 @@ impl PDFObjP<'_> {
                         let mut dp = DictP::new(&mut self.ctxt);
                         let d = dp.parse(buf)?;
                         Ok(PDFObjT::Dict(d))
-                    },
+                    }
                     Some(_) | None => {
                         let mut hp = HexString;
                         let s = hp.parse(buf)?;
                         Ok(PDFObjT::String(s.unwrap()))
                     }
                 }
-            },
-            Some(b)   => {
+            }
+            Some(b) => {
                 if !b.is_ascii_digit() && b != 45 { // '-' to handle negative numbers
                     let start = buf.get_cursor();
                     let err = ErrorKind::GuardError("not at PDF object");
-                    return Err(make_error(err, start, start))
+                    return Err(make_error(err, start, start));
                 }
                 let cursor = buf.get_cursor();
 
@@ -480,13 +508,13 @@ impl PDFObjP<'_> {
                 // prefix.
 
                 let mut real = RealP;
-                let mut int  = IntegerP;
-                let mut ws   = WhitespaceEOL::new(false); // no empty whitespace
+                let mut int = IntegerP;
+                let mut ws = WhitespaceEOL::new(false); // no empty whitespace
 
                 // Check if we are at a real.
                 let r = real.parse(buf)?;
                 if !r.val().is_integer() {
-                    return Ok(PDFObjT::Real(r.unwrap()))
+                    return Ok(PDFObjT::Real(r.unwrap()));
                 }
 
                 // We parsed the first integer.
@@ -498,7 +526,7 @@ impl PDFObjP<'_> {
                     // We've already parsed a number, so set the
                     // cursor past that and return it.
                     buf.set_cursor(n1_end_cursor);
-                    return Ok(PDFObjT::Integer(n1))
+                    return Ok(PDFObjT::Integer(n1));
                 }
 
                 // Get the second integer.
@@ -506,7 +534,7 @@ impl PDFObjP<'_> {
                 if let Err(_) = n2 {
                     // See above comment.
                     buf.set_cursor(n1_end_cursor);
-                    return Ok(PDFObjT::Integer(n1))
+                    return Ok(PDFObjT::Integer(n1));
                 }
 
                 // Skip past non-empty whitespace.
@@ -514,14 +542,14 @@ impl PDFObjP<'_> {
                     // We've already parsed the first number, so set the
                     // cursor past that and return it.
                     buf.set_cursor(n1_end_cursor);
-                    return Ok(PDFObjT::Integer(n1))
+                    return Ok(PDFObjT::Integer(n1));
                 }
 
                 // We have now seen two integers.
                 let prefix = buf.check_prefix("obj".as_bytes());
                 if let Err(_) = prefix {
                     buf.set_cursor(n1_end_cursor);
-                    return Ok(PDFObjT::Integer(n1))
+                    return Ok(PDFObjT::Integer(n1));
                 }
                 if prefix.unwrap() {
                     // This looks like an indirect object.  Rewind and
@@ -529,13 +557,13 @@ impl PDFObjP<'_> {
                     buf.set_cursor(cursor);
 
                     let mut p = IndirectP::new(&mut self.ctxt);
-                    return Ok(PDFObjT::Indirect(p.parse(buf)?))
+                    return Ok(PDFObjT::Indirect(p.parse(buf)?));
                 }
 
                 let prefix = buf.check_prefix("R".as_bytes());
                 if let Err(_) = prefix {
                     buf.set_cursor(n1_end_cursor);
-                    return Ok(PDFObjT::Integer(n1))
+                    return Ok(PDFObjT::Integer(n1));
                 }
                 if prefix.unwrap() {
                     // This looks like an indirect reference.  Rewind
@@ -544,12 +572,12 @@ impl PDFObjP<'_> {
                     buf.set_cursor(cursor);
 
                     let p = ReferenceP;
-                    return Ok(PDFObjT::Reference(p.parse(buf)?))
+                    return Ok(PDFObjT::Reference(p.parse(buf)?));
                 }
 
                 // Fallback case.
                 buf.set_cursor(n1_end_cursor);
-                return Ok(PDFObjT::Integer(n1))
+                return Ok(PDFObjT::Integer(n1));
             }
         }
     }
@@ -566,8 +594,8 @@ impl ParsleyParser for PDFObjP<'_> {
         ws.parse(buf)?;
 
         let start = buf.get_cursor();
-        let val   = self.parse_internal(buf)?;
-        let end   = buf.get_cursor();
+        let val = self.parse_internal(buf)?;
+        let end = buf.get_cursor();
         Ok(LocatedVal::new(val, start, end))
     }
 }
@@ -576,10 +604,10 @@ impl ParsleyParser for PDFObjP<'_> {
 mod test_pdf_obj {
     use std::rc::Rc;
     use std::borrow::Borrow;
-    use std::collections::{BTreeMap};
+    use std::collections::BTreeMap;
     use super::super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal,
                                                   ErrorKind, make_error};
-    use super::super::pdf_prim::{RealT};
+    use super::super::pdf_prim::RealT;
     use super::{PDFObjContext, PDFObjP, PDFObjT, ReferenceT, ArrayT, DictT, IndirectT, StreamT};
 
     #[test]
@@ -739,7 +767,7 @@ mod test_pdf_obj {
         let obj = PDFObjT::Indirect(IndirectT::new(1, 0, Rc::clone(&dict)));
         assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(obj, 0, 40)));
         assert_eq!(pb.get_cursor(), vlen);
-        assert_eq!(ctxt.lookup_obj((1,0)), Some(dict.borrow()));
+        assert_eq!(ctxt.lookup_obj((1, 0)), Some(dict.borrow()));
     }
 
     #[test]
@@ -762,7 +790,7 @@ mod test_pdf_obj {
         let obj = PDFObjT::Indirect(IndirectT::new(1, 0, Rc::clone(&stream)));
         assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(obj, 0, 61)));
         assert_eq!(pb.get_cursor(), vlen);
-        assert_eq!(ctxt.lookup_obj((1,0)), Some(stream.borrow()));
+        assert_eq!(ctxt.lookup_obj((1, 0)), Some(stream.borrow()));
     }
 
     #[test]
@@ -782,7 +810,7 @@ mod test_pdf_obj {
         let d = Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 10, 46));
         let o = PDFObjT::Indirect(IndirectT::new(1, 0, Rc::clone(&d)));
         assert_eq!(val, Ok(LocatedVal::new(o, 0, 53)));
-        assert_eq!(ctxt.lookup_obj((1,0)), Some(d.borrow()));
+        assert_eq!(ctxt.lookup_obj((1, 0)), Some(d.borrow()));
     }
 
     #[test]
@@ -800,7 +828,7 @@ mod test_pdf_obj {
         let d = Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 10, 45));
         let o = PDFObjT::Indirect(IndirectT::new(1, 0, Rc::clone(&d)));
         assert_eq!(val, Ok(LocatedVal::new(o, 0, 52)));
-        assert_eq!(ctxt.lookup_obj((1,0)), Some(d.borrow()));
+        assert_eq!(ctxt.lookup_obj((1, 0)), Some(d.borrow()));
     }
 
     #[test]
@@ -820,7 +848,7 @@ mod test_pdf_obj {
         let d = Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 23, 59));
         let o = PDFObjT::Indirect(IndirectT::new(1, 0, Rc::clone(&d)));
         assert_eq!(val, Ok(LocatedVal::new(o, 0, 66)));
-        assert_eq!(ctxt.lookup_obj((1,0)), Some(d.borrow()));
+        assert_eq!(ctxt.lookup_obj((1, 0)), Some(d.borrow()));
     }
 
     #[test]
@@ -863,7 +891,7 @@ mod test_pdf_obj {
         let o = PDFObjT::Indirect(IndirectT::new(10, 0, Rc::clone(&a)));
         assert_eq!(pb.get_cursor(), vlen);
         assert_eq!(val, Ok(LocatedVal::new(o, 0, vlen)));
-        assert_eq!(ctxt.lookup_obj((10,0)), Some(a.borrow()));
+        assert_eq!(ctxt.lookup_obj((10, 0)), Some(a.borrow()));
 
         let mut ctxt = PDFObjContext::new();
         let mut p = PDFObjP::new(&mut ctxt);
@@ -879,7 +907,7 @@ mod test_pdf_obj {
         let o = PDFObjT::Indirect(IndirectT::new(10, 0, Rc::clone(&d)));
         assert_eq!(pb.get_cursor(), vlen);
         assert_eq!(val, Ok(LocatedVal::new(o, 0, vlen)));
-        assert_eq!(ctxt.lookup_obj((10,0)), Some(d.borrow()));
+        assert_eq!(ctxt.lookup_obj((10, 0)), Some(d.borrow()));
 
         let mut ctxt = PDFObjContext::new();
         let mut p = PDFObjP::new(&mut ctxt);
@@ -895,7 +923,7 @@ mod test_pdf_obj {
         let o = PDFObjT::Indirect(IndirectT::new(11, 0, Rc::clone(&d)));
         assert_eq!(pb.get_cursor(), vlen);
         assert_eq!(val, Ok(LocatedVal::new(o, 0, vlen)));
-        assert_eq!(ctxt.lookup_obj((11,0)), Some(d.borrow()));
+        assert_eq!(ctxt.lookup_obj((11, 0)), Some(d.borrow()));
 
         // TODO: handle empty values
         let mut ctxt = PDFObjContext::new();

@@ -1,6 +1,24 @@
-// Basic primitive (non-compound or non-recursive) PDF objects.
+// Copyright (c) 2019-2020 SRI International.
+// All rights reserved.
+//
+//    This file is part of the Parsley parser.
+//
+//    Parsley is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    Parsley is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::collections::{HashSet};
+/// Basic primitive (non-compound or non-recursive) PDF objects.
+
+use std::collections::HashSet;
 use super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal,
                                        ParseResult, ErrorKind, make_error};
 
@@ -9,6 +27,7 @@ use super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal,
 pub struct WhitespaceNoEOL {
     empty_ok: bool
 }
+
 impl WhitespaceNoEOL {
     pub fn new(empty_ok: bool) -> WhitespaceNoEOL {
         WhitespaceNoEOL { empty_ok }
@@ -20,11 +39,11 @@ impl ParsleyParser for WhitespaceNoEOL {
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
-        let ws    = buf.parse_allowed_bytes(" \0\t\r\x0c".as_bytes())?;
+        let ws = buf.parse_allowed_bytes(" \0\t\r\x0c".as_bytes())?;
         if ws.len() == 0 && !self.empty_ok {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not at whitespace-noeol");
-            return Err(LocatedVal::new(err, start, end))
+            return Err(LocatedVal::new(err, start, end));
         };
         // If the last character is '\r' (13), check if the next one
         // is '\n' (10).  If so, rewind by one character.
@@ -39,6 +58,7 @@ impl ParsleyParser for WhitespaceNoEOL {
 // Comments
 
 pub struct Comment;
+
 impl ParsleyParser for Comment {
     type T = LocatedVal<Vec<u8>>;
 
@@ -49,7 +69,7 @@ impl ParsleyParser for Comment {
         if !(buf.peek() == Some(37)) {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not at comment");
-            return Err(LocatedVal::new(err, start, end))
+            return Err(LocatedVal::new(err, start, end));
         }
         buf.incr_cursor();
         let c = buf.parse_bytes_until("\n".as_bytes())?;
@@ -65,6 +85,7 @@ impl ParsleyParser for Comment {
 pub struct WhitespaceEOL {
     empty_ok: bool
 }
+
 impl WhitespaceEOL {
     pub fn new(empty_ok: bool) -> WhitespaceEOL {
         WhitespaceEOL { empty_ok }
@@ -95,7 +116,7 @@ impl ParsleyParser for WhitespaceEOL {
             // we did not consume anything
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not at whitespace-eol");
-            return Err(LocatedVal::new(err, start, end))
+            return Err(LocatedVal::new(err, start, end));
         };
         let end = buf.get_cursor();
         Ok(LocatedVal::new((), start, end))
@@ -105,6 +126,7 @@ impl ParsleyParser for WhitespaceEOL {
 // Booleans are almost keywords, except that they have a semantic
 // value.
 pub struct Boolean;
+
 impl ParsleyParser for Boolean {
     type T = LocatedVal<bool>;
 
@@ -130,12 +152,13 @@ impl ParsleyParser for Boolean {
 
 // null is an explicit PDF object.
 pub struct Null;
+
 impl ParsleyParser for Null {
     type T = LocatedVal<()>;
 
     fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
-        let null  = buf.exact("null".as_bytes());
+        let null = buf.exact("null".as_bytes());
         if let Err(_) = null {
             let end = buf.get_cursor();
             Err(make_error(ErrorKind::GuardError("not at null"), start, end))
@@ -150,6 +173,7 @@ impl ParsleyParser for Null {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct IntegerT(i64);
+
 impl IntegerT {
     pub fn new(i: i64) -> IntegerT {
         IntegerT(i)
@@ -166,6 +190,7 @@ impl IntegerT {
 }
 
 pub struct IntegerP;
+
 impl ParsleyParser for IntegerP {
     type T = LocatedVal<IntegerT>;
 
@@ -186,12 +211,26 @@ impl ParsleyParser for IntegerP {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not at number");
             buf.set_cursor(start);
-            return Err(make_error(err, start, end))
+            return Err(make_error(err, start, end));
         }
-        let mut num : i64 = 0;
+        let mut num: i64 = 0;
         for c in num_str.iter() {
-            // TODO: used checked_* operations to check for overflow.
-            num = num * 10 + i64::from(c - 48);
+            let tmp = i64::checked_mul(num, 10);
+            if let None = tmp {
+                let end = buf.get_cursor();
+                let err = ErrorKind::GuardError("numerical overflow");
+                buf.set_cursor(start);
+                return Err(make_error(err, start, end));
+            }
+            num = tmp.unwrap();
+            let tmp = i64::checked_add(num, i64::from(c - 48));
+            if let None = tmp {
+                let end = buf.get_cursor();
+                let err = ErrorKind::GuardError("numerical overflow");
+                buf.set_cursor(start);
+                return Err(make_error(err, start, end));
+            }
+            num = tmp.unwrap();
         }
         if minus { num *= -1; }
         let end = buf.get_cursor();
@@ -226,6 +265,7 @@ impl RealT {
 }
 
 pub struct RealP;
+
 impl ParsleyParser for RealP {
     type T = LocatedVal<RealT>;
 
@@ -246,20 +286,56 @@ impl ParsleyParser for RealP {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not at number");
             buf.set_cursor(start);
-            return Err(make_error(err, start, end))
+            return Err(make_error(err, start, end));
         }
-        let mut num : i64 = 0;
+        let mut num: i64 = 0;
         for c in num_str.iter() {
-            num = num * 10 + i64::from(c - 48);
+            let tmp = i64::checked_mul(num, 10);
+            if let None = tmp {
+                let end = buf.get_cursor();
+                let err = ErrorKind::GuardError("numerical overflow");
+                buf.set_cursor(start);
+                return Err(make_error(err, start, end));
+            }
+            num = tmp.unwrap();
+            let tmp = i64::checked_add(num, i64::from(c - 48));
+            if let None = tmp {
+                let end = buf.get_cursor();
+                let err = ErrorKind::GuardError("numerical overflow");
+                buf.set_cursor(start);
+                return Err(make_error(err, start, end));
+            }
+            num = tmp.unwrap();
         }
         if buf.peek() == Some(46) {            // '.'
-            let mut den : i64 = 1;
+            let mut den: i64 = 1;
             buf.incr_cursor();
             let s = buf.parse_allowed_bytes("0123456789".as_bytes());
             if let Ok(den_str) = s {
                 for c in den_str.iter() {
-                    num = num * 10 + i64::from(c - 48);
-                    den *= 10;
+                    let tmp = i64::checked_mul(num, 10);
+                    if let None = tmp {
+                        let end = buf.get_cursor();
+                        let err = ErrorKind::GuardError("numerical overflow");
+                        buf.set_cursor(start);
+                        return Err(make_error(err, start, end));
+                    }
+                    let num = tmp.unwrap();
+                    let tmp = i64::checked_add(num, i64::from(c - 48));
+                    if let None = tmp {
+                        let end = buf.get_cursor();
+                        let err = ErrorKind::GuardError("numerical overflow");
+                        buf.set_cursor(start);
+                        return Err(make_error(err, start, end));
+                    }
+                    let tmp = i64::checked_mul(den, 10);
+                    if let None = tmp {
+                        let end = buf.get_cursor();
+                        let err = ErrorKind::GuardError("numerical overflow");
+                        buf.set_cursor(start);
+                        return Err(make_error(err, start, end));
+                    }
+                    den = tmp.unwrap();
                 }
             }
             if minus { num *= -1; }
@@ -275,6 +351,7 @@ impl ParsleyParser for RealP {
 
 // Representation does not include the demarcating brackets.
 pub struct HexString;
+
 // assumes input is hex
 fn int_of_hex(b: u8) -> u8 {
     assert!(b.is_ascii_hexdigit());
@@ -286,6 +363,7 @@ fn int_of_hex(b: u8) -> u8 {
         b - b'A' + 10
     }
 }
+
 impl ParsleyParser for HexString {
     type T = LocatedVal<Vec<u8>>;
 
@@ -293,7 +371,7 @@ impl ParsleyParser for HexString {
         let start = buf.get_cursor();
         if buf.peek() != Some(60) {
             let err = ErrorKind::GuardError("not at hex string");
-            return Err(LocatedVal::new(err, start, start))
+            return Err(LocatedVal::new(err, start, start));
         };
         buf.incr_cursor();
         let bytes = buf.parse_allowed_bytes("0123456789abcdefABCDEF \n\r\t\0\x0c".as_bytes())?;
@@ -301,7 +379,7 @@ impl ParsleyParser for HexString {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not at valid hex string");
             buf.set_cursor(start);
-            return Err(make_error(err, start, end))
+            return Err(make_error(err, start, end));
         }
         buf.incr_cursor();
 
@@ -315,8 +393,8 @@ impl ParsleyParser for HexString {
         if hx.len() % 2 != 0 { hx.push(b'0'); }
         // Convert hex pairs to bytes
         let mut v = Vec::new();
-        for i in 0 .. hx.len() / 2 {
-            let b = 16 * int_of_hex(hx[2*i]) + int_of_hex(hx[2*i + 1]);
+        for i in 0..hx.len() / 2 {
+            let b = 16 * int_of_hex(hx[2 * i]) + int_of_hex(hx[2 * i + 1]);
             v.push(b)
         }
         let end = buf.get_cursor();
@@ -329,6 +407,7 @@ impl ParsleyParser for HexString {
 // unicode validation.  The representation does not include the
 // demarcating parentheses.
 pub struct RawLiteralString;
+
 impl ParsleyParser for RawLiteralString {
     // since the literal could contain arbitrary bytes, the raw
     // version is represented as a byte vector.
@@ -338,7 +417,7 @@ impl ParsleyParser for RawLiteralString {
         let start = buf.get_cursor();
         if buf.peek() != Some(40) { // '('
             let err = ErrorKind::GuardError("not at literal string");
-            return Err(LocatedVal::new(err, start, start))
+            return Err(LocatedVal::new(err, start, start));
         };
 
         let mut v = Vec::new();
@@ -360,7 +439,7 @@ impl ParsleyParser for RawLiteralString {
                         v.extend_from_slice(&bytes);
                         v.extend_from_slice("(".as_bytes());
                     }
-                },
+                }
                 Some(41) => { // ')'
                     buf.incr_cursor();
                     if let Some(last) = bytes.last() {
@@ -368,7 +447,7 @@ impl ParsleyParser for RawLiteralString {
                         v.extend_from_slice(&bytes);
                         if !escaped {
                             depth -= 1;
-                            if depth == 0 { break }
+                            if depth == 0 { break; }
                         }
                         v.extend_from_slice(")".as_bytes());
                     } else {
@@ -377,7 +456,7 @@ impl ParsleyParser for RawLiteralString {
                         if depth == 0 { break; }
                         v.extend_from_slice(")".as_bytes());
                     }
-                },
+                }
                 Some(_) => {
                     // can never happen
                     panic!("unexpected lit string");
@@ -385,7 +464,7 @@ impl ParsleyParser for RawLiteralString {
                 None => {
                     let end = buf.get_cursor();
                     buf.set_cursor(start);
-                    return Err(make_error(ErrorKind::EndOfBuffer, start, end))
+                    return Err(make_error(ErrorKind::EndOfBuffer, start, end));
                 }
             }
         }
@@ -397,6 +476,7 @@ impl ParsleyParser for RawLiteralString {
 // Raw names: does not perform UTF decoding, and the representation
 // does not include the leading '/'.
 pub struct RawName;
+
 impl ParsleyParser for RawName {
     type T = LocatedVal<Vec<u8>>;
 
@@ -404,7 +484,7 @@ impl ParsleyParser for RawName {
         let start = buf.get_cursor();
         if buf.peek() != Some(47) { // '/'
             let err = ErrorKind::GuardError("not at name object");
-            return Err(LocatedVal::new(err, start, start))
+            return Err(LocatedVal::new(err, start, start));
         }
         buf.incr_cursor();
 
@@ -440,18 +520,18 @@ impl ParsleyParser for RawName {
                         if ch == 0 {
                             let err = ErrorKind::GuardError("null char in name");
                             buf.set_cursor(start);
-                            return Err(make_error(err, start, end))
+                            return Err(make_error(err, start, end));
                         }
                         r.push(ch);
                         // adjust iterator to skip the next two windows if present.
                         // if not present, properly handle any trailing bytes.
                         let x = iter.next();
-                        if x.is_none() { break }
+                        if x.is_none() { break; }
                         let y = iter.next();
                         if y.is_none() {
                             let x = x.unwrap();
                             r.push(x[2]);
-                            break
+                            break;
                         }
                         w = iter.next();
                         if w.is_none() {
@@ -478,6 +558,7 @@ impl ParsleyParser for RawName {
 
 // Stream object content
 pub struct StreamContent;
+
 impl ParsleyParser for StreamContent {
     // This involves a copy from the parsebuffer, which is
     // inefficient.  We should add an interface that returns a
@@ -493,7 +574,7 @@ impl ParsleyParser for StreamContent {
         let is_stream = buf.exact("stream".as_bytes());
         if let Err(_) = is_stream {
             let err = ErrorKind::GuardError("not at stream content");
-            return Err(make_error(err, start, start))
+            return Err(make_error(err, start, start));
         }
         if buf.peek() == Some(13) { // '\r'
             buf.incr_cursor();
@@ -504,14 +585,14 @@ impl ParsleyParser for StreamContent {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not a valid stream marker");
             buf.set_cursor(start);
-            return Err(make_error(err, start, end))
+            return Err(make_error(err, start, end));
         }
         let stream_start_cursor = buf.get_cursor();
 
         let len = buf.scan("endstream".as_bytes());
         if let Err(e) = len {
             buf.set_cursor(start);
-            return Err(e)
+            return Err(e);
         }
         let stream_end_cursor = buf.get_cursor();
 
@@ -520,7 +601,7 @@ impl ParsleyParser for StreamContent {
         let content_res = buf.extract(stream_end_cursor - stream_start_cursor);
         if let Err(e) = content_res {
             buf.set_cursor(start);
-            return Err(e)
+            return Err(e);
         }
         let mut v = Vec::from(content_res.unwrap());
         // Remove the trailing EOL.
@@ -530,7 +611,7 @@ impl ParsleyParser for StreamContent {
         // '\n'.  For now, just remove a trailing '\n'.
         match v.pop() {
             None | Some(10) => (),
-            Some(c)         => v.push(c)
+            Some(c) => v.push(c)
         }
 
         // Go back to the end of the content
@@ -539,7 +620,7 @@ impl ParsleyParser for StreamContent {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("invalid endstream");
             buf.set_cursor(start);
-            return Err(make_error(err, start, end))
+            return Err(make_error(err, start, end));
         }
         let end = buf.get_cursor();
         Ok(LocatedVal::new(v, start, end))
@@ -715,6 +796,7 @@ mod test_pdf_prim {
         assert_eq!(null.parse(&mut pb), Ok(LocatedVal::new((), 0, 4)));
         assert_eq!(pb.get_cursor(), 4);
     }
+
     #[test]
     fn integer() {
         let mut int = IntegerP;
@@ -817,7 +899,7 @@ mod test_pdf_prim {
         let v = Vec::from("1".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let r = real.parse(&mut pb);
-        assert_eq!(r, Ok(LocatedVal::new(RealT(1,1), 0, 1)));
+        assert_eq!(r, Ok(LocatedVal::new(RealT(1, 1), 0, 1)));
         let r = r.unwrap();
         assert!(r.unwrap().is_integer());
         assert_eq!(pb.get_cursor(), 1);
