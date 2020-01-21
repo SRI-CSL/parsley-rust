@@ -21,7 +21,7 @@ use std::rc::Rc;
 use std::convert::TryInto;
 use std::collections::{VecDeque, BTreeSet};
 use parsley_rust::pcore::parsebuffer::{ParseBuffer, ParsleyParser, Location, LocatedVal};
-use parsley_rust::pcore::prim_binary::{BinaryMatcher, IntObj16, IntObj32};
+use parsley_rust::pcore::prim_binary::{BinaryMatcher, IntObj16, IntObj32, BitObj8};
 use parsley_rust::pcore::prim_combinators::{Sequence};
 use byteorder::{ByteOrder, BigEndian};
 
@@ -68,17 +68,28 @@ fn main() -> std::io::Result<()>{
                                         use etherparse::InternetSlice::*;
                                         use etherparse::TransportSlice::*;
                                         use etherparse::VlanSlice::*;
+                                        use bit_vec::BitVec;
+                                        use bit_set::BitSet;
                                         // value.payload here contains the DNS payload
                                         // TODO: The pcap I am using contains only DNS packets, I need to filter ot packets with no payload? Or other payloads?
                                         //println!("{:?}", value.payload);
                                         let mut pb1 = ParseBuffer::new(value.payload.to_vec());
                                         let mut pb2 = ParseBuffer::new(value.payload.to_vec());
-                                        let mut s1 = IntObj16::new();
+                                        let mut s1 = IntObj32::new();
                                         let mut s2 = IntObj32::new();
+                                        let mut s3 = BitObj8::new();
                                         let mut s = Sequence::new(&mut s1, &mut s2);
-                                        println!("{:?}", s.parse(&mut pb1));
+                                        let mut s_new = Sequence::new(&mut s, &mut s3);
+                                        println!("{:?}", s_new.parse(&mut pb1));
                                         println!("{:?}", s1.parse(&mut pb2));
                                         println!("{:?}", s2.parse(&mut pb2));
+
+                                        let other = BitSet::from_bytes(&[value.payload[0]]);
+                                        let mut bv = other.into_bit_vec();
+                                        // insert all primes less than 10
+                                        println!("{:?}", bv);
+                                        println!("total bits set to true: {}", bv.iter().filter(|x| *x).count());
+
                                     }
                                 }
                             },

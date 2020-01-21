@@ -21,6 +21,8 @@ use byteorder::{ByteOrder, BigEndian};
 /// Primitives for handling binary data.
 use super::parsebuffer::{ParsleyParser, ParseBuffer, ParseResult, LocatedVal};
 use std::slice;
+use bit_vec::BitVec;
+use bit_set::BitSet;
 
 pub struct BinaryScanner {
     tag: Vec<u8>
@@ -97,6 +99,33 @@ impl ParsleyParser for BinaryMatcher {
    }
    }
    */
+
+pub struct BitObj8 {
+}
+
+impl BitObj8 {
+    pub fn new() -> BitObj8 {
+        BitObj8 {}
+    }
+}
+
+impl ParsleyParser for BitObj8 {
+    type T = LocatedVal<Vec<u8>>;
+
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let mut bytes = buf.extract(1)?;
+        {
+        let other = BitSet::from_bytes(&[bytes[0]]);
+        println!("Bitvector {:?}", bytes);
+        println!("Bitvector {:?}", other);
+        }
+        let end = buf.get_cursor();
+        let result: Vec<u8> = Vec::new();
+
+        Ok(LocatedVal::new(result, start, end))
+    }
+}
 
 pub struct IntObj32 {
 }
