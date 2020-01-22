@@ -75,20 +75,15 @@ fn main() -> std::io::Result<()>{
                                         //println!("{:?}", value.payload);
                                         let mut pb1 = ParseBuffer::new(value.payload.to_vec());
                                         let mut pb2 = ParseBuffer::new(value.payload.to_vec());
-                                        let mut s1 = IntObj32::new();
+                                        let mut s3 = IntObj32::new();
                                         let mut s2 = IntObj32::new();
-                                        let mut s3 = BitObj8::new();
+                                        let mut s1 = BitObj8::new();
                                         let mut s = Sequence::new(&mut s1, &mut s2);
                                         let mut s_new = Sequence::new(&mut s, &mut s3);
                                         println!("{:?}", s_new.parse(&mut pb1));
                                         println!("{:?}", s1.parse(&mut pb2));
                                         println!("{:?}", s2.parse(&mut pb2));
-
-                                        let other = BitSet::from_bytes(&[value.payload[0]]);
-                                        let mut bv = other.into_bit_vec();
                                         // insert all primes less than 10
-                                        println!("{:?}", bv);
-                                        println!("total bits set to true: {}", bv.iter().filter(|x| *x).count());
 
                                     }
                                 }

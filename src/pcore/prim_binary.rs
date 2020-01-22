@@ -115,11 +115,10 @@ impl ParsleyParser for BitObj8 {
     fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let mut bytes = buf.extract(1)?;
-        {
+        println!("Bytes in BitVector {:?}", bytes);
         let other = BitSet::from_bytes(&[bytes[0]]);
-        println!("Bitvector {:?}", bytes);
-        println!("Bitvector {:?}", other);
-        }
+        let mut bv = other.into_bit_vec();
+        println!("Bitvector {:?}", bv);
         let end = buf.get_cursor();
         let result: Vec<u8> = Vec::new();
 
