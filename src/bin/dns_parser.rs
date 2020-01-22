@@ -21,7 +21,7 @@ use std::rc::Rc;
 use std::convert::TryInto;
 use std::collections::{VecDeque, BTreeSet};
 use parsley_rust::pcore::parsebuffer::{ParseBuffer, ParsleyParser, Location, LocatedVal};
-use parsley_rust::pcore::prim_binary::{BinaryMatcher, IntObj16, IntObj32, BitObj8};
+use parsley_rust::pcore::prim_binary::*;
 use parsley_rust::pcore::prim_combinators::{Sequence};
 use byteorder::{ByteOrder, BigEndian};
 
@@ -104,6 +104,13 @@ fn main() -> std::io::Result<()>{
         }
         (_,_) => print_usage(1)
     }
+        let mut character = TokenParser::new("\x01\x01", 2);
+        let mut v: Vec<u8> = Vec::new();
+        v.extend_from_slice("\x01\x02".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let val = vec![0];
+        let mut r = character.parse(&mut pb);
+        println!("---{:?}---", r);
     Ok(())
 }
 //let mut stream = TcpStream::connect("127.0.0.1:8000")?;
