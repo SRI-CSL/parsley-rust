@@ -1,5 +1,6 @@
 # README and Notes for Parsley Rust
 
+[![Build Status](https://travis-ci.com/SRI-CSL/parsley-rust.svg?token=o5TGhkjJAL4mzkVZNy5S&branch=master)](https://travis-ci.com/SRI-CSL/parsley-rust)
 
 ## Requirements
 
