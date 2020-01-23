@@ -15,4 +15,4 @@ cache: cargo
 
 script:
   - cargo build --verbose --all
-# TODO: after fixing 2 tests  - cargo test --verbose --all
+  - cargo test --verbose --all
