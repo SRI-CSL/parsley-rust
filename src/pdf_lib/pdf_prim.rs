@@ -320,7 +320,7 @@ impl ParsleyParser for RealP {
                         buf.set_cursor(start);
                         return Err(make_error(err, start, end));
                     }
-                    let num = tmp.unwrap();
+                    num = tmp.unwrap();
                     let tmp = i64::checked_add(num, i64::from(c - 48));
                     if let None = tmp {
                         let end = buf.get_cursor();
@@ -328,6 +328,7 @@ impl ParsleyParser for RealP {
                         buf.set_cursor(start);
                         return Err(make_error(err, start, end));
                     }
+                    num = tmp.unwrap();
                     let tmp = i64::checked_mul(den, 10);
                     if let None = tmp {
                         let end = buf.get_cursor();
