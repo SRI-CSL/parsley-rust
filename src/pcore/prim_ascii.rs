@@ -153,7 +153,7 @@ mod test_prim_ascii {
         assert_eq!(pb.get_cursor(), 1);
 
         let r = pb.parse_guarded::<AsciiCharPrimitive>(&mut |c: &char| { *c == 'A' });
-        let e = ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name());
+        let e = ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name().to_string());
         let e = Err(make_error(e, 1, 1));
         assert_eq!(r, e);
         // the cursor should not advance if the guard fails
@@ -204,7 +204,7 @@ mod test_ascii {
         pb.set_cursor(2);
         let r = ascii_parser.parse(&mut pb);
         // nul fails the guard test
-        let e = ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name());
+        let e = ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name().to_string());
         let e = Err(make_error(e, 2, 2));
         assert_eq!(r, e);
         // the cursor should not advance over the failed guard

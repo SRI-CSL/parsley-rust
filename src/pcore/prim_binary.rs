@@ -152,7 +152,7 @@ mod test_binary {
         let mut s = BinaryMatcher::new("%PDF-".as_bytes());
 
         let mut pb = ParseBuffer::new(Vec::from("".as_bytes()));
-        let e = make_error(ErrorKind::GuardError("match"), 0, 0);
+        let e = make_error(ErrorKind::GuardError("match".to_string()), 0, 0);
         assert_eq!(s.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
@@ -161,7 +161,7 @@ mod test_binary {
         assert_eq!(pb.get_cursor(), 5);
 
         let mut pb = ParseBuffer::new(Vec::from(" %PDF-".as_bytes()));
-        let e = make_error(ErrorKind::GuardError("match"), 0, 0);
+        let e = make_error(ErrorKind::GuardError("match".to_string()), 0, 0);
         assert_eq!(s.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
     }

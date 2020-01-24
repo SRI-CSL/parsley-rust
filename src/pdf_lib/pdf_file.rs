@@ -105,19 +105,19 @@ impl XrefEntP {
         let mut inf = buf.extract(10)?;
         let mut infs = String::new();
         if let Err(_) = inf.read_to_string(&mut infs) {
-            let err = ErrorKind::GuardError("bad xref ofs");
+            let err = ErrorKind::GuardError("bad xref ofs".to_string());
             let end = buf.get_cursor();
             return Err(make_error(err, start, end));
         }
         // check if all bytes read are digits
         if infs.matches(&mut |c: char| { c.is_ascii_digit() }).count() != 10 {
-            let err = ErrorKind::GuardError("bad format for xref ofs");
+            let err = ErrorKind::GuardError("bad format for xref ofs".to_string());
             let end = buf.get_cursor();
             return Err(make_error(err, start, end));
         }
         let inf = u64::from_str_radix(&infs, 10);
         if let Err(_) = inf {
-            let err = ErrorKind::GuardError("bad xref ofs conversion");
+            let err = ErrorKind::GuardError("bad xref ofs conversion".to_string());
             let end = buf.get_cursor();
             return Err(make_error(err, start, end));
         }
@@ -130,19 +130,19 @@ impl XrefEntP {
         let mut gen = buf.extract(5)?;
         let mut gens = String::new();
         if let Err(_) = gen.read_to_string(&mut gens) {
-            let err = ErrorKind::GuardError("bad xref gen");
+            let err = ErrorKind::GuardError("bad xref gen".to_string());
             let end = buf.get_cursor();
             return Err(make_error(err, start, end));
         }
         // check if all bytes read are digits
         if gens.matches(&mut |c: char| { c.is_ascii_digit() }).count() != 5 {
-            let err = ErrorKind::GuardError("bad format for xref gen");
+            let err = ErrorKind::GuardError("bad format for xref gen".to_string());
             let end = buf.get_cursor();
             return Err(make_error(err, start, end));
         }
         let gen = u64::from_str_radix(&gens, 10);
         if let Err(_) = gen {
-            let err = ErrorKind::GuardError("bad xref gen");
+            let err = ErrorKind::GuardError("bad xref gen".to_string());
             let end = buf.get_cursor();
             return Err(make_error(err, start, end));
         }
@@ -158,7 +158,7 @@ impl XrefEntP {
             102 => false,  // 'f'
             110 => true,   // 'n'
             _ => {
-                let err = ErrorKind::GuardError("bad xref code");
+                let err = ErrorKind::GuardError("bad xref code".to_string());
                 let end = buf.get_cursor();
                 return Err(make_error(err, start, end));
             }
@@ -167,7 +167,7 @@ impl XrefEntP {
         // Xrefent-specific EOL.
         let eol = buf.extract(2)?;
         if eol != " \r".as_bytes() && eol != " \n".as_bytes() && eol != "\r\n".as_bytes() {
-            let err = ErrorKind::GuardError("bad eol gen");
+            let err = ErrorKind::GuardError("bad eol gen".to_string());
             let end = buf.get_cursor();
             return Err(make_error(err, start, end));
         }
@@ -219,7 +219,7 @@ impl XrefSubSectP {
         let mut int = IntegerP;
         let xstart = u64::try_from(int.parse(buf)?.val().int_val());
         if let Err(_) = xstart {
-            let err = ErrorKind::GuardError("conversion error on xref-subsect start");
+            let err = ErrorKind::GuardError("conversion error on xref-subsect start".to_string());
             let end = buf.get_cursor();
             return Err(make_error(err, start, end));
         }
@@ -228,7 +228,7 @@ impl XrefSubSectP {
         let _ = buf.exact(" ".as_bytes())?;
         let xcount = u64::try_from(int.parse(buf)?.val().int_val());
         if let Err(_) = xcount {
-            let err = ErrorKind::GuardError("conversion error on xref-subsect count");
+            let err = ErrorKind::GuardError("conversion error on xref-subsect count".to_string());
             let end = buf.get_cursor();
             return Err(make_error(err, start, end));
         }
@@ -281,7 +281,7 @@ impl ParsleyParser for XrefSectP {
         ws.parse(buf)?;
 
         if let Err(_) = buf.exact("xref".as_bytes()) {
-            let err = ErrorKind::GuardError("not at xref");
+            let err = ErrorKind::GuardError("not at xref".to_string());
             let end = buf.get_cursor();
             return Err(make_error(err, start, end));
         }
@@ -348,7 +348,7 @@ impl ParsleyParser for BodyP<'_> {
             if let PDFObjT::Indirect(_) = o.val() {
                 objs.push(o)
             } else {
-                let err = ErrorKind::GuardError("non-indirect object in body");
+                let err = ErrorKind::GuardError("non-indirect object in body".to_string());
                 let end = buf.get_cursor();
                 return Err(make_error(err, start, end));
             }
@@ -385,7 +385,7 @@ impl ParsleyParser for TrailerP<'_> {
     fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         if let Err(_) = buf.exact("trailer".as_bytes()) {
-            let err = ErrorKind::GuardError("not at trailer");
+            let err = ErrorKind::GuardError("not at trailer".to_string());
             let end = buf.get_cursor();
             return Err(make_error(err, start, end));
         }
@@ -395,7 +395,7 @@ impl ParsleyParser for TrailerP<'_> {
         let mut dp = DictP::new(&mut self.ctxt);
         let dict = dp.parse(buf);
         if let Err(_) = dict {
-            let err = ErrorKind::GuardError("error parsing trailer dictionary");
+            let err = ErrorKind::GuardError("error parsing trailer dictionary".to_string());
             let end = buf.get_cursor();
             return Err(make_error(err, start, end));
         }
@@ -425,7 +425,7 @@ impl ParsleyParser for StartXrefP {
         let start = buf.get_cursor();
 
         if let Err(_) = buf.exact("startxref".as_bytes()) {
-            let err = ErrorKind::GuardError("not at startxref");
+            let err = ErrorKind::GuardError("not at startxref".to_string());
             let end = buf.get_cursor();
             return Err(make_error(err, start, end));
         }
@@ -435,7 +435,7 @@ impl ParsleyParser for StartXrefP {
         let mut int = IntegerP;
         let offset = u64::try_from(int.parse(buf)?.val().int_val());
         if let Err(_) = offset {
-            let err = ErrorKind::GuardError("conversion error on startxref");
+            let err = ErrorKind::GuardError("conversion error on startxref".to_string());
             let end = buf.get_cursor();
             return Err(make_error(err, start, end));
         }
@@ -508,7 +508,7 @@ mod test_pdf_file {
         let v = Vec::from("1234567890 12345 f  \r".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let ent = p.parse(&mut pb);
-        let e = make_error(ErrorKind::GuardError("bad eol gen"), 0, 0);
+        let e = make_error(ErrorKind::GuardError("bad eol gen".to_string()), 0, 0);
         assert_eq!(ent, Err(e));
     }
 

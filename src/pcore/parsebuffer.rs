@@ -114,12 +114,12 @@ impl<T> Location for LocatedVal<T>
 
 #[derive(Debug, PartialEq)]
 pub struct ParseError {
-    msg: &'static str
+    msg: String
 }
 
 impl ParseError {
-    pub fn new(msg: &'static str) -> ParseError {
-        ParseError { msg }
+    pub fn new(s: &str) -> ParseError {
+        ParseError { msg: String::from(s) }
     }
 }
 
@@ -164,7 +164,7 @@ pub enum ErrorKind {
     // Errors during unguarded primitive parsing.
     PrimitiveError(ParseError),
     // Errors during guarded primitive parsing.
-    GuardError(&'static str),
+    GuardError(String),
 }
 
 // function to report located errors with sensible location
@@ -264,7 +264,7 @@ impl ParseBuffer {
         let (t, consumed) = P::parse(&self.buf[self.ofs..])?;
         if !guard(&t) {
             let end = self.get_cursor();
-            let err = ErrorKind::GuardError(P::name());
+            let err = ErrorKind::GuardError(P::name().to_string());
             return Err(make_error(err, start, end));
         };
         self.ofs += consumed;
@@ -359,7 +359,7 @@ impl ParseBuffer {
             self.ofs = self.ofs + tag.len();
             Ok(true)
         } else {
-            Err(make_error(ErrorKind::GuardError("match"), start, start))
+            Err(make_error(ErrorKind::GuardError("match".to_string()), start, start))
         }
     }
 
