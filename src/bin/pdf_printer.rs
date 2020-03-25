@@ -286,7 +286,7 @@ fn parse_file(test_file: &str) {
                 }
             }
             PDFObjT::Stream(s) => {
-                log_obj("dict", o.as_ref() as &dyn Location, depth);
+                log_obj("stream", o.as_ref() as (&dyn Location), depth);
                 for (_, v) in s.dict().val().map().iter() {
                     // TODO: print key names
                     if !processed.contains(v) {
