@@ -152,7 +152,7 @@ fn parse_file(test_file: &str) {
     }
     let sxref = sxref.unwrap();
     ta3_log!(Level::Info, file_offset(sxref.loc_start()), " startxref span (in file-offsets): {}..{}.",
-          file_offset(sxref.loc_start()), file_offset(sxref.loc_end()));
+             file_offset(sxref.loc_start()), file_offset(sxref.loc_end()));
     let sxref = sxref.unwrap();
     let sxref_offset : usize = sxref.offset().try_into().unwrap();
     ta3_log!(Level::Info, file_offset(sxref_offset),
@@ -167,13 +167,15 @@ fn parse_file(test_file: &str) {
         panic!("Could not parse xref in {} at file-offset {} (pdf-offset {}): {}",
                display, file_offset(e.start()), e.start(), e.val());
     }
-    let xref = xref.unwrap().unwrap();
-    let mut offsets: Vec<usize> = Vec::new();
+
+    let xref_loc = xref.unwrap();
+    let xref_loc_end = xref_loc.end();
+    let xref = xref_loc.unwrap();
+    let mut offsets : Vec<usize> = Vec::new();
     for ls in xref.sects().iter() {
         let s = ls.val();
-        // TODO: for logging in TA3 format, need more accurate position:
-        //  is this ls.loc_start()??
-        ta3_log!(Level::Info, ls.loc_start(), "Found {} objects starting at {}:",
+        ta3_log!(Level::Info, file_offset(ls.loc_start()),
+                 "Found {} objects in xref section starting at object {}:",
                  s.count(), s.start());
         for o in s.ents() {
             match o.val() {
@@ -195,12 +197,11 @@ fn parse_file(test_file: &str) {
     // id of the Root object.
     match pb.scan("trailer".as_bytes()) {
         Ok(nbytes) =>
-        // TODO: for logging in TA3 format, need more accurate position:
-        //  nbytes + pos(end of xref table) as second argument?
-            ta3_log!(Level::Info, nbytes, "Found trailer {} bytes from end of xref table.", nbytes),
-        Err(e) => {
-            panic!("Cannot find trailer: {}", e.val());
-        }
+            ta3_log!(Level::Info, file_offset(xref_loc_end + nbytes),
+                     "Found trailer {} bytes from end of xref table.",
+                     nbytes),
+        Err(e)     =>
+            panic!("Cannot find trailer: {}", e.val())
     }
     let mut p = TrailerP::new(&mut ctxt);
     let trlr = p.parse(&mut pb);
@@ -315,11 +316,11 @@ fn parse_file(test_file: &str) {
                             obj_queue.push_back((Rc::clone(obj), depth + 1));
                             processed.insert(Rc::clone(obj));
                         }
-                    }
-                    None => {
-                        ta3_log!(Level::Warn, file_offset(loc.loc_start()),
-                            " ref ({},{}) does not point to a defined object!",
-                            r.num(), r.gen())
+                    },
+                    None      => {
+                        ta3_log!(Level::Warn, file_offset(o.start()),
+                                 " ref ({},{}) does not point to a defined object!",
+                                 r.num(), r.gen())
                     }
                 }
             }

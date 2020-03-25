@@ -187,7 +187,7 @@ impl XrefEntP {
 //   '\n'  // EOL-type is not specified in the spec.
 //
 //   { x.start := s.val;
-//      x.count := c.val }
+//     x.count := c.val }
 //
 //   ( e=XrefEnt [ x.ents.len() < x.count() ] { x.ents.append(e) } )* ;
 
