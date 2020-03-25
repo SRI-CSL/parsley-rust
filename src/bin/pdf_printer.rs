@@ -155,7 +155,7 @@ fn parse_file(test_file: &str) {
              file_offset(sxref.loc_start()), file_offset(sxref.loc_end()));
     let sxref = sxref.unwrap();
     let sxref_offset : usize = sxref.offset().try_into().unwrap();
-    ta3_log!(Level::Info, file_offset(sxref_offset),
+    ta3_log!(Level::Info, file_offset(sxref.loc_start()),
              "startxref points to file-offset {} (pdf-offset {}) for xref",
              file_offset(sxref_offset), sxref_offset);
 
