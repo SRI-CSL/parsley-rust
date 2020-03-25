@@ -132,7 +132,8 @@ fn parse_file(test_file: &str) {
         ta3_log!(Level::Info, file_offset(0), "No %%EOF in {}: {}", display, e.val());
     } else {
         let eof_ofs = buflen - eof.unwrap();
-        ta3_log!(Level::Info, file_offset(eof_ofs), "Found %%EOF at offset {}.", file_offset(eof_ofs));
+        ta3_log!(Level::Info, file_offset(eof_ofs), "Found %%EOF at file-offset {} (pdf-offset {}).",
+                 file_offset(eof_ofs), eof_ofs);
     }
 
     // Scan backward for startxref.
@@ -141,28 +142,30 @@ fn parse_file(test_file: &str) {
         panic!("Could not find startxref in {}: {}", display, e.val());
     }
     let sxref_ofs = buflen - sxref.unwrap();
-    ta3_log!(Level::Info, file_offset(sxref_ofs), "Found startxref at offset {}.", file_offset(sxref_ofs));
+    ta3_log!(Level::Info, file_offset(sxref_ofs), "Found startxref at file-offset {} (pdf-offset {}).",
+             file_offset(sxref_ofs), sxref_ofs);
     let mut p = StartXrefP;
     let sxref = p.parse(&mut pb);
     if let Err(e) = sxref {
-        panic!("Could not parse startxref in {} at pos {}: {}",
-               display, file_offset(e.start()), e.val());
+        panic!("Could not parse startxref in {} at file-offset {} (pdf-offset {}): {}",
+               display, file_offset(e.start()), e.start(), e.val());
     }
     let sxref = sxref.unwrap();
-    ta3_log!(Level::Info, file_offset(sxref.loc_start()), " startxref span: {}..{}.",
+    ta3_log!(Level::Info, file_offset(sxref.loc_start()), " startxref span (in file-offsets): {}..{}.",
           file_offset(sxref.loc_start()), file_offset(sxref.loc_end()));
     let sxref = sxref.unwrap();
-    ta3_log!(Level::Info, file_offset(sxref.offset().try_into().unwrap()),
-        "startxref points to offset {} for xref",
-        file_offset(sxref.offset().try_into().unwrap()));
+    let sxref_offset : usize = sxref.offset().try_into().unwrap();
+    ta3_log!(Level::Info, file_offset(sxref_offset),
+             "startxref points to file-offset {} (pdf-offset {}) for xref",
+             file_offset(sxref_offset), sxref_offset);
 
     // Parse xref at that offset.
     pb.set_cursor(sxref.offset().try_into().unwrap());
     let mut p = XrefSectP;
     let xref = p.parse(&mut pb);
     if let Err(e) = xref {
-        panic!("Could not parse xref in {} at pos {}: {}",
-               display, file_offset(e.start()), e.val());
+        panic!("Could not parse xref in {} at file-offset {} (pdf-offset {}): {}",
+               display, file_offset(e.start()), e.start(), e.val());
     }
     let xref = xref.unwrap().unwrap();
     let mut offsets: Vec<usize> = Vec::new();
@@ -170,7 +173,8 @@ fn parse_file(test_file: &str) {
         let s = ls.val();
         // TODO: for logging in TA3 format, need more accurate position:
         //  is this ls.loc_start()??
-        ta3_log!(Level::Info, ls.loc_start(), "Found {} objects starting at {}:", s.count(), s.start());
+        ta3_log!(Level::Info, ls.loc_start(), "Found {} objects starting at {}:",
+                 s.count(), s.start());
         for o in s.ents() {
             match o.val() {
                 XrefEntT::Inuse(x) => {
@@ -219,16 +223,16 @@ fn parse_file(test_file: &str) {
         pb.set_cursor((*o).try_into().unwrap());
         let lobj = p.parse(&mut pb);
         if let Err(e) = lobj {
-            panic!("Cannot parse object at offset {} in {}: {}",
-                   file_offset(e.start()), display, e.val());
+            panic!("Cannot parse object at file-offset {} (pdf-offset {}) in {}: {}",
+                   file_offset(e.start()), e.start(), display, e.val());
         }
         let obj = lobj.unwrap().unwrap();
         if let PDFObjT::Indirect(_) = obj {
             objs.push(obj)
         } else {
             ta3_log!(Level::Info, file_offset(*o),
-                "found non-indirect object at offset {}!",
-                file_offset(*o))
+                     "found non-indirect object at file-offset {} (pdf-offset {})!",
+                     file_offset(*o), *o)
         }
     }
 
@@ -253,8 +257,8 @@ fn parse_file(test_file: &str) {
 
     let log_obj = |t: &str, loc: &dyn Location, depth: u32| {
         ta3_log!(Level::Info, file_offset(loc.loc_start()),
-            "depth:{} type:{} start:{} end:{}  ",
-            depth, t, file_offset(loc.loc_start()), file_offset(loc.loc_end()))
+                 "depth:{} type:{} start-file-offset:{} end-file-offset:{}  ",
+                 depth, t, file_offset(loc.loc_start()), file_offset(loc.loc_end()))
     };
 
     let mut obj_queue = VecDeque::new();
