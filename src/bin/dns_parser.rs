@@ -77,12 +77,14 @@ fn main() -> std::io::Result<()>{
                                         let mut pb2 = ParseBuffer::new(value.payload.to_vec());
                                         let mut s3 = IntObj32::new();
                                         let mut s2 = IntObj32::new();
-                                        let mut s1 = BitObj8::new();
+                                        let mut s1 = IntObj7::new();
+                                        let mut s4 = IntObj1::new();
                                         let mut s = Sequence::new(&mut s1, &mut s2);
                                         let mut s_new = Sequence::new(&mut s, &mut s3);
                                         println!("{:?}", s_new.parse(&mut pb1));
                                         println!("{:?}", s1.parse(&mut pb2));
                                         println!("{:?}", s2.parse(&mut pb2));
+                                        println!("{:?}", s4.parse(&mut pb2));
                                         // insert all primes less than 10
 
                                     }
@@ -106,7 +108,7 @@ fn main() -> std::io::Result<()>{
     }
         let mut character = ABigInt::new();
         let mut v: Vec<u8> = Vec::new();
-        v.extend_from_slice("\x01\x02 ".as_bytes());
+        v.extend_from_slice("\x01\x02 \x05".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let mut r = character.parse(&mut pb);
         println!("---{:?}---", r);
