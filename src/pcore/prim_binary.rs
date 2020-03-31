@@ -17,12 +17,22 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 extern crate byteorder; // 1.3.1
+extern crate num_bigint;
 use byteorder::{ByteOrder, BigEndian};
 /// Primitives for handling binary data.
-use super::parsebuffer::{ParsleyParser, ParseBuffer, ParseResult, LocatedVal};
+use super::parsebuffer::{ParsleyParser, ParseBuffer, ParseResult, LocatedVal, ErrorKind};
 use std::slice;
 use bit_vec::BitVec;
 use bit_set::BitSet;
+
+// function to report located errors with sensible location
+pub fn make_error(val: ErrorKind, s: usize, e: usize) -> LocatedVal<ErrorKind> {
+    if s < e {
+        LocatedVal::new(val, s, e)
+    } else {
+        LocatedVal::new(val, e, s)
+    }
+}
 
 pub struct BinaryScanner {
     tag: Vec<u8>
@@ -100,6 +110,45 @@ impl ParsleyParser for BinaryMatcher {
    }
    */
 
+
+pub struct ABigInt {
+}
+
+impl ABigInt {
+    pub fn new() -> ABigInt {
+        ABigInt { }
+    }
+}
+
+impl ParsleyParser for ABigInt {
+    type T = LocatedVal<Vec<u8>>;
+
+    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let len  = buf.scan(" ".as_bytes())?;
+
+        if len == 0 {
+            buf.set_cursor(start);
+            return Err(make_error(ErrorKind::EndOfBuffer, 0, 0));;
+        }
+        let mut ret = Vec::new();
+        //ret.extend_from_slice(bytes);
+        let end = buf.get_cursor();
+        let start_cursor = buf.set_cursor(start);
+        use num_bigint::BigUint;
+        let err = ErrorKind::EndOfBuffer;
+        let mut bytes = buf.extract(len);
+        match &mut bytes {
+            Ok(val) => { 
+            println!("{:?}", val); 
+            //println!(BigUint::from_bytes_be(&mut bytes)); 
+            }
+            Err(val) => { make_error(err, start, start); }
+        }
+        println!("Bytes scanned is -- {:?}", bytes);
+        Ok(LocatedVal::new(ret, start, end))
+    }
+}
 pub struct CharParser {
     arg: char
 }

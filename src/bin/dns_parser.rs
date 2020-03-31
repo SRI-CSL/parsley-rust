@@ -104,11 +104,10 @@ fn main() -> std::io::Result<()>{
         }
         (_,_) => print_usage(1)
     }
-        let mut character = TokenParser::new("\x01\x01", 2);
+        let mut character = ABigInt::new();
         let mut v: Vec<u8> = Vec::new();
-        v.extend_from_slice("\x01\x02".as_bytes());
+        v.extend_from_slice("\x01\x02 ".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let val = vec![0];
         let mut r = character.parse(&mut pb);
         println!("---{:?}---", r);
     Ok(())
