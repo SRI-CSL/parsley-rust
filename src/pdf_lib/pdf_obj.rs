@@ -166,7 +166,12 @@ impl DictP<'_> {
                 let mut p = RawName;
                 let n = p.parse(buf)?;
                 if names.contains(n.val()) {
-                    let err = ErrorKind::GuardError("non-unique dictionary key".to_string());
+                    let n_str = match std::str::from_utf8(n.val()) {
+                        Ok(v)  => v.to_string(),
+                        Err(e) => format!("(error: cannot convert to UTF-8: {})", e)
+                    };
+                    let msg = format!("non-unique dictionary key: {}", n_str);
+                    let err = ErrorKind::GuardError(msg);
                     // TODO: need extensible error reporting
                     return Err(make_error_with_loc(err, &n));
                 }
@@ -268,7 +273,8 @@ impl IndirectP<'_> {
         let mut cursor = start;
         let num = int.parse(buf)?;
         if !num.val().is_positive() {
-            let err = ErrorKind::GuardError("invalid object id".to_string());
+            let msg = format!("invalid object id: {}", num.val().int_val());
+            let err = ErrorKind::GuardError(msg);
             buf.set_cursor(cursor);
             return Err(make_error_with_loc(err, &num));
         }
@@ -276,7 +282,8 @@ impl IndirectP<'_> {
         cursor = buf.get_cursor();
         let gen = int.parse(buf)?;
         if !(gen.val().is_zero() || gen.val().is_positive()) {
-            let err = ErrorKind::GuardError("invalid object generation".to_string());
+            let msg = format!("invalid object generation: {}", gen.val().int_val());
+            let err = ErrorKind::GuardError(msg);
             buf.set_cursor(cursor);
             return Err(make_error_with_loc(err, &gen));
         }
@@ -334,7 +341,9 @@ impl IndirectP<'_> {
         match self.ctxt.register_obj(&ind, Rc::clone(&obj)) {
             None => Ok(ind),
             Some(_) => {
-                let err = ErrorKind::GuardError("non-unique object id".to_string());
+                let msg = format!("non-unique object id ({}, {})",
+                                  num.val().int_val(), gen.val().int_val());
+                let err = ErrorKind::GuardError(msg);
                 let end = buf.get_cursor();
                 Err(make_error(err, start, end))
             }
@@ -381,7 +390,8 @@ impl ReferenceP {
         let mut cursor = buf.get_cursor();
         let num = int.parse(buf)?;
         if !num.val().is_positive() {
-            let err = ErrorKind::GuardError("invalid ref-object id".to_string());
+            let msg = format!("invalid ref-object id: {}", num.val().int_val());
+            let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             buf.set_cursor(cursor);
             return Err(make_error(err, cursor, end));
@@ -391,7 +401,8 @@ impl ReferenceP {
         cursor = buf.get_cursor();
         let gen = int.parse(buf)?;
         if !(gen.val().is_zero() || gen.val().is_positive()) {
-            let err = ErrorKind::GuardError("invalid ref-object generation".to_string());
+            let msg = format!("invalid ref-object generation: {}", gen.val().int_val());
+            let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             buf.set_cursor(cursor);
             return Err(make_error(err, cursor, end));
@@ -653,14 +664,14 @@ mod test_pdf_obj {
 //                         012345678901234567890
         let v = Vec::from("\r\n -1 0 R \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("invalid ref-object id".to_string()), 5, 7);
+        let e = make_error(ErrorKind::GuardError("invalid ref-object id: -1".to_string()), 5, 7);
         assert_eq!(p.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 3);
 
 //                         012345678901234567890
         let v = Vec::from("\r\n 1 -1 R \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("invalid ref-object generation".to_string()), 7, 9);
+        let e = make_error(ErrorKind::GuardError("invalid ref-object generation: -1".to_string()), 7, 9);
         assert_eq!(p.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 5);
     }
@@ -732,7 +743,7 @@ mod test_pdf_obj {
 
         let v = Vec::from("[ -1 0 R ] \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("invalid ref-object id".to_string()), 2, 4);
+        let e = make_error(ErrorKind::GuardError("invalid ref-object id: -1".to_string()), 2, 4);
         assert_eq!(p.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 2);
     }
@@ -774,7 +785,7 @@ mod test_pdf_obj {
 //                         0123456789012345678901234567890123456789012345678901234567890123
         let v = Vec::from("<< /Entry [ 1 0 R ] /Entry \r\n >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("non-unique dictionary key".to_string()), 20, 26);
+        let e = make_error(ErrorKind::GuardError("non-unique dictionary key: Entry".to_string()), 20, 26);
         assert_eq!(p.parse(&mut pb), Err(e));
     }
 
@@ -905,7 +916,7 @@ mod test_pdf_obj {
         let v = Vec::from("1 0 obj  \n<<  /Type 1 0 obj true endobj>>\nendobj".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
-        let e = make_error(ErrorKind::GuardError("non-unique object id".to_string()), 0, 0);
+        let e = make_error(ErrorKind::GuardError("non-unique object id (1, 0)".to_string()), 0, 0);
         assert_eq!(val, Err(e));
     }
 
