@@ -151,11 +151,12 @@ fn parse_file(test_file: &str) {
                display, file_offset(e.start()), e.start(), e.val());
     }
     let sxref = sxref.unwrap();
-    ta3_log!(Level::Info, file_offset(sxref.loc_start()), " startxref span (in file-offsets): {}..{}.",
+    let sxref_loc_start = sxref.loc_start();
+    ta3_log!(Level::Info, file_offset(sxref_loc_start), " startxref span (in file-offsets): {}..{}.",
              file_offset(sxref.loc_start()), file_offset(sxref.loc_end()));
     let sxref = sxref.unwrap();
     let sxref_offset : usize = sxref.offset().try_into().unwrap();
-    ta3_log!(Level::Info, file_offset(sxref.loc_start()),
+    ta3_log!(Level::Info, file_offset(sxref_loc_start),
              "startxref points to file-offset {} (pdf-offset {}) for xref",
              file_offset(sxref_offset), sxref_offset);
 
