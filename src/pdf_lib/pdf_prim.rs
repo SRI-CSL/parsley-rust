@@ -939,6 +939,12 @@ mod test_pdf_prim {
         assert!(r.unwrap().unwrap().is_zero());
         assert_eq!(pb.get_cursor(), 3);
 
+        let v = Vec::from(".01 ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let r = real.parse(&mut pb);
+        assert_eq!(r, Ok(LocatedVal::new(RealT(1, 100), 0, 3)));
+        assert_eq!(pb.get_cursor(), 3);
+
         let v = Vec::from("+0.0 ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let r = real.parse(&mut pb);
