@@ -222,7 +222,10 @@ fn parse_file(test_file: &str) {
     let mut objs = Vec::new();
     for o in offsets.iter() {
         let mut p = PDFObjP::new(&mut ctxt);
-        pb.set_cursor((*o).try_into().unwrap());
+        let ofs = (*o).try_into().unwrap();
+        ta3_log!(Level::Info, file_offset(ofs), "parsing object at file-offset {} (pdf-offset {})",
+                 file_offset(ofs), ofs);
+        pb.set_cursor(ofs);
         let lobj = p.parse(&mut pb);
         if let Err(e) = lobj {
             panic!("Cannot parse object at file-offset {} (pdf-offset {}) in {}: {}",
