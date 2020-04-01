@@ -495,7 +495,10 @@ impl PDFObjP<'_> {
                 }
             }
             Some(b) => {
-                if !b.is_ascii_digit() && b != 45 { // '-' to handle negative numbers
+                if !b.is_ascii_digit()
+                    && b != 45 // '-' to handle negative numbers
+                    && b != 46 // '.' to handle reals
+                {
                     let start = buf.get_cursor();
                     let err = ErrorKind::GuardError("not at PDF object".to_string());
                     return Err(make_error(err, start, start));
@@ -607,7 +610,7 @@ mod test_pdf_obj {
     use std::collections::BTreeMap;
     use super::super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal,
                                                   ErrorKind, make_error};
-    use super::super::pdf_prim::RealT;
+    use super::super::pdf_prim::{IntegerT, RealT};
     use super::{PDFObjContext, PDFObjP, PDFObjT, ReferenceT, ArrayT, DictT, IndirectT, StreamT};
 
     #[test]
@@ -660,6 +663,48 @@ mod test_pdf_obj {
         let e = make_error(ErrorKind::GuardError("invalid ref-object generation".to_string()), 7, 9);
         assert_eq!(p.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 5);
+    }
+
+    #[test]
+    fn numbers() {
+        let mut ctxt = PDFObjContext::new();
+        let mut p = PDFObjP::new(&mut ctxt);
+
+        let v = Vec::from("1\r\n".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let val = PDFObjT::Integer(IntegerT::new(1));
+        assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 0, 1)));
+        assert_eq!(pb.get_cursor(), 1);
+
+        let v = Vec::from("-1\r\n".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let val = PDFObjT::Integer(IntegerT::new(-1));
+        assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 0, 2)));
+        assert_eq!(pb.get_cursor(), 2);
+
+        let v = Vec::from("0.1\r\n".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let val = PDFObjT::Real(RealT::new(1, 10));
+        assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 0, 3)));
+        assert_eq!(pb.get_cursor(), 3);
+
+        let v = Vec::from("-0.1\r\n".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let val = PDFObjT::Real(RealT::new(-1, 10));
+        assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 0, 4)));
+        assert_eq!(pb.get_cursor(), 4);
+
+        let v = Vec::from(".1\r\n".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let val = PDFObjT::Real(RealT::new(1, 10));
+        assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 0, 2)));
+        assert_eq!(pb.get_cursor(), 2);
+
+        let v = Vec::from("-.1\r\n".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let val = PDFObjT::Real(RealT::new(-1, 10));
+        assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 0, 3)));
+        assert_eq!(pb.get_cursor(), 3);
     }
 
     #[test]
