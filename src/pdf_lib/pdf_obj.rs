@@ -44,7 +44,7 @@ impl Location for PDFLocation {
 // This keeps track of information collected during parsing.
 
 pub struct PDFObjContext {
-    defns: BTreeMap<(i64, i64), Rc<LocatedVal<PDFObjT>>>
+    defns: BTreeMap<(usize, usize), Rc<LocatedVal<PDFObjT>>>
 }
 
 impl PDFObjContext {
@@ -55,7 +55,7 @@ impl PDFObjContext {
                         -> Option<Rc<LocatedVal<PDFObjT>>> {
         self.defns.insert((p.num(), p.gen()), o)
     }
-    pub fn lookup_obj(&self, oid: (i64, i64)) -> Option<&Rc<LocatedVal<PDFObjT>>> {
+    pub fn lookup_obj(&self, oid: (usize, usize)) -> Option<&Rc<LocatedVal<PDFObjT>>> {
         self.defns.get(&oid)
     }
 }
@@ -243,17 +243,17 @@ impl StreamT {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct IndirectT {
-    num: i64,
-    gen: i64,
+    num: usize,
+    gen: usize,
     obj: Rc<LocatedVal<PDFObjT>>,
 }
 
 impl IndirectT {
-    pub fn new(num: i64, gen: i64, obj: Rc<LocatedVal<PDFObjT>>) -> IndirectT {
+    pub fn new(num: usize, gen: usize, obj: Rc<LocatedVal<PDFObjT>>) -> IndirectT {
         IndirectT { num, gen, obj }
     }
-    pub fn num(&self) -> i64 { self.num }
-    pub fn gen(&self) -> i64 { self.gen }
+    pub fn num(&self) -> usize { self.num }
+    pub fn gen(&self) -> usize { self.gen }
     pub fn obj(&self) -> &Rc<LocatedVal<PDFObjT>> { &self.obj }
 }
 
@@ -337,7 +337,7 @@ impl IndirectP<'_> {
         }
 
         let obj = Rc::new(obj);
-        let ind = IndirectT::new(num.val().int_val(), gen.val().int_val(), Rc::clone(&obj));
+        let ind = IndirectT::new(num.val().usize_val(), gen.val().usize_val(), Rc::clone(&obj));
         match self.ctxt.register_obj(&ind, Rc::clone(&obj)) {
             None => Ok(ind),
             Some(old) => {
@@ -369,17 +369,17 @@ impl IndirectP<'_> {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ReferenceT {
-    num: i64,
-    gen: i64,
+    num: usize,
+    gen: usize,
 }
 
 impl ReferenceT {
-    pub fn new(num: i64, gen: i64) -> ReferenceT {
+    pub fn new(num: usize, gen: usize) -> ReferenceT {
         ReferenceT { num, gen }
     }
-    pub fn num(&self) -> i64 { self.num }
-    pub fn gen(&self) -> i64 { self.gen }
-    pub fn id(&self) -> (i64, i64) { (self.num, self.gen) }
+    pub fn num(&self) -> usize { self.num }
+    pub fn gen(&self) -> usize { self.gen }
+    pub fn id(&self) -> (usize, usize) { (self.num, self.gen) }
 }
 
 struct ReferenceP;
@@ -417,7 +417,7 @@ impl ReferenceP {
 
         // TODO: update refs
 
-        Ok(ReferenceT::new(num.val().int_val(), gen.val().int_val()))
+        Ok(ReferenceT::new(num.val().usize_val(), gen.val().usize_val()))
     }
 }
 

@@ -18,6 +18,7 @@
 
 /// Basic primitive (non-compound or non-recursive) PDF objects.
 
+use std::convert::TryFrom;
 use std::collections::HashSet;
 use super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal,
                                        ParseResult, ErrorKind, make_error};
@@ -180,6 +181,11 @@ impl IntegerT {
     }
     pub fn int_val(&self) -> i64 {
         self.0
+    }
+    pub fn usize_val(&self) -> usize {
+        let u = <usize as TryFrom::<i64>>::try_from(self.0);
+        // TODO: handle conversion errors.
+        u.unwrap()
     }
     pub fn is_zero(&self) -> bool {
         self.0 == 0
