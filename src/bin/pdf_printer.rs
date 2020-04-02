@@ -25,7 +25,6 @@ extern crate log_panics;
 
 use env_logger::Builder;
 use log::{Level, LevelFilter};
-use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
 use std::env;
@@ -79,10 +78,8 @@ fn parse_file(test_file: &str) {
 
     // Open the path in read-only mode, returns `io::Result<File>`
     let mut file = match File::open(&path.as_path()) {
-        // The `description` method of `io::Error` returns a string that
-        // describes the error
         Err(why) => {
-            panic!("Couldn't open {}: {}", display, why.description());
+            panic!("Couldn't open {}: {}", display, why.to_string());
         }
         Ok(file) => file,
     };
@@ -91,7 +88,7 @@ fn parse_file(test_file: &str) {
     let mut v = Vec::new();
     match file.read_to_end(&mut v) {
         Err(why) => {
-            panic!("Couldn't read {}: {}", display, why.description());
+            panic!("Couldn't read {}: {}", display, why.to_string());
         }
         Ok(_) => ()
     };
@@ -299,7 +296,7 @@ fn parse_file(test_file: &str) {
                 }
             }
             PDFObjT::Stream(s) => {
-                log_obj("stream", o.as_ref() as (&dyn Location), depth);
+                log_obj("stream", o.as_ref() as &dyn Location, depth);
                 for (_, v) in s.dict().val().map().iter() {
                     // TODO: print key names
                     if !processed.contains(v) {
