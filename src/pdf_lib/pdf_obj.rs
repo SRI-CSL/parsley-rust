@@ -340,9 +340,11 @@ impl IndirectP<'_> {
         let ind = IndirectT::new(num.val().int_val(), gen.val().int_val(), Rc::clone(&obj));
         match self.ctxt.register_obj(&ind, Rc::clone(&obj)) {
             None => Ok(ind),
-            Some(_) => {
-                let msg = format!("non-unique object id ({}, {})",
-                                  num.val().int_val(), gen.val().int_val());
+            Some(old) => {
+                // Note that this location is inside any 'n g obj' prefix for the indirect object.
+                let loc = old.start();
+                let msg = format!("non-unique object id ({}, {}), first found near offset {}",
+                                  num.val().int_val(), gen.val().int_val(), loc);
                 let err = ErrorKind::GuardError(msg);
                 let end = buf.get_cursor();
                 Err(make_error(err, start, end))
@@ -916,7 +918,7 @@ mod test_pdf_obj {
         let v = Vec::from("1 0 obj  \n<<  /Type 1 0 obj true endobj>>\nendobj".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
-        let e = make_error(ErrorKind::GuardError("non-unique object id (1, 0)".to_string()), 0, 0);
+        let e = make_error(ErrorKind::GuardError("non-unique object id (1, 0), first found near offset 28".to_string()), 0, 0);
         assert_eq!(val, Err(e));
     }
 
