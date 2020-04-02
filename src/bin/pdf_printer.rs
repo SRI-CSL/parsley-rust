@@ -172,17 +172,17 @@ fn parse_file(test_file: &str) {
     let xref_loc = xref.unwrap();
     let (xref_loc_start, xref_loc_end) = (xref_loc.start(), xref_loc.end());
     let xref = xref_loc.unwrap();
-    let mut offsets : Vec<usize> = Vec::new();
+    let mut id_offsets : Vec<((usize, usize), usize)> = Vec::new();
     for ls in xref.sects().iter() {
         let s = ls.val();
         ta3_log!(Level::Info, file_offset(xref_loc_start),
                  "Found {} objects in xref section starting at object {}:",
                  s.count(), s.start());
-        for o in s.ents() {
+        for (idx, o) in s.ents().iter().enumerate() {
             match o.val() {
                 XrefEntT::Inuse(x) => {
                     ta3_log!(Level::Info, file_offset(o.loc_start()), "   inuse object at {}.", x.info());
-                    offsets.push(x.info().try_into().unwrap())
+                    id_offsets.push(((s.start() + idx, x.gen()), x.info().try_into().unwrap()))
                 }
                 XrefEntT::Free(x) => {
                     ta3_log!(Level::Info, file_offset(o.loc_start()), "   free object (next is {}).", x.info())
@@ -220,11 +220,11 @@ fn parse_file(test_file: &str) {
     // Now get the outermost objects at each offset in the xref table.
     let mut ctxt = PDFObjContext::new();
     let mut objs = Vec::new();
-    for o in offsets.iter() {
+    for (id, o) in id_offsets.iter() {
         let mut p = PDFObjP::new(&mut ctxt);
         let ofs = (*o).try_into().unwrap();
-        ta3_log!(Level::Info, file_offset(ofs), "parsing object at file-offset {} (pdf-offset {})",
-                 file_offset(ofs), ofs);
+        ta3_log!(Level::Info, file_offset(ofs), "parsing object ({},{}) at file-offset {} (pdf-offset {})",
+                 id.0, id.1, file_offset(ofs), ofs);
         pb.set_cursor(ofs);
         let lobj = p.parse(&mut pb);
         if let Err(e) = lobj {
@@ -232,7 +232,11 @@ fn parse_file(test_file: &str) {
                    file_offset(e.start()), e.start(), display, e.val());
         }
         let obj = lobj.unwrap().unwrap();
-        if let PDFObjT::Indirect(_) = obj {
+        if let PDFObjT::Indirect(ref io) = obj {
+            if (io.num(), io.gen()) != *id {
+                panic!("unexpected object ({},{}) found: expected ({},{}) from xref entry",
+                       io.num(), io.gen(), id.0, id.1)
+            }
             objs.push(obj)
         } else {
             ta3_log!(Level::Info, file_offset(*o),
