@@ -207,6 +207,7 @@ fn parse_file(test_file: &str) {
         panic!("Cannot parse trailer: {}", e.val());
     }
     let trlr = trlr.unwrap().unwrap();
+    // TODO: this constraint should be enforced in the library.
     let root_ref = match trlr.dict().get("Root".as_bytes()) {
         Some(rt) => rt,
         None => {
@@ -229,6 +230,8 @@ fn parse_file(test_file: &str) {
                    file_offset(e.start()), e.start(), display, e.val());
         }
         let obj = lobj.unwrap().unwrap();
+        // Validate that the object is what we expect.
+        // TODO: this constraint should be enforced in the library.
         if let PDFObjT::Indirect(ref io) = obj {
             if (io.num(), io.gen()) != *id {
                 panic!("unexpected object ({},{}) found: expected ({},{}) from xref entry",
@@ -244,6 +247,7 @@ fn parse_file(test_file: &str) {
 
     let root_obj: &Rc<LocatedVal<PDFObjT>> =
         if let PDFObjT::Reference(r) = root_ref.val() {
+            // TODO: this constraint should be enforced in the library.
             match ctxt.lookup_obj(r.id()) {
                 Some(obj) => obj,
                 None => {
