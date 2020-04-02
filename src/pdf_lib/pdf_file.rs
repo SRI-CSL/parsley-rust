@@ -76,13 +76,13 @@ impl ParsleyParser for HeaderP {
 
 #[derive(Debug, PartialEq)]
 pub struct XrefT {
-    info: u64,
-    gen: u64,
+    info: usize,
+    gen: usize,
 }
 
 impl XrefT {
-    pub fn info(&self) -> u64 { self.info }
-    pub fn gen(&self) -> u64 { self.gen }
+    pub fn info(&self) -> usize { self.info }
+    pub fn gen(&self) -> usize { self.gen }
 }
 
 #[derive(Debug, PartialEq)]
@@ -115,7 +115,7 @@ impl XrefEntP {
             let end = buf.get_cursor();
             return Err(make_error(err, start, end));
         }
-        let inf = u64::from_str_radix(&infs, 10);
+        let inf = usize::from_str_radix(&infs, 10);
         if let Err(_) = inf {
             let err = ErrorKind::GuardError("bad xref ofs conversion".to_string());
             let end = buf.get_cursor();
@@ -140,7 +140,7 @@ impl XrefEntP {
             let end = buf.get_cursor();
             return Err(make_error(err, start, end));
         }
-        let gen = u64::from_str_radix(&gens, 10);
+        let gen = usize::from_str_radix(&gens, 10);
         if let Err(_) = gen {
             let err = ErrorKind::GuardError("bad xref gen".to_string());
             let end = buf.get_cursor();
@@ -193,14 +193,14 @@ impl XrefEntP {
 
 #[derive(Debug, PartialEq)]
 pub struct XrefSubSectT {
-    start: u64,
-    count: u64,
+    start: usize,
+    count: usize,
     ents: Vec<LocatedVal<XrefEntT>>,
 }
 
 impl XrefSubSectT {
-    pub fn start(&self) -> u64 { self.start }
-    pub fn count(&self) -> u64 { self.count }
+    pub fn start(&self) -> usize { self.start }
+    pub fn count(&self) -> usize { self.count }
     pub fn ents(&self) -> &[LocatedVal<XrefEntT>] { self.ents.as_slice() }
 }
 
@@ -217,7 +217,7 @@ impl XrefSubSectP {
         ws.parse(buf)?;
 
         let mut int = IntegerP;
-        let xstart = u64::try_from(int.parse(buf)?.val().int_val());
+        let xstart = usize::try_from(int.parse(buf)?.val().int_val());
         if let Err(_) = xstart {
             let err = ErrorKind::GuardError("conversion error on xref-subsect start".to_string());
             let end = buf.get_cursor();
@@ -226,7 +226,7 @@ impl XrefSubSectP {
         let xstart = xstart.unwrap();
 
         let _ = buf.exact(" ".as_bytes())?;
-        let xcount = u64::try_from(int.parse(buf)?.val().int_val());
+        let xcount = usize::try_from(int.parse(buf)?.val().int_val());
         if let Err(_) = xcount {
             let err = ErrorKind::GuardError("conversion error on xref-subsect count".to_string());
             let end = buf.get_cursor();
@@ -407,11 +407,11 @@ impl ParsleyParser for TrailerP<'_> {
 
 #[derive(Debug, PartialEq)]
 pub struct StartXrefT {
-    offset: u64
+    offset: usize
 }
 
 impl StartXrefT {
-    pub fn offset(&self) -> u64 { self.offset }
+    pub fn offset(&self) -> usize { self.offset }
 }
 
 pub struct StartXrefP;
@@ -433,7 +433,7 @@ impl ParsleyParser for StartXrefP {
         ws.parse(buf)?;
 
         let mut int = IntegerP;
-        let offset = u64::try_from(int.parse(buf)?.val().int_val());
+        let offset = usize::try_from(int.parse(buf)?.val().int_val());
         if let Err(_) = offset {
             let err = ErrorKind::GuardError("conversion error on startxref".to_string());
             let end = buf.get_cursor();
