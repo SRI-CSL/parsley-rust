@@ -197,10 +197,28 @@ pub struct XrefSubSectT {
     ents: Vec<LocatedVal<XrefEntT>>,
 }
 
+#[derive(Debug, PartialEq)]
+pub enum InvalidXrefSubSect {
+    Entry(usize),
+    Count(usize,usize),
+}
+
 impl XrefSubSectT {
     pub fn start(&self) -> usize { self.start }
     pub fn count(&self) -> usize { self.count }
-    pub fn ents(&self) -> &[LocatedVal<XrefEntT>] { self.ents.as_slice() }
+    pub fn ents(&self)  -> &[LocatedVal<XrefEntT>] { self.ents.as_slice() }
+
+    pub fn is_valid(&self) -> Option<InvalidXrefSubSect> {
+        for (i, e) in self.ents().iter().enumerate() {
+            if e.val().is_valid() { continue }
+            return Some(InvalidXrefSubSect::Entry(i))
+        }
+        // Each subsection should have the advertized number of entries.
+        if self.ents.len() != self.count {
+            return Some(InvalidXrefSubSect::Count(self.ents.len(), self.count))
+        }
+        None
+    }
 }
 
 struct XrefSubSectP;
@@ -261,8 +279,84 @@ pub struct XrefSectT {
     sects: Vec<LocatedVal<XrefSubSectT>>
 }
 
+#[derive(Debug, PartialEq)]
+pub enum InvalidXrefSect {
+    SubSect(usize, InvalidXrefSubSect),  // invalid subsection
+    ObjectNotFree(usize),                // in-use object that is on free linked list
+    BadDeadObject(usize),                // invalid link or generation
+    NonCircularFreeList                  // invalid tail pointer
+}
+
+pub struct XrefSectEntIterator<'a> {
+    subsect: usize,
+    idx: usize,
+    xref: &'a XrefSectT
+}
+
 impl XrefSectT {
     pub fn sects(&self) -> &[LocatedVal<XrefSubSectT>] { self.sects.as_slice() }
+
+    pub fn ent_iter(&self) -> XrefSectEntIterator {
+        XrefSectEntIterator { subsect: 0, idx: 0, xref: self }
+    }
+
+    pub fn is_valid(&self) -> Option<InvalidXrefSect> {
+        // Each subsection should be valid.
+        for (i, ls) in self.sects.iter().enumerate() {
+            let ss = ls.val();
+            let v = ss.is_valid();
+            if v.is_some() {
+                return Some(InvalidXrefSect::SubSect(i, v.unwrap()))
+            }
+        }
+
+        // First entry should be free and the head of the free entry linked list.
+        // This linked list should be circular, with the tail pointing to the 0'th entry.
+        // Each free entry not on linked list should have gen == 65535, and link to entry 0
+        let mut next_free = 0;
+        for (o, ent) in self.ent_iter() {
+            if o == next_free {
+                if ent.in_use() {
+                    return Some(InvalidXrefSect::ObjectNotFree(o))
+                }
+                next_free = ent.info();
+                continue;
+            }
+            if !ent.in_use() {
+                // Not on the linked list.
+                if ent.gen() != 65535 || ent.info() != 0 {
+                    return Some(InvalidXrefSect::BadDeadObject(o))
+                }
+            }
+        }
+        if next_free != 0 {
+            return Some(InvalidXrefSect::NonCircularFreeList)
+        }
+        None
+    }
+}
+
+impl<'a> Iterator for XrefSectEntIterator<'a> {
+    type Item = (usize, XrefEntT);  // object number and its entry
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if self.subsect >= self.xref.sects().len() {
+                break;
+            }
+            let ss = self.xref.sects()[self.subsect].val();
+            if self.idx >= ss.count() {
+                self.subsect += 1;
+                self.idx = 0;
+                continue;
+            }
+            let ent = ss.ents()[self.idx].val();
+            let obj = ss.start() + self.idx;
+            self.idx += 1;
+            return Some((obj, *ent))
+        }
+        None
+    }
 }
 
 pub struct XrefSectP;
@@ -454,6 +548,7 @@ mod test_pdf_file {
     use super::super::super::pdf_lib::pdf_prim::IntegerT;
     use super::{HeaderT, HeaderP, BodyT, BodyP, StartXrefT, StartXrefP, TrailerT, TrailerP};
     use super::{XrefEntT, XrefEntP, XrefSubSectT, XrefSubSectP, XrefSectT, XrefSectP};
+    use super::{InvalidXrefSect};
 
     #[test]
     fn test_header() {
@@ -490,18 +585,21 @@ mod test_pdf_file {
         let ent = p.parse(&mut pb);
         let xref = XrefEntT { info: 1234567890, gen: 12345, in_use: false };
         assert_eq!(ent, Ok(LocatedVal::new(xref, 0, 20)));
+        assert!(ent.unwrap().val().is_valid());
         //                 01234567890123456789012345678
         let v = Vec::from("1234567890 12345 n \n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let ent = p.parse(&mut pb);
         let xref = XrefEntT { info: 1234567890, gen: 12345, in_use: true };
         assert_eq!(ent, Ok(LocatedVal::new(xref, 0, 20)));
+        assert!(ent.unwrap().val().is_valid());
         //                 01234567890123456789012345678
         let v = Vec::from("1234567890 12345 f \r".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let ent = p.parse(&mut pb);
         let xref = XrefEntT { info: 1234567890, gen: 12345, in_use: false };
         assert_eq!(ent, Ok(LocatedVal::new(xref, 0, 20)));
+        assert!(ent.unwrap().val().is_valid());
 
         // bad eol
         let v = Vec::from("1234567890 12345 f  \r".as_bytes());
@@ -509,6 +607,15 @@ mod test_pdf_file {
         let ent = p.parse(&mut pb);
         let e = make_error(ErrorKind::GuardError("bad eol gen".to_string()), 0, 0);
         assert_eq!(ent, Err(e));
+
+        // bad generation
+        //                 01234567890123456789012345678
+        let v = Vec::from("1234567890 65536 f \r".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let ent = p.parse(&mut pb);
+        let xref = XrefEntT { info: 1234567890, gen: 65536, in_use: false };
+        assert_eq!(ent, Ok(LocatedVal::new(xref, 0, 20)));
+        assert!(!ent.unwrap().val().is_valid());
     }
 
     #[test]
@@ -521,6 +628,7 @@ mod test_pdf_file {
         let xref = LocatedVal::new(XrefEntT { info: 1234567890, gen: 12345, in_use: false }, 4, 24);
         let s = XrefSubSectT { start: 0, count: 1, ents: vec![xref] };
         assert_eq!(val, Ok(LocatedVal::new(s, 0, 24)));
+        assert!(val.unwrap().val().is_valid().is_none());
 
         // leading and trailing space on leading line
         //                 01234567890123456789012345678901
@@ -530,6 +638,7 @@ mod test_pdf_file {
         let xref = LocatedVal::new(XrefEntT { info: 1234567890, gen: 12345, in_use: false }, 7, 27);
         let s = XrefSubSectT { start: 0, count: 1, ents: vec![xref] };
         assert_eq!(val, Ok(LocatedVal::new(s, 0, 27)));
+        assert!(val.unwrap().val().is_valid().is_none());
     }
 
     #[test]
@@ -544,6 +653,7 @@ mod test_pdf_file {
         let ssect = LocatedVal::new(XrefSubSectT { start: 0, count: 1, ents: vec![xref] }, 5, 29);
         let s = XrefSectT { sects: vec![ssect] };
         assert_eq!(val, Ok(LocatedVal::new(s, 0, 29)));
+        assert_eq!(val.unwrap().val().is_valid(), Some(InvalidXrefSect::NonCircularFreeList));
 
         // different leading eol, and terminate with trailer
         //                           1         2         3         4
@@ -555,6 +665,7 @@ mod test_pdf_file {
         let ssect = LocatedVal::new(XrefSubSectT { start: 0, count: 1, ents: vec![xref] }, 6, 30);
         let s = XrefSectT { sects: vec![ssect] };
         assert_eq!(val, Ok(LocatedVal::new(s, 0, 30)));
+        assert_eq!(val.unwrap().val().is_valid(), Some(InvalidXrefSect::NonCircularFreeList));
 
         // snippet from hello-world pdf.
 //01234
@@ -589,6 +700,7 @@ mod test_pdf_file {
         let ssect = LocatedVal::new(XrefSubSectT { start: 0, count: 6, ents }, 5, 129);
         let s = LocatedVal::new(XrefSectT { sects: vec![ssect] }, 0, 129);
         assert_eq!(val, Ok(s));
+        assert!(val.unwrap().val().is_valid().is_none());
     }
 
     #[test]
