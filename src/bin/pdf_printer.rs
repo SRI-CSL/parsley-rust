@@ -35,7 +35,7 @@ use std::rc::Rc;
 use std::convert::TryInto;
 use std::collections::{VecDeque, BTreeSet};
 use parsley_rust::pcore::parsebuffer::{ParseBuffer, ParsleyParser, Location, LocatedVal};
-use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, XrefSectP, XrefEntT, TrailerP};
+use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, XrefSectP, TrailerP};
 use parsley_rust::pdf_lib::pdf_obj::{PDFObjT, PDFObjP, PDFObjContext};
 
 /* from: https://osr.jpl.nasa.gov/wiki/pages/viewpage.action?spaceKey=SD&title=TA2+PDF+Safe+Parser+Evaluation
@@ -176,14 +176,14 @@ fn parse_file(test_file: &str) {
                  "Found {} objects in xref section starting at object {}:",
                  s.count(), s.start());
         for (idx, o) in s.ents().iter().enumerate() {
-            match o.val() {
-                XrefEntT::Inuse(x) => {
-                    ta3_log!(Level::Info, file_offset(o.loc_start()), "   inuse object at {}.", x.info());
-                    id_offsets.push(((s.start() + idx, x.gen()), x.info().try_into().unwrap()))
-                }
-                XrefEntT::Free(x) => {
-                    ta3_log!(Level::Info, file_offset(o.loc_start()), "   free object (next is {}).", x.info())
-                }
+            let ent = o.val();
+            if ent.in_use() {
+                ta3_log!(Level::Info, file_offset(o.loc_start()), "   inuse object at {}.",
+                         ent.info());
+                id_offsets.push(((s.start() + idx, ent.gen()), ent.info().try_into().unwrap()))
+            } else {
+                ta3_log!(Level::Info, file_offset(o.loc_start()), "   free object (next is {}).",
+                         ent.info())
             }
         }
     }
