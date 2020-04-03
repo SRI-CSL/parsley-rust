@@ -18,6 +18,7 @@
 
 /// File structure of PDF
 
+use std::fmt;
 use std::io::Read;
 // for read_to_string()
 use std::convert::TryFrom;
@@ -200,7 +201,18 @@ pub struct XrefSubSectT {
 #[derive(Debug, PartialEq)]
 pub enum InvalidXrefSubSect {
     Entry(usize),
-    Count(usize,usize),
+    Count(usize,usize)
+}
+
+impl fmt::Display for InvalidXrefSubSect {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Entry(e) =>
+                write!(f, "invalid entry at {}", e),
+            Self::Count(fnd, exp) =>
+                write!(f, "{} entries found, {} expected", fnd, exp)
+        }
+    }
 }
 
 impl XrefSubSectT {
@@ -287,6 +299,21 @@ pub enum InvalidXrefSect {
     ObjectNotFree(usize),                // in-use object that is on free linked list
     BadDeadObject(usize),                // invalid link or generation
     NonCircularFreeList                  // invalid tail pointer
+}
+
+impl fmt::Display for InvalidXrefSect {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::SubSect(n, ss_err) =>
+                write!(f, "invalid xref subsection #{}: {}", n, ss_err),
+            Self::ObjectNotFree(n) =>
+                write!(f, "in-use object {} is on xref free list", n),
+            Self::BadDeadObject(n) =>
+                write!(f, "free object {} not on free list is not a valid dead object", n),
+            Self::NonCircularFreeList =>
+                write!(f, "xref free entry list is not circular")
+        }
+    }
 }
 
 pub struct XrefSectEntIterator<'a> {

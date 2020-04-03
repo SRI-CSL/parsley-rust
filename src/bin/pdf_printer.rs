@@ -169,6 +169,9 @@ fn parse_file(test_file: &str) {
     let xref_loc = xref.unwrap();
     let (xref_loc_start, xref_loc_end) = (xref_loc.start(), xref_loc.end());
     let xref = xref_loc.unwrap();
+    if let Some(err) = xref.is_valid() {
+        panic!("Invalid xref table found: {}", err)
+    }
     let mut id_offsets : Vec<((usize, usize), usize)> = Vec::new();
     for ls in xref.sects().iter() {
         let s = ls.val();
