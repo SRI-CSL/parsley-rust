@@ -29,19 +29,19 @@ impl ParsleyPrimitive for AsciiCharPrimitive {
 
     fn parse(buf: &[u8]) -> ParseResult<(Self::T, usize)> {
         if buf.len() < 1 {
-            return Err(LocatedVal::new(ErrorKind::EndOfBuffer, 0, 0));
+            return Err(LocatedVal::new(ErrorKind::EndOfBuffer, 0, 0))
         }
         let c = char::try_from(buf[0]);
         // check this: we should never get the below error from
         // non-empty buffers, as all u8 should be convertible to char.
         if c.is_err() {
             let err = ErrorKind::PrimitiveError(ParseError::new("ascii-prim: invalid character"));
-            return Err(LocatedVal::new(err, 0, 0));
+            return Err(LocatedVal::new(err, 0, 0))
         }
         let c = c.unwrap();
         if !c.is_ascii() {
             let err = ErrorKind::PrimitiveError(ParseError::new("ascii-prim: invalid ascii character"));
-            return Err(LocatedVal::new(err, 0, 0));
+            return Err(LocatedVal::new(err, 0, 0))
         }
         Ok((c, 1))
     }

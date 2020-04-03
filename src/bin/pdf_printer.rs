@@ -277,7 +277,7 @@ fn parse_file(test_file: &str) {
     processed.insert(Rc::clone(root_obj));
     while obj_queue.len() > 0 {
         let o = obj_queue.pop_front();
-        if o.is_none() { break; };
+        if o.is_none() { break };
         let (o, depth) = o.unwrap();
 
         match o.val() {

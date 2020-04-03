@@ -18,7 +18,6 @@
 
 /// Basic parsing buffer manager, and the traits defining the parsing interface.
 
-use std::error::Error;
 use std::cmp::{PartialEq, PartialOrd, Ordering};
 use std::borrow::Borrow;
 use std::hash::{Hash, Hasher};
@@ -190,16 +189,6 @@ impl fmt::Display for ErrorKind {
     }
 }
 
-impl Error for ErrorKind {
-    fn description(&self) -> &str {
-        match self {
-            ErrorKind::EndOfBuffer => "end of buffer",
-            ErrorKind::PrimitiveError(ParseError { msg }) => msg,
-            ErrorKind::GuardError(_prim) => "primitive guard error",
-        }
-    }
-}
-
 impl From<ParseError> for ErrorKind {
     fn from(err: ParseError) -> ErrorKind {
         ErrorKind::PrimitiveError(err)
@@ -265,7 +254,7 @@ impl ParseBuffer {
         if !guard(&t) {
             let end = self.get_cursor();
             let err = ErrorKind::GuardError(P::name().to_string());
-            return Err(make_error(err, start, end));
+            return Err(make_error(err, start, end))
         };
         self.ofs += consumed;
         Ok(t)
@@ -279,7 +268,7 @@ impl ParseBuffer {
         let mut consumed = 0;
         let mut r = Vec::new();
         for b in self.buf[self.ofs..].iter() {
-            if !allow.contains(b) { break; }
+            if !allow.contains(b) { break }
             r.push(*b);
             consumed += 1;
         }
@@ -298,7 +287,7 @@ impl ParseBuffer {
         let mut consumed = 0;
         let mut r = Vec::new();
         for b in self.buf[self.ofs..].iter() {
-            if terminators.contains(b) { break; }
+            if terminators.contains(b) { break }
             r.push(*b);
             consumed += 1;
         }
@@ -325,7 +314,7 @@ impl ParseBuffer {
         for w in self.buf[self.ofs..].windows(tag.len()) {
             if w.starts_with(tag) {
                 self.ofs = self.ofs + skip;
-                return Ok(skip);
+                return Ok(skip)
             }
             skip += 1;
         }
@@ -343,7 +332,7 @@ impl ParseBuffer {
             if w.starts_with(tag) {
                 skip = skip + tag.len() - 1;
                 self.ofs = self.ofs - skip;
-                return Ok(skip);
+                return Ok(skip)
             }
             skip += 1;
         }

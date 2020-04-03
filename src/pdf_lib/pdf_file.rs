@@ -107,19 +107,19 @@ impl XrefEntP {
         if let Err(_) = inf.read_to_string(&mut infs) {
             let err = ErrorKind::GuardError("bad xref ofs".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end));
+            return Err(make_error(err, start, end))
         }
         // check if all bytes read are digits
         if infs.matches(&mut |c: char| { c.is_ascii_digit() }).count() != 10 {
             let err = ErrorKind::GuardError("bad format for xref ofs".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end));
+            return Err(make_error(err, start, end))
         }
         let info = usize::from_str_radix(&infs, 10);
         if let Err(_) = info {
             let err = ErrorKind::GuardError("bad xref ofs conversion".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end));
+            return Err(make_error(err, start, end))
         }
         let info = info.unwrap();
 
@@ -132,19 +132,19 @@ impl XrefEntP {
         if let Err(_) = gen.read_to_string(&mut gens) {
             let err = ErrorKind::GuardError("bad xref gen".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end));
+            return Err(make_error(err, start, end))
         }
         // check if all bytes read are digits
         if gens.matches(&mut |c: char| { c.is_ascii_digit() }).count() != 5 {
             let err = ErrorKind::GuardError("bad format for xref gen".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end));
+            return Err(make_error(err, start, end))
         }
         let gen = usize::from_str_radix(&gens, 10);
         if let Err(_) = gen {
             let err = ErrorKind::GuardError("bad xref gen".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end));
+            return Err(make_error(err, start, end))
         }
         let gen = gen.unwrap();
 
@@ -160,7 +160,7 @@ impl XrefEntP {
             _ => {
                 let err = ErrorKind::GuardError("bad xref code".to_string());
                 let end = buf.get_cursor();
-                return Err(make_error(err, start, end));
+                return Err(make_error(err, start, end))
             }
         };
 
@@ -169,7 +169,7 @@ impl XrefEntP {
         if eol != " \r".as_bytes() && eol != " \n".as_bytes() && eol != "\r\n".as_bytes() {
             let err = ErrorKind::GuardError("bad eol gen".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end));
+            return Err(make_error(err, start, end))
         }
 
         let ent = XrefEntT { info, gen, in_use };
@@ -238,7 +238,7 @@ impl XrefSubSectP {
         if let Err(_) = xstart {
             let err = ErrorKind::GuardError("conversion error on xref-subsect start".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end));
+            return Err(make_error(err, start, end))
         }
         let xstart = xstart.unwrap();
 
@@ -247,7 +247,7 @@ impl XrefSubSectP {
         if let Err(_) = xcount {
             let err = ErrorKind::GuardError("conversion error on xref-subsect count".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end));
+            return Err(make_error(err, start, end))
         }
         let xcount = xcount.unwrap();
 
@@ -261,7 +261,9 @@ impl XrefSubSectP {
         let mut ents = Vec::new();
         for _ in 0..xcount {
             let ent = p.parse(buf)?;
-            // TODO: constrain object 0 to always be free
+            // Object 0 should always be free; we don't check it here,
+            // but in a separate validation pass, which is easier
+            // since xref table validity is a non-local property.
             ents.push(ent);
         }
 
@@ -310,9 +312,17 @@ impl XrefSectT {
             }
         }
 
-        // First entry should be free and the head of the free entry linked list.
-        // This linked list should be circular, with the tail pointing to the 0'th entry.
-        // Each free entry not on linked list should have gen == 65535, and link to entry 0
+        // There are various non-local top-level validity constraints:
+        //
+        // . The first entry should be free and the head of the free
+        //   entry linked list.
+        // . This linked list should be circular, with the tail
+        //   pointing to the 0'th entry.
+        // . Each free entry not on the linked list should be dead,
+        //   i,e, have gen == 65535, and a link to entry 0.
+        //
+        // TODO: this assumes a linearly ordered linked list, which is
+        // the most common case. Generalize this later.
         let mut next_free = 0;
         for (o, ent) in self.ent_iter() {
             if o == next_free {
@@ -320,10 +330,10 @@ impl XrefSectT {
                     return Some(InvalidXrefSect::ObjectNotFree(o))
                 }
                 next_free = ent.info();
-                continue;
+                continue
             }
             if !ent.in_use() {
-                // Not on the linked list.
+                // This should be a dead object.
                 if ent.gen() != 65535 || ent.info() != 0 {
                     return Some(InvalidXrefSect::BadDeadObject(o))
                 }
@@ -342,13 +352,13 @@ impl<'a> Iterator for XrefSectEntIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             if self.subsect >= self.xref.sects().len() {
-                break;
+                break
             }
             let ss = self.xref.sects()[self.subsect].val();
             if self.idx >= ss.count() {
                 self.subsect += 1;
                 self.idx = 0;
-                continue;
+                continue
             }
             let ent = ss.ents()[self.idx].val();
             let obj = ss.start() + self.idx;
@@ -376,7 +386,7 @@ impl ParsleyParser for XrefSectP {
         if let Err(_) = buf.exact("xref".as_bytes()) {
             let err = ErrorKind::GuardError("not at xref".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end));
+            return Err(make_error(err, start, end))
         }
         // Since the xref subsections follow this line, there is an
         // implied EOL.
@@ -389,7 +399,7 @@ impl ParsleyParser for XrefSectP {
         loop {
             let p = XrefSubSectP;
             let sect = p.parse(buf);
-            if let Err(_) = sect { break; }
+            if let Err(_) = sect { break }
             sects.push(sect.unwrap());
         }
         let end = buf.get_cursor();
@@ -436,14 +446,14 @@ impl ParsleyParser for BodyP<'_> {
         let mut objs = Vec::new();
         loop {
             let o = op.parse(buf);
-            if let Err(_) = o { break; }
+            if let Err(_) = o { break }
             let o = o.unwrap();
             if let PDFObjT::Indirect(_) = o.val() {
                 objs.push(o)
             } else {
                 let err = ErrorKind::GuardError("non-indirect object in body".to_string());
                 let end = buf.get_cursor();
-                return Err(make_error(err, start, end));
+                return Err(make_error(err, start, end))
             }
         }
         let end = buf.get_cursor();
@@ -480,7 +490,7 @@ impl ParsleyParser for TrailerP<'_> {
         if let Err(_) = buf.exact("trailer".as_bytes()) {
             let err = ErrorKind::GuardError("not at trailer".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end));
+            return Err(make_error(err, start, end))
         }
         let mut ws = WhitespaceEOL::new(false); // need to consume an EOL
         ws.parse(buf)?;
@@ -490,7 +500,7 @@ impl ParsleyParser for TrailerP<'_> {
         if let Err(_) = dict {
             let err = ErrorKind::GuardError("error parsing trailer dictionary".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end));
+            return Err(make_error(err, start, end))
         }
         let dict = dict.unwrap();
         let end = buf.get_cursor();
@@ -520,7 +530,7 @@ impl ParsleyParser for StartXrefP {
         if let Err(_) = buf.exact("startxref".as_bytes()) {
             let err = ErrorKind::GuardError("not at startxref".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end));
+            return Err(make_error(err, start, end))
         }
         let mut ws = WhitespaceEOL::new(false); // need to consume an EOL
         ws.parse(buf)?;
@@ -530,7 +540,7 @@ impl ParsleyParser for StartXrefP {
         if let Err(_) = offset {
             let err = ErrorKind::GuardError("conversion error on startxref".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end));
+            return Err(make_error(err, start, end))
         }
         let offset = offset.unwrap();
         let end = buf.get_cursor();

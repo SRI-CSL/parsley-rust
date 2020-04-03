@@ -90,7 +90,7 @@ impl ArrayP<'_> {
         if let Err(_) = buf.exact("[".as_bytes()) {
             let err = ErrorKind::GuardError("not at array object".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end));
+            return Err(make_error(err, start, end))
         }
         let mut objs = Vec::new();
         let mut end = false;
@@ -173,7 +173,7 @@ impl DictP<'_> {
                     let msg = format!("non-unique dictionary key: {}", n_str);
                     let err = ErrorKind::GuardError(msg);
                     // TODO: need extensible error reporting
-                    return Err(make_error_with_loc(err, &n));
+                    return Err(make_error_with_loc(err, &n))
                 }
 
                 // do not require whitespace between key/value pairs
@@ -276,7 +276,7 @@ impl IndirectP<'_> {
             let msg = format!("invalid object id: {}", num.val().int_val());
             let err = ErrorKind::GuardError(msg);
             buf.set_cursor(cursor);
-            return Err(make_error_with_loc(err, &num));
+            return Err(make_error_with_loc(err, &num))
         }
         ws.parse(buf)?;
         cursor = buf.get_cursor();
@@ -285,12 +285,12 @@ impl IndirectP<'_> {
             let msg = format!("invalid object generation: {}", gen.val().int_val());
             let err = ErrorKind::GuardError(msg);
             buf.set_cursor(cursor);
-            return Err(make_error_with_loc(err, &gen));
+            return Err(make_error_with_loc(err, &gen))
         }
         ws.parse(buf)?;
         if let Err(e) = buf.exact("obj".as_bytes()) {
             let err = ErrorKind::GuardError("invalid object tag".to_string());
-            return Err(make_error_with_loc(err, &e));
+            return Err(make_error_with_loc(err, &e))
         }
         ws.parse(buf)?;
 
@@ -332,7 +332,7 @@ impl IndirectP<'_> {
         if let Err(_) = buf.exact("endobj".as_bytes()) {
             if let Err(e) = buf.exact("objend".as_bytes()) {
                 let err = ErrorKind::GuardError("invalid endobject tag".to_string());
-                return Err(make_error_with_loc(err, &e));
+                return Err(make_error_with_loc(err, &e))
             }
         }
 
@@ -396,7 +396,7 @@ impl ReferenceP {
             let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             buf.set_cursor(cursor);
-            return Err(make_error(err, cursor, end));
+            return Err(make_error(err, cursor, end))
         }
         ws.parse(buf)?;
 
@@ -407,12 +407,12 @@ impl ReferenceP {
             let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             buf.set_cursor(cursor);
-            return Err(make_error(err, cursor, end));
+            return Err(make_error(err, cursor, end))
         }
         ws.parse(buf)?;
         if let Err(e) = buf.exact("R".as_bytes()) {
             let err = ErrorKind::GuardError("invalid reference tag".to_string());
-            return Err(make_error_with_loc(err, &e));
+            return Err(make_error_with_loc(err, &e))
         }
 
         // TODO: update refs
@@ -514,7 +514,7 @@ impl PDFObjP<'_> {
                 {
                     let start = buf.get_cursor();
                     let err = ErrorKind::GuardError("not at PDF object".to_string());
-                    return Err(make_error(err, start, start));
+                    return Err(make_error(err, start, start))
                 }
                 let cursor = buf.get_cursor();
 
@@ -530,7 +530,7 @@ impl PDFObjP<'_> {
                 // Check if we are at a real.
                 let r = real.parse(buf)?;
                 if !r.val().is_integer() {
-                    return Ok(PDFObjT::Real(r.unwrap()));
+                    return Ok(PDFObjT::Real(r.unwrap()))
                 }
 
                 // We parsed the first integer.
@@ -542,7 +542,7 @@ impl PDFObjP<'_> {
                     // We've already parsed a number, so set the
                     // cursor past that and return it.
                     buf.set_cursor(n1_end_cursor);
-                    return Ok(PDFObjT::Integer(n1));
+                    return Ok(PDFObjT::Integer(n1))
                 }
 
                 // Get the second integer.
@@ -550,7 +550,7 @@ impl PDFObjP<'_> {
                 if let Err(_) = n2 {
                     // See above comment.
                     buf.set_cursor(n1_end_cursor);
-                    return Ok(PDFObjT::Integer(n1));
+                    return Ok(PDFObjT::Integer(n1))
                 }
 
                 // Skip past non-empty whitespace.
@@ -558,14 +558,14 @@ impl PDFObjP<'_> {
                     // We've already parsed the first number, so set the
                     // cursor past that and return it.
                     buf.set_cursor(n1_end_cursor);
-                    return Ok(PDFObjT::Integer(n1));
+                    return Ok(PDFObjT::Integer(n1))
                 }
 
                 // We have now seen two integers.
                 let prefix = buf.check_prefix("obj".as_bytes());
                 if let Err(_) = prefix {
                     buf.set_cursor(n1_end_cursor);
-                    return Ok(PDFObjT::Integer(n1));
+                    return Ok(PDFObjT::Integer(n1))
                 }
                 if prefix.unwrap() {
                     // This looks like an indirect object.  Rewind and
@@ -573,13 +573,13 @@ impl PDFObjP<'_> {
                     buf.set_cursor(cursor);
 
                     let mut p = IndirectP::new(&mut self.ctxt);
-                    return Ok(PDFObjT::Indirect(p.parse(buf)?));
+                    return Ok(PDFObjT::Indirect(p.parse(buf)?))
                 }
 
                 let prefix = buf.check_prefix("R".as_bytes());
                 if let Err(_) = prefix {
                     buf.set_cursor(n1_end_cursor);
-                    return Ok(PDFObjT::Integer(n1));
+                    return Ok(PDFObjT::Integer(n1))
                 }
                 if prefix.unwrap() {
                     // This looks like an indirect reference.  Rewind
@@ -588,12 +588,12 @@ impl PDFObjP<'_> {
                     buf.set_cursor(cursor);
 
                     let p = ReferenceP;
-                    return Ok(PDFObjT::Reference(p.parse(buf)?));
+                    return Ok(PDFObjT::Reference(p.parse(buf)?))
                 }
 
                 // Fallback case.
                 buf.set_cursor(n1_end_cursor);
-                return Ok(PDFObjT::Integer(n1));
+                return Ok(PDFObjT::Integer(n1))
             }
         }
     }

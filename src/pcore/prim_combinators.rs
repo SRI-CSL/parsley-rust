@@ -45,14 +45,14 @@ impl<'a, P1: ParsleyParser, P2: ParsleyParser> ParsleyParser for Sequence<'a, P1
         let o1 = self.p1.parse(buf);
         if let Err(err) = o1 {
             buf.set_cursor(start);
-            return Err(err);
+            return Err(err)
         }
         let o1 = o1.unwrap();
 
         let o2 = self.p2.parse(buf);
         if let Err(err) = o2 {
             buf.set_cursor(start);
-            return Err(err);
+            return Err(err)
         }
         let o2 = o2.unwrap();
         let end = buf.get_cursor();
@@ -92,14 +92,14 @@ impl<'a, P1: ParsleyParser, P2: ParsleyParser> ParsleyParser for Alternate<'a, P
         let o1 = self.p1.parse(buf);
         if let Ok(o) = o1 {
             let end = buf.get_cursor();
-            return Ok(LocatedVal::new(Alt::Left(o), start, end));
+            return Ok(LocatedVal::new(Alt::Left(o), start, end))
         }
 
         buf.set_cursor(start);
         let o2 = self.p2.parse(buf);
         if let Err(err) = o2 {
             buf.set_cursor(start);
-            return Err(err);
+            return Err(err)
         }
 
         let o2 = o2.unwrap();

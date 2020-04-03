@@ -108,9 +108,9 @@ impl ParsleyParser for WhitespaceEOL {
                 let mut c = Comment;
                 c.parse(buf)?;
                 is_empty = false;
-                continue;
+                continue
             }
-            break;
+            break
         }
 
         if is_empty && !self.empty_ok {
@@ -217,7 +217,7 @@ impl ParsleyParser for IntegerP {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not at number".to_string());
             buf.set_cursor(start);
-            return Err(make_error(err, start, end));
+            return Err(make_error(err, start, end))
         }
         let mut num: i64 = 0;
         for c in num_str.iter() {
@@ -226,7 +226,7 @@ impl ParsleyParser for IntegerP {
                 let end = buf.get_cursor();
                 let err = ErrorKind::GuardError("numerical overflow".to_string());
                 buf.set_cursor(start);
-                return Err(make_error(err, start, end));
+                return Err(make_error(err, start, end))
             }
             num = tmp.unwrap();
             let tmp = i64::checked_add(num, i64::from(c - 48));
@@ -234,7 +234,7 @@ impl ParsleyParser for IntegerP {
                 let end = buf.get_cursor();
                 let err = ErrorKind::GuardError("numerical overflow".to_string());
                 buf.set_cursor(start);
-                return Err(make_error(err, start, end));
+                return Err(make_error(err, start, end))
             }
             num = tmp.unwrap();
         }
@@ -292,7 +292,7 @@ impl ParsleyParser for RealP {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not at number".to_string());
             buf.set_cursor(start);
-            return Err(make_error(err, start, end));
+            return Err(make_error(err, start, end))
         }
         let mut num: i64 = 0;
         for c in num_str.iter() {
@@ -301,7 +301,7 @@ impl ParsleyParser for RealP {
                 let end = buf.get_cursor();
                 let err = ErrorKind::GuardError("numerical overflow".to_string());
                 buf.set_cursor(start);
-                return Err(make_error(err, start, end));
+                return Err(make_error(err, start, end))
             }
             num = tmp.unwrap();
             let tmp = i64::checked_add(num, i64::from(c - 48));
@@ -309,7 +309,7 @@ impl ParsleyParser for RealP {
                 let end = buf.get_cursor();
                 let err = ErrorKind::GuardError("numerical overflow".to_string());
                 buf.set_cursor(start);
-                return Err(make_error(err, start, end));
+                return Err(make_error(err, start, end))
             }
             num = tmp.unwrap();
         }
@@ -324,7 +324,7 @@ impl ParsleyParser for RealP {
                         let end = buf.get_cursor();
                         let err = ErrorKind::GuardError("numerical overflow".to_string());
                         buf.set_cursor(start);
-                        return Err(make_error(err, start, end));
+                        return Err(make_error(err, start, end))
                     }
                     num = tmp.unwrap();
                     let tmp = i64::checked_add(num, i64::from(c - 48));
@@ -332,7 +332,7 @@ impl ParsleyParser for RealP {
                         let end = buf.get_cursor();
                         let err = ErrorKind::GuardError("numerical overflow".to_string());
                         buf.set_cursor(start);
-                        return Err(make_error(err, start, end));
+                        return Err(make_error(err, start, end))
                     }
                     num = tmp.unwrap();
                     let tmp = i64::checked_mul(den, 10);
@@ -340,7 +340,7 @@ impl ParsleyParser for RealP {
                         let end = buf.get_cursor();
                         let err = ErrorKind::GuardError("numerical overflow".to_string());
                         buf.set_cursor(start);
-                        return Err(make_error(err, start, end));
+                        return Err(make_error(err, start, end))
                     }
                     den = tmp.unwrap();
                 }
@@ -378,7 +378,7 @@ impl ParsleyParser for HexString {
         let start = buf.get_cursor();
         if buf.peek() != Some(60) {
             let err = ErrorKind::GuardError("not at hex string".to_string());
-            return Err(LocatedVal::new(err, start, start));
+            return Err(LocatedVal::new(err, start, start))
         };
         buf.incr_cursor();
         let bytes = buf.parse_allowed_bytes("0123456789abcdefABCDEF \n\r\t\0\x0c".as_bytes())?;
@@ -386,7 +386,7 @@ impl ParsleyParser for HexString {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not at valid hex string".to_string());
             buf.set_cursor(start);
-            return Err(make_error(err, start, end));
+            return Err(make_error(err, start, end))
         }
         buf.incr_cursor();
 
@@ -424,7 +424,7 @@ impl ParsleyParser for RawLiteralString {
         let start = buf.get_cursor();
         if buf.peek() != Some(40) { // '('
             let err = ErrorKind::GuardError("not at literal string".to_string());
-            return Err(LocatedVal::new(err, start, start));
+            return Err(LocatedVal::new(err, start, start))
         };
 
         let mut v = Vec::new();
@@ -454,13 +454,13 @@ impl ParsleyParser for RawLiteralString {
                         v.extend_from_slice(&bytes);
                         if !escaped {
                             depth -= 1;
-                            if depth == 0 { break; }
+                            if depth == 0 { break }
                         }
                         v.extend_from_slice(")".as_bytes());
                     } else {
                         v.extend_from_slice(&bytes);
                         depth -= 1;
-                        if depth == 0 { break; }
+                        if depth == 0 { break }
                         v.extend_from_slice(")".as_bytes());
                     }
                 }
@@ -471,7 +471,7 @@ impl ParsleyParser for RawLiteralString {
                 None => {
                     let end = buf.get_cursor();
                     buf.set_cursor(start);
-                    return Err(make_error(ErrorKind::EndOfBuffer, start, end));
+                    return Err(make_error(ErrorKind::EndOfBuffer, start, end))
                 }
             }
         }
@@ -491,7 +491,7 @@ impl ParsleyParser for RawName {
         let start = buf.get_cursor();
         if buf.peek() != Some(47) { // '/'
             let err = ErrorKind::GuardError("not at name object".to_string());
-            return Err(LocatedVal::new(err, start, start));
+            return Err(LocatedVal::new(err, start, start))
         }
         buf.incr_cursor();
 
@@ -527,25 +527,25 @@ impl ParsleyParser for RawName {
                         if ch == 0 {
                             let err = ErrorKind::GuardError("null char in name".to_string());
                             buf.set_cursor(start);
-                            return Err(make_error(err, start, end));
+                            return Err(make_error(err, start, end))
                         }
                         r.push(ch);
                         // adjust iterator to skip the next two windows if present.
                         // if not present, properly handle any trailing bytes.
                         let x = iter.next();
-                        if x.is_none() { break; }
+                        if x.is_none() { break }
                         let y = iter.next();
                         if y.is_none() {
                             let x = x.unwrap();
                             r.push(x[2]);
-                            break;
+                            break
                         }
                         w = iter.next();
                         if w.is_none() {
                             let y = y.unwrap();
                             r.push(y[1]);
                             r.push(y[2]);
-                            break;
+                            break
                         }
                     } else {
                         r.push(triple[0]);
@@ -581,7 +581,7 @@ impl ParsleyParser for StreamContent {
         let is_stream = buf.exact("stream".as_bytes());
         if let Err(_) = is_stream {
             let err = ErrorKind::GuardError("not at stream content".to_string());
-            return Err(make_error(err, start, start));
+            return Err(make_error(err, start, start))
         }
         if buf.peek() == Some(13) { // '\r'
             buf.incr_cursor();
@@ -592,14 +592,14 @@ impl ParsleyParser for StreamContent {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not a valid stream marker".to_string());
             buf.set_cursor(start);
-            return Err(make_error(err, start, end));
+            return Err(make_error(err, start, end))
         }
         let stream_start_cursor = buf.get_cursor();
 
         let len = buf.scan("endstream".as_bytes());
         if let Err(e) = len {
             buf.set_cursor(start);
-            return Err(e);
+            return Err(e)
         }
         let stream_end_cursor = buf.get_cursor();
 
@@ -608,7 +608,7 @@ impl ParsleyParser for StreamContent {
         let content_res = buf.extract(stream_end_cursor - stream_start_cursor);
         if let Err(e) = content_res {
             buf.set_cursor(start);
-            return Err(e);
+            return Err(e)
         }
         let mut v = Vec::from(content_res.unwrap());
         // Remove the trailing EOL.
@@ -627,7 +627,7 @@ impl ParsleyParser for StreamContent {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("invalid endstream".to_string());
             buf.set_cursor(start);
-            return Err(make_error(err, start, end));
+            return Err(make_error(err, start, end))
         }
         let end = buf.get_cursor();
         Ok(LocatedVal::new(v, start, end))
