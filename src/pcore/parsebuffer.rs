@@ -299,7 +299,7 @@ impl ParseBufferT for ParseBuffer {
     }
 
     fn peek(&self) -> Option<u8> {
-        if self.start + self.ofs < self.size {
+        if self.ofs < self.size {
             Some(self.buf[self.start + self.ofs])
         } else {
             None
@@ -315,9 +315,11 @@ impl ParseBufferT for ParseBuffer {
     }
 
     fn incr_cursor(&mut self) -> () {
+        assert!(self.ofs < self.size);
         self.ofs += 1;
     }
     fn decr_cursor(&mut self) -> () {
+        assert!(self.ofs > 0);
         self.ofs -= 1;
     }
 
