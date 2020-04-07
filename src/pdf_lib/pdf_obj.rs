@@ -87,8 +87,9 @@ impl ArrayP<'_> {
     }
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<LocatedVal<ArrayT>> {
         let start = buf.get_cursor();
-        if let Err(_) = buf.exact("[".as_bytes()) {
-            let err = ErrorKind::GuardError("not at array object".to_string());
+        if let Err(e) = buf.exact("[".as_bytes()) {
+            let msg = format!("not at array object: {}", e.val());
+            let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             return Err(make_error(err, start, end))
         }

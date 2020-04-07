@@ -524,8 +524,9 @@ impl ParsleyParser for TrailerP<'_> {
 
         let mut dp = DictP::new(&mut self.ctxt);
         let dict = dp.parse(buf);
-        if let Err(_) = dict {
-            let err = ErrorKind::GuardError("error parsing trailer dictionary".to_string());
+        if let Err(e) = dict {
+            let msg = format!("error parsing trailer dictionary: {}", e.val());
+            let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             return Err(make_error(err, start, end))
         }
