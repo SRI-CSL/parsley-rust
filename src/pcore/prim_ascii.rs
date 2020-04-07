@@ -67,7 +67,7 @@ impl AsciiChar {
 impl ParsleyParser for AsciiChar {
     type T = LocatedVal<char>;
 
-    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let c = match &mut self.guard {
             None => buf.parse_prim::<AsciiCharPrimitive>()?,

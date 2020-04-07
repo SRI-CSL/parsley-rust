@@ -18,7 +18,7 @@
 
 /// Basic combinators (sequence, alternation, and Kleene/star closure).
 
-use super::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal, ParseResult, ErrorKind, make_error};
+use super::parsebuffer::{ParseBufferT, ParsleyParser, LocatedVal, ParseResult, ErrorKind, make_error};
 
 pub struct Sequence<'a, P1: ParsleyParser, P2: ParsleyParser> {
     p1: &'a mut P1,
@@ -40,7 +40,7 @@ impl<'a, P1: ParsleyParser, P2: ParsleyParser> ParsleyParser for Sequence<'a, P1
 {
     type T = LocatedVal<(P1::T, P2::T)>;
 
-    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let o1 = self.p1.parse(buf);
         if let Err(err) = o1 {
@@ -87,7 +87,7 @@ impl<'a, P1: ParsleyParser, P2: ParsleyParser> ParsleyParser for Alternate<'a, P
 {
     type T = LocatedVal<Alt<P1::T, P2::T>>;
 
-    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let o1 = self.p1.parse(buf);
         if let Ok(o) = o1 {
@@ -125,7 +125,7 @@ impl<'a, P: ParsleyParser> ParsleyParser for Star<'a, P>
 {
     type T = LocatedVal<Vec<P::T>>;
 
-    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let mut c = start;
         let mut v = Vec::new();
@@ -160,7 +160,7 @@ impl<'a, P: ParsleyParser> ParsleyParser for Not<'a, P>
 {
     type T = LocatedVal<()>;
 
-    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let r = self.p.parse(buf);
         let end = buf.get_cursor();

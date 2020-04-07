@@ -20,7 +20,7 @@
 
 use std::rc::Rc;
 use std::collections::{HashSet, BTreeMap};
-use super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, Location, LocatedVal,
+use super::super::pcore::parsebuffer::{ParseBufferT, ParsleyParser, Location, LocatedVal,
                                        ParseResult, ErrorKind, make_error, make_error_with_loc};
 
 use super::pdf_prim::{WhitespaceEOL, Comment};
@@ -85,7 +85,7 @@ impl ArrayP<'_> {
     pub fn new<'a>(ctxt: &'a mut PDFObjContext) -> ArrayP<'a> {
         ArrayP { ctxt }
     }
-    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<LocatedVal<ArrayT>> {
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<LocatedVal<ArrayT>> {
         let start = buf.get_cursor();
         if let Err(_) = buf.exact("[".as_bytes()) {
             let err = ErrorKind::GuardError("not at array object".to_string());
@@ -149,7 +149,7 @@ impl DictP<'_> {
     pub fn new<'a>(ctxt: &'a mut PDFObjContext) -> DictP<'a> {
         DictP { ctxt }
     }
-    pub fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<DictT> {
+    pub fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<DictT> {
         buf.exact("<<".as_bytes())?;
         let mut end = false;
         let mut map = BTreeMap::new();
@@ -265,7 +265,7 @@ impl IndirectP<'_> {
     pub fn new<'a>(ctxt: &'a mut PDFObjContext) -> IndirectP<'a> {
         IndirectP { ctxt }
     }
-    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<IndirectT> {
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<IndirectT> {
         let mut int = IntegerP;
         let mut ws = WhitespaceEOL::new(true);
 
@@ -385,7 +385,7 @@ impl ReferenceT {
 struct ReferenceP;
 
 impl ReferenceP {
-    fn parse(self, buf: &mut ParseBuffer) -> ParseResult<ReferenceT> {
+    fn parse(self, buf: &mut dyn ParseBufferT) -> ParseResult<ReferenceT> {
         let mut int = IntegerP;
         let mut ws = WhitespaceEOL::new(true);
 
@@ -447,7 +447,7 @@ impl PDFObjP<'_> {
         PDFObjP { ctxt }
     }
     // The top-level object parser, as an internal helper.
-    fn parse_internal(&mut self, buf: &mut ParseBuffer) -> ParseResult<PDFObjT> {
+    fn parse_internal(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<PDFObjT> {
         let c = buf.peek();
         match c {
             None => {
@@ -603,7 +603,7 @@ impl ParsleyParser for PDFObjP<'_> {
     type T = LocatedVal<PDFObjT>;
 
     // The top-level object parser.
-    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         // First, consume possibly empty whitespace.
         // TODO: what about EOL?
         let mut ws = WhitespaceEOL::new(true);
@@ -621,7 +621,7 @@ mod test_pdf_obj {
     use std::rc::Rc;
     use std::borrow::Borrow;
     use std::collections::BTreeMap;
-    use super::super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal,
+    use super::super::super::pcore::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyParser, LocatedVal,
                                                   ErrorKind, make_error};
     use super::super::pdf_prim::{IntegerT, RealT};
     use super::{PDFObjContext, PDFObjP, PDFObjT, ReferenceT, ArrayT, DictT, IndirectT, StreamT};

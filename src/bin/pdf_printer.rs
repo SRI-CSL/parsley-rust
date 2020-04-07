@@ -34,7 +34,7 @@ use std::process;
 use std::rc::Rc;
 use std::convert::TryInto;
 use std::collections::{VecDeque, BTreeSet};
-use parsley_rust::pcore::parsebuffer::{ParseBuffer, ParsleyParser, Location, LocatedVal};
+use parsley_rust::pcore::parsebuffer::{ParseBufferT, ParseBuffer, ParsleyParser, Location, LocatedVal};
 use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, XrefSectP, TrailerP};
 use parsley_rust::pdf_lib::pdf_obj::{PDFObjT, PDFObjP, PDFObjContext};
 
