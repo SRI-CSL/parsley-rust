@@ -23,11 +23,17 @@ use std::borrow::Borrow;
 use std::hash::{Hash, Hasher};
 use std::fmt;
 
-// The basic parsing buffer.
+// The basic parsing buffer.  This implements a (possibly restricted)
+// view of length 'size' into the underlying buffer 'buf'.  The first
+// (0'th byte) of the view corresponds to byte 'start', and the last
+// valid byte of the view is at byte 'start + size - 1'.
+
 #[derive(Debug)]
 pub struct ParseBuffer {
-    buf: Vec<u8>,
-    ofs: usize,
+    buf:   Vec<u8>,
+    start: usize,
+    size:  usize,
+    ofs:   usize, // index into the view (added to 'start' for buffer index).
 }
 
 // Location information for objects returned by parsers.
@@ -195,6 +201,10 @@ impl From<ParseError> for ErrorKind {
     }
 }
 
+// The interface provided by every parsebuffer view.  All cursor
+// management and query operations are done with respect to the view,
+// and not the underlying buffer.
+
 pub trait ParseBufferT {
     // current state queries
 
@@ -261,27 +271,36 @@ pub trait ParseBufferT {
 
     // Extract binary stream of specified length.
     fn extract<'a>(&'a mut self, len: usize) -> ParseResult<&'a [u8]>;
-
-    // Destructive modification of parsing buffer by dropping content
-    // before the cursor.  The cursor will then have offset 0.
-    fn drop_upto(&mut self);
 }
 
 impl ParseBuffer {
+    // Creates a default view into the parse buffer.
     pub fn new(buf: Vec<u8>) -> ParseBuffer {
-        ParseBuffer { buf, ofs: 0 }
+        let size = buf.len();
+        ParseBuffer { buf, start: 0, ofs: 0, size }
+    }
+
+    // Consumes the current view, and returns a new view restricted as
+    // specified if the bounds permit.  In the returned view, the
+    // offset is reset to 0.
+    pub fn restrict_view(self, start: usize, size: usize) -> Option<ParseBuffer> {
+        if self.start + start < self.size && start + size <= self.size {
+            Some(ParseBuffer { buf: self.buf, start: self.start + start, ofs: 0, size })
+        } else {
+            None
+        }
     }
 }
 
 impl ParseBufferT for ParseBuffer {
     fn remaining(&self) -> usize {
-        assert!(self.ofs <= self.buf.len());
-        self.buf.len() - self.ofs
+        assert!(self.ofs <= self.size);
+        self.size - self.ofs
     }
 
     fn peek(&self) -> Option<u8> {
-        if self.ofs < self.buf.len() {
-            Some(self.buf[self.ofs])
+        if self.start + self.ofs < self.size {
+            Some(self.buf[self.start + self.ofs])
         } else {
             None
         }
@@ -291,7 +310,7 @@ impl ParseBufferT for ParseBuffer {
         self.ofs
     }
     fn set_cursor(&mut self, ofs: usize) {
-        assert!(ofs <= self.buf.len());
+        assert!(ofs <= self.size);
         self.ofs = ofs
     }
 
@@ -323,11 +342,10 @@ impl ParseBufferT for ParseBuffer {
     //     Ok(t)
     // }
 
-    fn parse_allowed_bytes(&mut self, allow: &[u8]) -> ParseResult<Vec<u8>>
-    {
+    fn parse_allowed_bytes(&mut self, allow: &[u8]) -> ParseResult<Vec<u8>> {
         let mut consumed = 0;
         let mut r = Vec::new();
-        for b in self.buf[self.ofs..].iter() {
+        for b in self.buf[(self.start + self.ofs) .. (self.start + self.size)].iter() {
             if !allow.contains(b) { break }
             r.push(*b);
             consumed += 1;
@@ -336,11 +354,10 @@ impl ParseBufferT for ParseBuffer {
         Ok(r)
     }
 
-    fn parse_bytes_until(&mut self, terminators: &[u8]) -> ParseResult<Vec<u8>>
-    {
+    fn parse_bytes_until(&mut self, terminators: &[u8]) -> ParseResult<Vec<u8>> {
         let mut consumed = 0;
         let mut r = Vec::new();
-        for b in self.buf[self.ofs..].iter() {
+        for b in self.buf[(self.start + self.ofs) .. (self.start + self.size)].iter() {
             if terminators.contains(b) { break }
             r.push(*b);
             consumed += 1;
@@ -349,15 +366,14 @@ impl ParseBufferT for ParseBuffer {
         Ok(r)
     }
 
-    fn check_prefix(&mut self, prefix: &[u8]) -> ParseResult<bool>
-    {
-        Ok(self.buf[self.ofs..].starts_with(prefix))
+    fn check_prefix(&mut self, prefix: &[u8]) -> ParseResult<bool> {
+        Ok(self.buf[(self.start + self.ofs) .. (self.start + self.size)].starts_with(prefix))
     }
 
     fn scan(&mut self, tag: &[u8]) -> ParseResult<usize> {
         let start = self.get_cursor();
         let mut skip = 0;
-        for w in self.buf[self.ofs..].windows(tag.len()) {
+        for w in self.buf[(self.start + self.ofs) .. (self.start + self.size)].windows(tag.len()) {
             if w.starts_with(tag) {
                 self.ofs = self.ofs + skip;
                 return Ok(skip)
@@ -370,7 +386,7 @@ impl ParseBufferT for ParseBuffer {
     fn backward_scan(&mut self, tag: &[u8]) -> ParseResult<usize> {
         let start = self.get_cursor();
         let mut skip = 1;
-        for w in self.buf[..self.ofs].windows(tag.len()).rev() {
+        for w in self.buf[self.start .. (self.start + self.ofs)].windows(tag.len()).rev() {
             if w.starts_with(tag) {
                 skip = skip + tag.len() - 1;
                 self.ofs = self.ofs - skip;
@@ -383,7 +399,7 @@ impl ParseBufferT for ParseBuffer {
 
     fn exact(&mut self, tag: &[u8]) -> ParseResult<bool> {
         let start = self.get_cursor();
-        if self.buf[self.ofs..].starts_with(tag) {
+        if self.buf[(self.start + self.ofs) .. (self.start + self.size)].starts_with(tag) {
             self.ofs = self.ofs + tag.len();
             Ok(true)
         } else {
@@ -392,19 +408,14 @@ impl ParseBufferT for ParseBuffer {
     }
 
     fn extract<'a>(&'a mut self, len: usize) -> ParseResult<&'a [u8]> {
-        if self.buf[self.ofs..].len() < len {
+        if self.remaining() < len {
             let start = self.get_cursor();
             Err(make_error(ErrorKind::EndOfBuffer, start, start))
         } else {
-            let ret = &self.buf[self.ofs..(self.ofs + len)];
+            let ret = &self.buf[(self.start + self.ofs) .. (self.start + self.ofs + len)];
             self.ofs += len;
             Ok(ret)
         }
-    }
-
-    fn drop_upto(&mut self) {
-        self.buf = self.buf.split_off(self.ofs);
-        self.ofs = 0
     }
 }
 
@@ -451,12 +462,18 @@ mod test_parsebuffer {
     }
 
     #[test]
-    fn test_drop_upto() {
+    fn test_restrict_view() {
         let v = Vec::from("0123456789".as_bytes());
         let mut pb = ParseBuffer::new(v);
+        assert_eq!(pb.scan("9".as_bytes()), Ok(9));
+        pb.set_cursor(0);
         assert_eq!(pb.scan("56".as_bytes()), Ok(5));
-        pb.drop_upto();
+        let size = pb.remaining();
+        pb = pb.restrict_view(5, size).unwrap();
         assert_eq!(pb.get_cursor(), 0);
+        assert_eq!(pb.remaining(), size);
         assert_eq!(pb.scan("56".as_bytes()), Ok(0));
+        pb.set_cursor(0);
+        assert_eq!(pb.scan("9".as_bytes()), Ok(4));
     }
 }

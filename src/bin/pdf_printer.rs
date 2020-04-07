@@ -103,7 +103,8 @@ fn parse_file(test_file: &str) {
                     ta3_log!(Level::Info, nbytes,
                              "Found {} bytes of leading garbage, dropping from buffer.",
                              nbytes);
-                    pb.drop_upto()
+                    let size = pb.remaining();
+                    pb = pb.restrict_view(nbytes, size).unwrap();
                 };
                 nbytes
             }
