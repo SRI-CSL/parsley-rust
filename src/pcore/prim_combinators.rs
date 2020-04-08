@@ -178,7 +178,7 @@ impl<'a, P: ParsleyParser> ParsleyParser for Not<'a, P>
 
 #[cfg(test)]
 mod test_sequence {
-    use super::super::parsebuffer::{ParseBuffer, ParsleyPrimitive, ParsleyParser,
+    use super::super::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyPrimitive, ParsleyParser,
                                     ErrorKind, make_error};
     use super::super::prim_ascii::{AsciiChar, AsciiCharPrimitive};
     use super::Sequence;
@@ -231,8 +231,8 @@ mod test_sequence {
 
 #[cfg(test)]
 mod test_alternate {
-    use super::super::parsebuffer::{ParseBuffer, ParsleyPrimitive, ParsleyParser, LocatedVal,
-                                    ErrorKind, make_error};
+    use super::super::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyPrimitive, ParsleyParser,
+                                    LocatedVal, ErrorKind, make_error};
     use super::super::prim_ascii::{AsciiChar, AsciiCharPrimitive};
     use super::{Alternate, Alt};
 
@@ -279,7 +279,7 @@ mod test_alternate {
 
 #[cfg(test)]
 mod test_star {
-    use super::super::parsebuffer::{ParseBuffer, ParsleyParser, LocatedVal};
+    use super::super::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyParser, LocatedVal};
     use super::super::prim_ascii::AsciiChar;
     use super::Star;
 
@@ -339,8 +339,8 @@ mod test_star {
 
 #[cfg(test)]
 mod test_combined {
-    use super::super::parsebuffer::{ParseBuffer, ParsleyParser, ParsleyPrimitive, LocatedVal,
-                                    ErrorKind, make_error};
+    use super::super::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyParser, ParsleyPrimitive,
+                                    LocatedVal, ErrorKind, make_error};
     use super::super::prim_ascii::{AsciiChar, AsciiCharPrimitive};
     use super::{Star, Sequence, Alternate, Alt, Not};
 

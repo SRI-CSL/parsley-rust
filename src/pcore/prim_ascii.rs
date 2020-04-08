@@ -17,8 +17,9 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use std::convert::TryFrom;
-use super::parsebuffer::{ParsleyPrimitive, ParsleyParser, ParseBuffer,
+use super::parsebuffer::{ParsleyPrimitive, ParsleyParser, ParseBufferT,
                          ParseResult, ParseError, LocatedVal, ErrorKind};
+use super::parsebuffer::{parse_prim, parse_guarded};
 
 pub struct AsciiCharPrimitive;
 
@@ -70,8 +71,8 @@ impl ParsleyParser for AsciiChar {
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let c = match &mut self.guard {
-            None => buf.parse_prim::<AsciiCharPrimitive>()?,
-            Some(b) => buf.parse_guarded::<AsciiCharPrimitive>(b)?
+            None => parse_prim::<AsciiCharPrimitive>(buf)?,
+            Some(b) => parse_guarded::<AsciiCharPrimitive>(buf, b)?
         };
         let end = buf.get_cursor();
         Ok(LocatedVal::new(c, start, end))
@@ -82,7 +83,9 @@ impl ParsleyParser for AsciiChar {
 #[cfg(test)]
 mod test_prim_ascii {
     use super::AsciiCharPrimitive;
-    use super::super::parsebuffer::{ParseBuffer, ParsleyPrimitive, ErrorKind, ParseError, make_error};
+    use super::super::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyPrimitive,
+                                    ErrorKind, ParseError};
+    use super::super::parsebuffer::{parse_prim, parse_guarded, make_error};
 
     // this raw interface would not normally be used; we would be
     // going via the ParseBuffer as in the remaining tests.
@@ -106,7 +109,7 @@ mod test_prim_ascii {
         let mut pb = ParseBuffer::new(Vec::new());
         assert_eq!(pb.get_cursor(), 0);
         let e = make_error(ErrorKind::EndOfBuffer, 0, 0);
-        assert_eq!(pb.parse_prim::<AsciiCharPrimitive>(), Err(e));
+        assert_eq!(parse_prim::<AsciiCharPrimitive>(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
     }
 
@@ -119,11 +122,11 @@ mod test_prim_ascii {
         let mut pb = ParseBuffer::new(v);
         assert_eq!(pb.get_cursor(), 0);
 
-        let r = pb.parse_prim::<AsciiCharPrimitive>();
+        let r = parse_prim::<AsciiCharPrimitive>(&mut pb);
         assert_eq!(r, Ok('A'));
         assert_eq!(pb.get_cursor(), 1);
 
-        let r = pb.parse_prim::<AsciiCharPrimitive>();
+        let r = parse_prim::<AsciiCharPrimitive>(&mut pb);
         let pe = ParseError::new("ascii-prim: invalid ascii character");
         let pe = make_error(ErrorKind::PrimitiveError(pe), 1, 1);
         let e = Err(pe);
@@ -133,11 +136,11 @@ mod test_prim_ascii {
 
         // forcibly advance
         pb.set_cursor(2);
-        let r = pb.parse_prim::<AsciiCharPrimitive>();
+        let r = parse_prim::<AsciiCharPrimitive>(&mut pb);
         assert_eq!(r, Ok('\u{0}'));
         assert_eq!(pb.get_cursor(), 3);
         let e = make_error(ErrorKind::EndOfBuffer, 3, 3);
-        assert_eq!(pb.parse_prim::<AsciiCharPrimitive>(), Err(e))
+        assert_eq!(parse_prim::<AsciiCharPrimitive>(&mut pb), Err(e))
     }
 
     #[test]
@@ -148,11 +151,11 @@ mod test_prim_ascii {
         let mut pb = ParseBuffer::new(v);
         assert_eq!(pb.get_cursor(), 0);
 
-        let r = pb.parse_guarded::<AsciiCharPrimitive>(&mut |c: &char| { *c == 'A' });
+        let r = parse_guarded::<AsciiCharPrimitive>(&mut pb, &mut |c: &char| { *c == 'A' });
         assert_eq!(r, Ok('A'));
         assert_eq!(pb.get_cursor(), 1);
 
-        let r = pb.parse_guarded::<AsciiCharPrimitive>(&mut |c: &char| { *c == 'A' });
+        let r = parse_guarded::<AsciiCharPrimitive>(&mut pb, &mut |c: &char| { *c == 'A' });
         let e = ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name().to_string());
         let e = Err(make_error(e, 1, 1));
         assert_eq!(r, e);
@@ -165,8 +168,8 @@ mod test_prim_ascii {
 #[cfg(test)]
 mod test_ascii {
     use super::{AsciiCharPrimitive, AsciiChar};
-    use super::super::parsebuffer::{ParseBuffer, ParsleyPrimitive, ParsleyParser, ParseError,
-                                    LocatedVal, ErrorKind, make_error};
+    use super::super::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyPrimitive, ParsleyParser,
+                                    ParseError, LocatedVal, ErrorKind, make_error};
 
     #[test]
     fn empty() {

@@ -211,6 +211,7 @@ pub trait ParseBufferT {
     fn remaining(&self) -> usize;
     fn get_cursor(&self) -> usize;
     fn peek(&self) -> Option<u8>;
+    fn buf(&self) -> &[u8];
     // Checks for a tag at the current location without moving the cursor.
     fn check_prefix(&mut self, prefix: &[u8]) -> ParseResult<bool>;
 
@@ -221,24 +222,6 @@ pub trait ParseBufferT {
     fn decr_cursor(&mut self);
 
     // parsing primitives
-
-    // TODO: find a different way to implement these, since P::T
-    // prevents us from making this usable as a trait object.
-    //
-    // Parsing a single element of the Parsley primitive type P; it
-    // returns a value of the Rust representation type P::T when successful.
-    // fn parse_prim(&mut self, p: &dyn ParsleyPrimitive) -> ParseResult<P::T>;
-    //
-    // Parsing a single element of the Parsley primitive type P that
-    // is constrained by a predicate 'guard'; it returns a value of
-    // the Rust representation type P::T when successful.  The 'guard'
-    // is specified in terms of the values of the representation type
-    // P::T.
-    // fn parse_guarded<P: ParsleyPrimitive>(&mut self, guard: &mut dyn FnMut(&P::T) -> bool)
-    //                                       -> ParseResult<P::T>;
-
-    // Specialized forms of guarded to avoid creation of boxed FnMut
-    // closures, which seem to require 'static lifetimes:
 
     // The match stops at the first disallowed byte.
     fn parse_allowed_bytes(&mut self, allow: &[u8]) -> ParseResult<Vec<u8>>;
@@ -292,6 +275,35 @@ impl ParseBuffer {
     }
 }
 
+// Parsing a single element of the Parsley primitive type P; it
+// returns a value of the Rust representation type P::T when
+// successful.
+pub fn parse_prim<P: ParsleyPrimitive>(buf: &mut dyn ParseBufferT) -> ParseResult<P::T> {
+    let start = buf.get_cursor();
+    let (t, consumed) = P::parse(buf.buf())?;
+    buf.set_cursor(start + consumed);
+    Ok(t)
+}
+
+// Parsing a single element of the Parsley primitive type P that is
+// constrained by a predicate 'guard'; it returns a value of the Rust
+// representation type P::T when successful.  The 'guard' is specified
+// in terms of the values of the representation type P::T.
+pub fn parse_guarded<P: ParsleyPrimitive>(buf: &mut dyn ParseBufferT,
+                                          guard: &mut dyn FnMut(&P::T) -> bool)
+                                          -> ParseResult<P::T> {
+    let start = buf.get_cursor();
+    let (t, consumed) = P::parse(buf.buf())?;
+    if !guard(&t) {
+        let end = buf.get_cursor();
+        let err = ErrorKind::GuardError(P::name().to_string());
+        return Err(make_error(err, start, end))
+    };
+    buf.set_cursor(start + consumed);
+    Ok(t)
+}
+
+
 impl ParseBufferT for ParseBuffer {
     fn remaining(&self) -> usize {
         assert!(self.ofs <= self.size);
@@ -304,6 +316,10 @@ impl ParseBufferT for ParseBuffer {
         } else {
             None
         }
+    }
+
+    fn buf(&self) -> &[u8] {
+        &self.buf[(self.start + self.ofs) .. (self.start + self.size)]
     }
 
     fn get_cursor(&self) -> usize {
@@ -322,27 +338,6 @@ impl ParseBufferT for ParseBuffer {
         assert!(self.ofs > 0);
         self.ofs -= 1;
     }
-
-    // fn parse_prim<P: ParsleyPrimitive>(&mut self) -> ParseResult<P::T>
-    // {
-    //     let (t, consumed) = P::parse(&self.buf[self.ofs..])?;
-    //     self.ofs += consumed;
-    //     Ok(t)
-    // }
-
-    // fn parse_guarded<P: ParsleyPrimitive>(&mut self, guard: &mut dyn FnMut(&P::T) -> bool)
-    //                                           -> ParseResult<P::T>
-    // {
-    //     let start = self.get_cursor();
-    //     let (t, consumed) = P::parse(&self.buf[self.ofs..])?;
-    //     if !guard(&t) {
-    //         let end = self.get_cursor();
-    //         let err = ErrorKind::GuardError(P::name().to_string());
-    //         return Err(make_error(err, start, end))
-    //     };
-    //     self.ofs += consumed;
-    //     Ok(t)
-    // }
 
     fn parse_allowed_bytes(&mut self, allow: &[u8]) -> ParseResult<Vec<u8>> {
         let mut consumed = 0;
