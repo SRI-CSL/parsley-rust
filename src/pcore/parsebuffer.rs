@@ -21,6 +21,7 @@
 use std::cmp::{PartialEq, PartialOrd, Ordering};
 use std::borrow::Borrow;
 use std::hash::{Hash, Hasher};
+use std::rc::Rc;
 use std::fmt;
 
 // The basic parsing buffer.  This implements a (possibly restricted)
@@ -30,7 +31,7 @@ use std::fmt;
 
 #[derive(Debug)]
 pub struct ParseBuffer {
-    buf:   Vec<u8>,
+    buf:   Rc<Vec<u8>>,
     start: usize,
     size:  usize,
     ofs:   usize, // index into the view (added to 'start' for buffer index).
@@ -188,9 +189,12 @@ pub fn make_error_with_loc(val: ErrorKind, l: &dyn Location) -> LocatedVal<Error
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ErrorKind::EndOfBuffer => write!(f, "end of buffer"),
-            ErrorKind::PrimitiveError(ParseError { msg }) => write!(f, "primitive parse failure: {}", msg),
-            ErrorKind::GuardError(prim) => write!(f, "primitive guard error: {}", prim),
+            ErrorKind::EndOfBuffer =>
+                write!(f, "end of buffer"),
+            ErrorKind::PrimitiveError(ParseError { msg }) =>
+                write!(f, "primitive parse failure: {}", msg),
+            ErrorKind::GuardError(prim) =>
+                write!(f, "primitive guard error: {}", prim),
         }
     }
 }
@@ -208,12 +212,14 @@ impl From<ParseError> for ErrorKind {
 pub trait ParseBufferT {
     // current state queries
 
+    fn size(&self) -> usize;
     fn remaining(&self) -> usize;
     fn get_cursor(&self) -> usize;
+
+    // buffer access
+
     fn peek(&self) -> Option<u8>;
     fn buf(&self) -> &[u8];
-    // Checks for a tag at the current location without moving the cursor.
-    fn check_prefix(&mut self, prefix: &[u8]) -> ParseResult<bool>;
 
     // cursor management
 
@@ -222,6 +228,9 @@ pub trait ParseBufferT {
     fn decr_cursor(&mut self);
 
     // parsing primitives
+
+    // Checks for a tag at the current location without moving the cursor.
+    fn check_prefix(&mut self, prefix: &[u8]) -> ParseResult<bool>;
 
     // The match stops at the first disallowed byte.
     fn parse_allowed_bytes(&mut self, allow: &[u8]) -> ParseResult<Vec<u8>>;
@@ -260,15 +269,15 @@ impl ParseBuffer {
     // Creates a default view into the parse buffer.
     pub fn new(buf: Vec<u8>) -> ParseBuffer {
         let size = buf.len();
-        ParseBuffer { buf, start: 0, ofs: 0, size }
+        ParseBuffer { buf: Rc::new(buf), start: 0, ofs: 0, size }
     }
 
-    // Consumes the current view, and returns a new view restricted as
-    // specified if the bounds permit.  In the returned view, the
-    // offset is reset to 0.
-    pub fn restrict_view(self, start: usize, size: usize) -> Option<ParseBuffer> {
-        if self.start + start < self.size && start + size <= self.size {
-            Some(ParseBuffer { buf: self.buf, start: self.start + start, ofs: 0, size })
+    // Returns a new view restricted as specified if the bounds
+    // permit.  In the returned view, the offset is reset to 0.
+    pub fn restrict_view(&self, start: usize, size: usize) -> Option<ParseBuffer> {
+        if start < self.size && start + size <= self.size {
+            Some(ParseBuffer { buf: Rc::clone(&self.buf),
+                               start: self.start + start, ofs: 0, size })
         } else {
             None
         }
@@ -305,6 +314,10 @@ pub fn parse_guarded<P: ParsleyPrimitive>(buf: &mut dyn ParseBufferT,
 
 
 impl ParseBufferT for ParseBuffer {
+    fn size(&self) -> usize {
+        self.size
+    }
+
     fn remaining(&self) -> usize {
         assert!(self.ofs <= self.size);
         self.size - self.ofs
@@ -472,5 +485,32 @@ mod test_parsebuffer {
         assert_eq!(pb.scan("56".as_bytes()), Ok(0));
         pb.set_cursor(0);
         assert_eq!(pb.scan("9".as_bytes()), Ok(4));
+
+        // identical view
+        pb.set_cursor(0);
+        let size = pb.remaining();
+        pb = pb.restrict_view(0, size).unwrap();
+        assert_eq!(pb.remaining(), size);
+        assert_eq!(pb.scan("9".as_bytes()), Ok(4));
+    }
+
+    #[test]
+    fn test_multiple_view() {
+        let v = Vec::from("0123456789".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(pb.scan("9".as_bytes()), Ok(9));
+        pb.set_cursor(0);
+        assert_eq!(pb.scan("56".as_bytes()), Ok(5));
+
+        // create a new view
+        let size = pb.remaining();
+        let mut pb_new = pb.restrict_view(5, size).unwrap();
+        assert_eq!(pb_new.scan("56".as_bytes()), Ok(0));
+        pb_new.set_cursor(0);
+        assert_eq!(pb_new.scan("9".as_bytes()), Ok(4));
+
+        // ensure the old view is still usable
+        pb.set_cursor(0);
+        assert_eq!(pb.scan("56".as_bytes()), Ok(5));
     }
 }
