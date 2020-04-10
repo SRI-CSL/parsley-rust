@@ -553,7 +553,7 @@ mod test_pdf_file {
     use super::super::super::pcore::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyParser, LocatedVal,
                                                   ErrorKind, make_error};
     use super::super::super::pdf_lib::pdf_obj::{PDFObjContext, PDFObjT, ReferenceT, DictT};
-    use super::super::super::pdf_lib::pdf_prim::IntegerT;
+    use super::super::super::pdf_lib::pdf_prim::{IntegerT, NameT};
     use super::{HeaderT, HeaderP, BodyT, BodyP, StartXrefT, StartXrefP, TrailerT, TrailerP};
     use super::{XrefEntT, XrefEntP, XrefSubSectT, XrefSubSectP, XrefSectT, XrefSectP};
     use super::{InvalidXrefSect};
@@ -864,9 +864,11 @@ endobj".as_bytes());
         let val = p.parse(&mut pb);
 
         let mut map = BTreeMap::new();
-        map.insert(LocatedVal::new(Vec::from("Size".as_bytes()), 12, 17),
+        let key = NameT::new(Vec::from("Size".as_bytes()));
+        map.insert(LocatedVal::new(key, 12, 17).val().normalize(),
                    Rc::new(LocatedVal::new(PDFObjT::Integer(IntegerT::new(8)), 18, 19)));
-        map.insert(LocatedVal::new(Vec::from("Root".as_bytes()), 21, 26),
+        let key = NameT::new(Vec::from("Root".as_bytes()));
+        map.insert(LocatedVal::new(key, 21, 26).val().normalize(),
                    Rc::new(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(1, 0)), 27, 32)));
         let dict = DictT::new(map);
         assert_eq!(val, Ok(LocatedVal::new(TrailerT { dict }, 0, 35)));

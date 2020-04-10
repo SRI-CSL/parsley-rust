@@ -26,9 +26,8 @@ use super::super::pcore::parsebuffer::{
 };
 use super::pdf_prim::{
     WhitespaceEOL, Comment, Null,
-    Boolean, IntegerT, IntegerP, RealT, RealP,
-    HexString, RawLiteralString,
-    RawName, StreamContent
+    Boolean, IntegerT, IntegerP, RealT, RealP, NameT, NameP,
+    HexString, RawLiteralString, StreamContent
 };
 
 // Object locations in the PDF file.  This will need to become
@@ -120,24 +119,38 @@ impl ArrayP<'_> {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DictT {
-    map: BTreeMap<<RawName as ParsleyParser>::T, Rc<LocatedVal<PDFObjT>>>
+    map: BTreeMap<Vec<u8>, Rc<LocatedVal<PDFObjT>>>
 }
 
 impl DictT {
-    pub fn new(map: BTreeMap<<RawName as ParsleyParser>::T, Rc<LocatedVal<PDFObjT>>>)
+    pub fn new(map: BTreeMap<Vec<u8>, Rc<LocatedVal<PDFObjT>>>)
                -> DictT {
         DictT { map }
     }
-    pub fn map(&self) -> &BTreeMap<<RawName as ParsleyParser>::T, Rc<LocatedVal<PDFObjT>>> {
+    pub fn map(&self) -> &BTreeMap<Vec<u8>, Rc<LocatedVal<PDFObjT>>> {
         &self.map
     }
-    // Helper for type-impedance mismatch:
-    //   map.get("Root".as_bytes())
-    // |     ^^^ the trait `std::borrow::Borrow<[u8]>` is not implemented for `parsley_rust::pcore::parsebuffer::LocatedVal<std::vec::Vec<u8>>`
-    // FIXME: is there is a cleaner way, ideally by adjusting the Borrow impl of LocatedVal?
-    // Otherwise, detecting that such helpers are needed is likely to require a deep model of the Rust trait system.
     pub fn get(&self, k: &[u8]) -> Option<&Rc<LocatedVal<PDFObjT>>> {
         self.map.get(&Vec::from(k))
+    }
+    // conveniences:
+    // get the usize value of a key
+    pub fn get_usize(&self, k: &[u8]) -> Option<usize> {
+        self.get(k).map_or(None, |lobj| {
+            match lobj.val() {
+                PDFObjT::Integer(i) => Some(i.usize_val()),
+                _                   => None
+            }
+        })
+    }
+    // get the name value of a key
+    pub fn get_name(&self, k: &[u8]) -> Option<&[u8]> {
+        self.get(k).map_or(None, |lobj| {
+            match lobj.val() {
+                PDFObjT::Name(n) => Some(n.val()),
+                _                => None
+            }
+        })
     }
 }
 
@@ -163,10 +176,12 @@ impl DictP<'_> {
             ws.parse(buf)?;
 
             if let Err(_) = buf.exact(">>".as_bytes()) {
-                let mut p = RawName;
+                let mut p = NameP;
                 let n = p.parse(buf)?;
-                if names.contains(n.val()) {
-                    let n_str = match std::str::from_utf8(n.val()) {
+                // Construct a normalized name usable as a key.
+                let key = n.val().normalize();
+                if names.contains(&key) {
+                    let n_str = match std::str::from_utf8(&key) {
                         Ok(v)  => v.to_string(),
                         Err(e) => format!("(error: cannot convert to UTF-8: {})", e)
                     };
@@ -187,9 +202,8 @@ impl DictP<'_> {
                 if let PDFObjT::Null(_) = o.val() {
                     // Drop the entry.
                 } else {
-                    // Note: reuse of n requires a clonable type
-                    names.insert(n.val().clone());
-                    map.insert(n, Rc::new(o));
+                    names.insert(key.clone());
+                    map.insert(key, Rc::new(o));
                 }
             } else {
                 end = true;
@@ -274,7 +288,7 @@ pub enum PDFObjT {
     Reference(ReferenceT),
     Boolean(bool),
     String(Vec<u8>),
-    Name(Vec<u8>),
+    Name(NameT),
     Null(()),
     Comment(Vec<u8>),
     Integer(IntegerT),
@@ -326,7 +340,7 @@ impl PDFObjP<'_> {
                 Ok(PDFObjT::Comment(c.unwrap()))
             }
             Some(47) => { // '/'
-                let mut np = RawName;
+                let mut np = NameP;
                 let n = np.parse(buf)?;
                 Ok(PDFObjT::Name(n.unwrap()))
             }
@@ -588,7 +602,7 @@ mod test_pdf_obj {
         ParseBuffer, ParseBufferT, ParsleyParser, LocatedVal,
         ErrorKind, make_error
     };
-    use super::super::pdf_prim::{IntegerT, RealT};
+    use super::super::pdf_prim::{IntegerT, RealT, NameT};
     use super::{
         PDFObjContext, PDFObjP, PDFObjT, IndirectT, IndirectP,
         ReferenceT, ArrayT, DictT, StreamT
@@ -731,7 +745,7 @@ mod test_pdf_obj {
         objs.push(Rc::new(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(1, 0)), 12, 17)));
         let entval = LocatedVal::new(PDFObjT::Array(ArrayT::new(objs)), 10, 19);
         let mut map = BTreeMap::new();
-        map.insert(LocatedVal::new(Vec::from("Entry".as_bytes()), 3, 9), Rc::new(entval));
+        map.insert(Vec::from("Entry".as_bytes()), Rc::new(entval));
         let val = PDFObjT::Dict(DictT::new(map));
         assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 0, 25)));
         assert_eq!(pb.get_cursor(), vlen);
@@ -746,7 +760,8 @@ mod test_pdf_obj {
         objs.push(Rc::new(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(1, 0)), 10, 15)));
         let entval = LocatedVal::new(PDFObjT::Array(ArrayT::new(objs)), 9, 16);
         let mut map = BTreeMap::new();
-        map.insert(LocatedVal::new(Vec::from("Entry".as_bytes()), 2, 8), Rc::new(entval));
+        let key = NameT::new(Vec::from("Entry".as_bytes()));
+        map.insert(LocatedVal::new(key, 2, 8).val().normalize(), Rc::new(entval));
         let val = PDFObjT::Dict(DictT::new(map));
         assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 0, 18)));
         assert_eq!(pb.get_cursor(), vlen);
@@ -763,13 +778,14 @@ mod test_pdf_obj {
     fn dict_lookup() {
         let entval = LocatedVal::new(PDFObjT::Null(()), 9, 16);
         let mut map = BTreeMap::new();
-        map.insert(LocatedVal::new(Vec::from("Entry".as_bytes()), 2, 8), Rc::new(entval));
+        let key = NameT::new(Vec::from("Entry".as_bytes()));
+        map.insert(LocatedVal::new(key, 2, 8).val().normalize(), Rc::new(entval));
         let val = PDFObjT::Dict(DictT::new(map));
         if let PDFObjT::Dict(d) = val {
             // the same located key
-            assert!(d.map().contains_key(&LocatedVal::new(Vec::from("Entry".as_bytes()), 2, 8)));
+            //assert!(d.map().contains_key(&LocatedVal::new(Vec::from("Entry".as_bytes()), 2, 8)));
             // different located key with the same val
-            assert!(d.map().contains_key(&LocatedVal::new(Vec::from("Entry".as_bytes()), 0, 0)));
+            //assert!(d.map().contains_key(&LocatedVal::new(Vec::from("Entry".as_bytes()), 0, 0)));
             // the same key val but not located
             assert!(d.map().contains_key(&Vec::from("Entry".as_bytes())));
         }
@@ -788,7 +804,8 @@ mod test_pdf_obj {
         objs.push(Rc::new(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(1, 0)), 20, 25)));
         let entval = LocatedVal::new(PDFObjT::Array(ArrayT::new(objs)), 18, 27);
         let mut map = BTreeMap::new();
-        map.insert(LocatedVal::new(Vec::from("Entry".as_bytes()), 11, 17), Rc::new(entval));
+        let key = NameT::new(Vec::from("Entry".as_bytes()));
+        map.insert(LocatedVal::new(key, 11, 17).val().normalize(), Rc::new(entval));
         let dict = Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 8, 33));
         let obj = IndirectT::new(1, 0, Rc::clone(&dict));
         assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(obj, 0, 40)));
@@ -809,7 +826,8 @@ mod test_pdf_obj {
         objs.push(Rc::new(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(1, 0)), 20, 25)));
         let entval = LocatedVal::new(PDFObjT::Array(ArrayT::new(objs)), 18, 27);
         let mut map = BTreeMap::new();
-        map.insert(LocatedVal::new(Vec::from("Entry".as_bytes()), 11, 17), Rc::new(entval));
+        let key = NameT::new(Vec::from("Entry".as_bytes()));
+        map.insert(LocatedVal::new(key, 11, 17).val().normalize(), Rc::new(entval));
         let dict = Rc::new(LocatedVal::new(DictT::new(map), 8, 30));
         let content = LocatedVal::new(Vec::from(" junk ".as_bytes()), 31, 54);
         let stream = Rc::new(LocatedVal::new(PDFObjT::Stream(StreamT::new(dict, content)), 8, 54));
@@ -829,9 +847,12 @@ mod test_pdf_obj {
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
         let mut map = BTreeMap::new();
-        map.insert(LocatedVal::new(Vec::from("Type".as_bytes()), 14, 19),
-                   Rc::new(LocatedVal::new(PDFObjT::Name(Vec::from("Catalog".as_bytes())), 20, 28)));
-        map.insert(LocatedVal::new(Vec::from("Pages".as_bytes()), 31, 37),
+        let key = NameT::new(Vec::from("Type".as_bytes()));
+        map.insert(LocatedVal::new(key, 14, 19).val().normalize(),
+                   Rc::new(LocatedVal::new(PDFObjT::Name(NameT::new(Vec::from("Catalog".as_bytes()))),
+                                           20, 28)));
+        let key = NameT::new(Vec::from("Pages".as_bytes()));
+        map.insert(LocatedVal::new(key, 31, 37).val().normalize(),
                    Rc::new(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(2, 0)), 38, 43)));
         let d = Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 10, 46));
         let o = IndirectT::new(1, 0, Rc::clone(&d));
@@ -849,8 +870,10 @@ mod test_pdf_obj {
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
         let mut map = BTreeMap::new();
-        map.insert(LocatedVal::new(Vec::from("Type".as_bytes()), 14, 19),
-                   Rc::new(LocatedVal::new(PDFObjT::Name(Vec::from("Catalog".as_bytes())), 20, 28)));
+        let key = NameT::new(Vec::from("Type".as_bytes()));
+        map.insert(LocatedVal::new(key, 14, 19).val().normalize(),
+                   Rc::new(LocatedVal::new(PDFObjT::Name(NameT::new(Vec::from("Catalog".as_bytes()))),
+                                           20, 28)));
         let d = Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 10, 45));
         let o = IndirectT::new(1, 0, Rc::clone(&d));
         assert_eq!(val, Ok(LocatedVal::new(o, 0, 52)));
@@ -867,9 +890,12 @@ mod test_pdf_obj {
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
         let mut map = BTreeMap::new();
-        map.insert(LocatedVal::new(Vec::from("Type".as_bytes()), 27, 32),
-                   Rc::new(LocatedVal::new(PDFObjT::Name(Vec::from("Catalog".as_bytes())), 33, 41)));
-        map.insert(LocatedVal::new(Vec::from("Pages".as_bytes()), 44, 50),
+        let key = NameT::new(Vec::from("Type".as_bytes()));
+        map.insert(LocatedVal::new(key, 27, 32).val().normalize(),
+                   Rc::new(LocatedVal::new(PDFObjT::Name(NameT::new(Vec::from("Catalog".as_bytes()))),
+                                           33, 41)));
+        let key = NameT::new(Vec::from("Pages".as_bytes()));
+        map.insert(LocatedVal::new(key, 44, 50).val().normalize(),
                    Rc::new(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(2, 0)), 51, 56)));
         let d = Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 23, 59));
         let o = IndirectT::new(1, 0, Rc::clone(&d));
@@ -902,17 +928,18 @@ mod test_pdf_obj {
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
         let mut objs = Vec::new();
-        objs.push(Rc::new(LocatedVal::new(PDFObjT::Name(Vec::from("")), 10, 11)));
+        objs.push(Rc::new(LocatedVal::new(PDFObjT::Name(NameT::new(Vec::from(""))), 10, 11)));
         objs.push(Rc::new(LocatedVal::new(PDFObjT::String(Vec::from("")), 11, 13)));
         let mut map = BTreeMap::new();
-        map.insert(LocatedVal::new(Vec::from(""), 15, 16),
+        let key = NameT::new(Vec::from(""));
+        map.insert(LocatedVal::new(key, 15, 16).val().normalize(),
                    Rc::new(LocatedVal::new(PDFObjT::Array(ArrayT::new(Vec::new())), 16, 18)));
         objs.push(Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 13, 20)));
         objs.push(Rc::new(LocatedVal::new(PDFObjT::String(Vec::from("")), 20, 22)));
         let ea = Rc::new(LocatedVal::new(PDFObjT::Array(ArrayT::new(Vec::new())), 23, 25));
         objs.push(Rc::new(LocatedVal::new(PDFObjT::Array(ArrayT::new(vec![ea])), 22, 26)));
         objs.push(Rc::new(LocatedVal::new(PDFObjT::Real(RealT::new(-1, 10)), 26, 29)));
-        objs.push(Rc::new(LocatedVal::new(PDFObjT::Name(Vec::from("+0")), 29, 32)));
+        objs.push(Rc::new(LocatedVal::new(PDFObjT::Name(NameT::new(Vec::from("+0"))), 29, 32)));
         let a = Rc::new(LocatedVal::new(PDFObjT::Array(ArrayT::new(objs)), 9, 33));
         let o = IndirectT::new(10, 0, Rc::clone(&a));
         assert_eq!(pb.get_cursor(), vlen);
@@ -927,8 +954,9 @@ mod test_pdf_obj {
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
         let mut map = BTreeMap::new();
-        map.insert(LocatedVal::new(Vec::from("".as_bytes()), 10, 11),
-                   Rc::new(LocatedVal::new(PDFObjT::Name(Vec::from("".as_bytes())), 11, 12)));
+        let key = NameT::new(Vec::from("".as_bytes()));
+        map.insert(LocatedVal::new(key, 10, 11).val().normalize(),
+                   Rc::new(LocatedVal::new(PDFObjT::Name(NameT::new(Vec::from("".as_bytes()))), 11, 12)));
         let d = Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 8, 14));
         let o = IndirectT::new(10, 0, Rc::clone(&d));
         assert_eq!(pb.get_cursor(), vlen);
@@ -943,7 +971,8 @@ mod test_pdf_obj {
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
         let mut map = BTreeMap::new();
-        map.insert(LocatedVal::new(Vec::from("".as_bytes()), 10, 11),
+        let key = NameT::new(Vec::from("".as_bytes()));
+        map.insert(LocatedVal::new(key, 10, 11).val().normalize(),
                    Rc::new(LocatedVal::new(PDFObjT::String(Vec::from("".as_bytes())), 11, 13)));
         let d = Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 8, 15));
         let o = IndirectT::new(11, 0, Rc::clone(&d));

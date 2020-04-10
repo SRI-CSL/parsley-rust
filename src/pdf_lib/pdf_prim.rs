@@ -484,10 +484,32 @@ impl ParsleyParser for RawLiteralString {
 
 // Raw names: does not perform UTF decoding, and the representation
 // does not include the leading '/'.
-pub struct RawName;
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct NameT {
+    raw_bytes: Vec<u8>
+}
 
-impl ParsleyParser for RawName {
-    type T = LocatedVal<Vec<u8>>;
+impl NameT {
+    pub fn new(raw_bytes: Vec<u8>) -> NameT {
+        NameT { raw_bytes }
+    }
+    pub fn val(&self) -> &[u8] {
+        &self.raw_bytes
+    }
+    pub fn normalize(&self) -> Vec<u8> {
+        // TODO: normalize according to PDF spec.
+        self.raw_bytes.clone()
+    }
+    // TODO: allow deferencing to Vec
+    pub fn len(&self) -> usize {
+        self.raw_bytes.len()
+    }
+}
+
+pub struct NameP;
+
+impl ParsleyParser for NameP {
+    type T = LocatedVal<NameT>;
 
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
@@ -561,7 +583,8 @@ impl ParsleyParser for RawName {
                 }
                 r
             };
-        Ok(LocatedVal::new(ret, start, end))
+        let name = NameT::new(ret);
+        Ok(LocatedVal::new(name, start, end))
     }
 }
 
@@ -641,8 +664,8 @@ mod test_pdf_prim {
     use super::super::super::pcore::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyParser, LocatedVal,
                                                   ErrorKind, make_error};
     use super::{WhitespaceNoEOL, WhitespaceEOL, Comment, Boolean, Null};
-    use super::{IntegerT, IntegerP, RealT, RealP};
-    use super::{HexString, RawLiteralString, RawName, StreamContent};
+    use super::{IntegerT, IntegerP, RealT, RealP, NameT, NameP};
+    use super::{HexString, RawLiteralString, StreamContent};
 
     #[test]
     fn noeol() {
@@ -1106,7 +1129,7 @@ mod test_pdf_prim {
 
     #[test]
     fn raw_name() {
-        let mut name = RawName;
+        let mut name = NameP;
 
         let v = Vec::new();
         let mut pb = ParseBuffer::new(v);
@@ -1132,24 +1155,28 @@ mod test_pdf_prim {
 
         let v = Vec::from("/1a9) ".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(Vec::from("1a9".as_bytes()), 0, 4)));
+        let val = NameT::new(Vec::from("1a9".as_bytes()));
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(val, 0, 4)));
         assert_eq!(pb.get_cursor(), 4);
 
         let v = Vec::from("/(1a(9)0) ".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(Vec::from("".as_bytes()), 0, 1)));
+        let val = NameT::new(Vec::from("".as_bytes()));
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(val, 0, 1)));
         assert_eq!(pb.get_cursor(), 1);
 
         // embedded null-character in name
 
         let v = vec![47, 65, 0, 66, 32];
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![65], 0, 2)));
+        let val = NameT::new(vec![65]);
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(val, 0, 2)));
         assert_eq!(pb.get_cursor(), 2);
 
         let v = vec![47, 0, 66, 32];
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![], 0, 1)));
+        let val = NameT::new(vec![]);
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(val, 0, 1)));
         assert_eq!(pb.get_cursor(), 1);
 
         // embedded character codes
@@ -1162,47 +1189,56 @@ mod test_pdf_prim {
 
         let v = vec![47, 35, 48, 49];
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![1], 0, 4)));
+        let val = NameT::new(vec![1]);
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(val, 0, 4)));
         assert_eq!(pb.get_cursor(), 4);
 
         let v = vec![47, 65, 35, 48, 49];
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![65, 1], 0, 5)));
+        let val = NameT::new(vec![65, 1]);
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(val, 0, 5)));
         assert_eq!(pb.get_cursor(), 5);
 
         let v = vec![47, 35, 48, 49, 35, 48, 49];
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![1, 1], 0, 7)));
+        let val = NameT::new(vec![1, 1]);
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(val, 0, 7)));
         assert_eq!(pb.get_cursor(), 7);
 
         let v = vec![47, 35, 48, 49, 65];     // code '01'
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![1, 65], 0, 5)));
+        let val = NameT::new(vec![1, 65]);
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(val, 0, 5)));
         assert_eq!(pb.get_cursor(), 5);
 
         let v = vec![47, 35, 48, 49, 65, 66]; // code '01'
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![1, 65, 66], 0, 6)));
+        let val = NameT::new(vec![1, 65, 66]);
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(val, 0, 6)));
         assert_eq!(pb.get_cursor(), 6);
 
         let v = vec![47, 35, 48, 65, 65, 66]; // code '0A'
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![10, 65, 66], 0, 6)));
+        let val = NameT::new(vec![10, 65, 66]);
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(val, 0, 6)));
         assert_eq!(pb.get_cursor(), 6);
 
         let v = vec![47, 35, 48, 97, 65, 66]; // code '0a'
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![10, 65, 66], 0, 6)));
+        let val = NameT::new(vec![10, 65, 66]);
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(val, 0, 6)));
         assert_eq!(pb.get_cursor(), 6);
 
         let v = vec![47, 35, 102, 70, 65, 66]; // code 'fF'
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![255, 65, 66], 0, 6)));
+        let val = NameT::new(vec![255, 65, 66]);
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(val, 0, 6)));
         assert_eq!(pb.get_cursor(), 6);
 
         let v = vec![47, 35, 102, 102, 65, 66]; // code 'ff'
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(vec![255, 65, 66], 0, 6)));
+        let val = NameT::new(vec![255, 65, 66]);
+        assert_eq!(name.parse(&mut pb), Ok(LocatedVal::new(val, 0, 6)));
         assert_eq!(pb.get_cursor(), 6);
     }
 
