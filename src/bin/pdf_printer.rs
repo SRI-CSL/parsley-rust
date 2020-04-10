@@ -34,9 +34,11 @@ use std::process;
 use std::rc::Rc;
 use std::convert::TryInto;
 use std::collections::{VecDeque, BTreeSet};
-use parsley_rust::pcore::parsebuffer::{ParseBufferT, ParseBuffer, ParsleyParser, Location, LocatedVal};
+use parsley_rust::pcore::parsebuffer::{
+    ParseBufferT, ParseBuffer, ParsleyParser, Location, LocatedVal
+};
 use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, XrefSectP, TrailerP};
-use parsley_rust::pdf_lib::pdf_obj::{PDFObjT, PDFObjP, PDFObjContext};
+use parsley_rust::pdf_lib::pdf_obj::{PDFObjT, IndirectP, PDFObjContext};
 
 /* from: https://osr.jpl.nasa.gov/wiki/pages/viewpage.action?spaceKey=SD&title=TA2+PDF+Safe+Parser+Evaluation
 
@@ -220,12 +222,14 @@ fn parse_file(test_file: &str) {
     };
 
     // Now get the outermost objects at each offset in the xref table.
+    // These have to be indirect/labelled objects.
     let mut ctxt = PDFObjContext::new();
     let mut objs = Vec::new();
     for (id, o) in id_offsets.iter() {
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut p = IndirectP::new(&mut ctxt);
         let ofs = (*o).try_into().unwrap();
-        ta3_log!(Level::Info, file_offset(ofs), "parsing object ({},{}) at file-offset {} (pdf-offset {})",
+        ta3_log!(Level::Info, file_offset(ofs),
+                 "parsing object ({},{}) at file-offset {} (pdf-offset {})",
                  id.0, id.1, file_offset(ofs), ofs);
         pb.set_cursor(ofs);
         let lobj = p.parse(&mut pb);
@@ -233,20 +237,14 @@ fn parse_file(test_file: &str) {
             panic!("Cannot parse object at file-offset {} (pdf-offset {}) in {}: {}",
                    file_offset(e.start()), e.start(), display, e.val());
         }
-        let obj = lobj.unwrap().unwrap();
+        let io = lobj.unwrap().unwrap(); // unwrap Result, LocatedVal.
         // Validate that the object is what we expect.
         // TODO: this constraint should be enforced in the library.
-        if let PDFObjT::Indirect(ref io) = obj {
-            if (io.num(), io.gen()) != *id {
-                panic!("unexpected object ({},{}) found: expected ({},{}) from xref entry",
-                       io.num(), io.gen(), id.0, id.1)
-            }
-            objs.push(obj)
-        } else {
-            ta3_log!(Level::Info, file_offset(*o),
-                     "found non-indirect object at file-offset {} (pdf-offset {})!",
-                     file_offset(*o), *o)
+        if (io.num(), io.gen()) != *id {
+            panic!("unexpected object ({},{}) found: expected ({},{}) from xref entry",
+                   io.num(), io.gen(), id.0, id.1)
         }
+        objs.push(io)
     }
 
     let root_obj: &Rc<LocatedVal<PDFObjT>> =
@@ -311,13 +309,6 @@ fn parse_file(test_file: &str) {
                         obj_queue.push_back((Rc::clone(v), depth + 1));
                         processed.insert(Rc::clone(v));
                     }
-                }
-            }
-            PDFObjT::Indirect(i) => {
-                log_obj("indirect", o.as_ref() as &dyn Location, depth);
-                if !processed.contains(i.obj()) {
-                    obj_queue.push_back((Rc::clone(i.obj()), depth + 1));
-                    processed.insert(Rc::clone(i.obj()));
                 }
             }
             PDFObjT::Reference(r) => {

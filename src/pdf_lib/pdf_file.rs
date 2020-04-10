@@ -22,18 +22,11 @@ use std::fmt;
 use std::io::Read;
 // for read_to_string()
 use std::convert::TryFrom;
-use super::super::pcore::parsebuffer::{ParseBufferT, ParsleyParser, LocatedVal,
-                                       ParseResult, ErrorKind, make_error};
+use super::super::pcore::parsebuffer::{
+    ParseBufferT, ParsleyParser, ParseResult, LocatedVal,
+    ErrorKind, make_error};
 use super::pdf_prim::{IntegerP, WhitespaceEOL, WhitespaceNoEOL, Comment};
-use super::pdf_obj::{PDFObjContext, PDFObjP, PDFObjT, DictT, DictP};
-
-// This doesn't yet fully specify a legal version string.
-//
-// Header h { version: typeof(CommentObj),
-//            binary: option(typeof(CommentObj)) } :=
-//
-//    v=CommentObj b=(CommentObj)?
-//    // '?' is a builtin that creates an option-type
+use super::pdf_obj::{PDFObjContext, IndirectT, IndirectP, DictT, DictP};
 
 #[derive(Debug, PartialEq)]
 pub struct HeaderT {
@@ -61,19 +54,6 @@ impl ParsleyParser for HeaderP {
         Ok(LocatedVal::new(HeaderT { version, binary }, start, end))
     }
 }
-
-// XrefEnt x { offset: int, gen: int, status: xfree_t } :=
-//     o=[[digit]*10] g=[[digit]*5]
-//     { x.offset = $string_to_int(o);
-//       x.gen    = $string_to_int(g);
-//       x.status = Inuse
-//     }
-//     ( 'n' { x.status = Inuse }
-//     | 'f' { x.status = Free  }
-//     )
-//     '\r\n' // This is required to be 'a two-character end-of-line
-//            // sequence'.
-//     ;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct XrefEntT {
@@ -434,17 +414,13 @@ impl ParsleyParser for XrefSectP {
     }
 }
 
-// Body b { objs = [PDFObj] } :=
-//
-//    ( o=PDFObj [ o ~~ IndirectObj ] { b.objs.append(o) } )* ;
-
 #[derive(Debug, PartialEq)]
 pub struct BodyT {
-    objs: Vec<LocatedVal<PDFObjT>>
+    objs: Vec<LocatedVal<IndirectT>>
 }
 
 impl BodyT {
-    pub fn objs(&self) -> &[LocatedVal<PDFObjT>] { self.objs.as_slice() }
+    pub fn objs(&self) -> &[LocatedVal<IndirectT>] { self.objs.as_slice() }
 }
 
 pub struct BodyP<'a> {
@@ -466,22 +442,16 @@ impl ParsleyParser for BodyP<'_> {
     // be used with simple files for debugging purposes.
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
-        let mut op = PDFObjP::new(&mut self.ctxt);
-        // The outermost objects should all be indirect objects.  In
-        // the simplest case, we just terminate when we can't parse
-        // any more objects.
+        // We can only find indirect objects at the top-level.
+        let mut op = IndirectP::new(&mut self.ctxt);
         let mut objs = Vec::new();
+        // In the simplest case, we just terminate when we can't parse
+        // any more objects.
         loop {
             let o = op.parse(buf);
             if let Err(_) = o { break }
             let o = o.unwrap();
-            if let PDFObjT::Indirect(_) = o.val() {
-                objs.push(o)
-            } else {
-                let err = ErrorKind::GuardError("non-indirect object in body".to_string());
-                let end = buf.get_cursor();
-                return Err(make_error(err, start, end))
-            }
+            objs.push(o);
         }
         let end = buf.get_cursor();
         Ok(LocatedVal::new(BodyT { objs }, start, end))
@@ -803,10 +773,8 @@ endobj
         // quick and dirty test.
         let BodyT { objs } = val.unwrap();
         assert_eq!(objs.len(), 5);
-        for o in objs {
-            if let PDFObjT::Indirect(_) = o.unwrap() {} else {
-                assert!(false)
-            }
+        for (idx, o) in objs.iter().enumerate() {
+            assert_eq!(idx + 1, o.val().num());
         }
     }
 
@@ -871,10 +839,8 @@ endobj".as_bytes());
         // quick and dirty test.
         let BodyT { objs } = val.unwrap();
         assert_eq!(objs.len(), 5);
-        for o in objs {
-            if let PDFObjT::Indirect(_) = o.unwrap() {} else {
-                assert!(false)
-            }
+        for (idx, o) in objs.iter().enumerate() {
+            assert_eq!(idx + 1, o.val().num());
         }
     }
 

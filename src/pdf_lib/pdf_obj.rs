@@ -16,16 +16,20 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-/// Basic PDF objects (simple and compound).
+/// Basic PDF objects.
 
 use std::rc::Rc;
 use std::collections::{HashSet, BTreeMap};
-use super::super::pcore::parsebuffer::{ParseBufferT, ParsleyParser, Location, LocatedVal,
-                                       ParseResult, ErrorKind, make_error, make_error_with_loc};
-
-use super::pdf_prim::{WhitespaceEOL, Comment};
-use super::pdf_prim::{Boolean, Null, IntegerT, IntegerP, RealT, RealP, HexString, RawLiteralString};
-use super::pdf_prim::{RawName, StreamContent};
+use super::super::pcore::parsebuffer::{
+    ParseBufferT, ParsleyParser, ParseResult, Location, LocatedVal,
+    ErrorKind, make_error, make_error_with_loc
+};
+use super::pdf_prim::{
+    WhitespaceEOL, Comment, Null,
+    Boolean, IntegerT, IntegerP, RealT, RealP,
+    HexString, RawLiteralString,
+    RawName, StreamContent
+};
 
 // Object locations in the PDF file.  This will need to become
 // hierarchical to handle nested object streams.
@@ -40,10 +44,11 @@ impl Location for PDFLocation {
     fn loc_end(&self) -> usize { self.end }
 }
 
-// PDF object parsing context.
-// This keeps track of information collected during parsing.
+// PDF object parsing context.  This keeps track of information
+// collected during parsing.
 
 pub struct PDFObjContext {
+    // This maps object identifiers to their objects.
     defns: BTreeMap<(usize, usize), Rc<LocatedVal<PDFObjT>>>
 }
 
@@ -60,8 +65,6 @@ impl PDFObjContext {
     }
 }
 
-
-// Array a { objs : [PDFObj] } := '[' ( o=PDFObj { a.objs.append(o) } )* ']'
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ArrayT {
@@ -114,10 +117,6 @@ impl ArrayP<'_> {
         Ok(LocatedVal::new(ArrayT::new(objs), start, end))
     }
 }
-
-// Dict d { map : map<typeof(NameObj.val), PDFObj> } :=
-//  { names : set<typeof(NameObj.val)> }
-//  '<<' ( n=NameObj [ !names.contains(n.val) "Unique dictionary key" ] o=PDFObj { d.map[n.val] := o; names.add(n.val) } )* '>>' ;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DictT {
@@ -173,7 +172,6 @@ impl DictP<'_> {
                     };
                     let msg = format!("non-unique dictionary key: {}", n_str);
                     let err = ErrorKind::GuardError(msg);
-                    // TODO: need extensible error reporting
                     return Err(make_error_with_loc(err, &n))
                 }
 
@@ -200,33 +198,6 @@ impl DictP<'_> {
         Ok(DictT::new(map))
     }
 }
-// type struct Stream {
-//   dict: DictObj,
-//   stream: StreamObj
-// }
-//
-// Indirect i { id : int, gen : int, val : PDFObj } :=
-//     // the constraints check that the matched IntegerT objects
-//     // are appropriate integers.
-//     n=IntegerObj [ n.val >= 0 ]
-//     g=IntegerObj [ g.val >= 0 && !defs.has_key((n.val, g.val))]
-//
-//     ( 'obj' o=PDFObj 'endobj'
-//
-//       // the semantic action computes the values of the attributes
-//       // of Indirect.  $location() is a predefined function that
-//       // returns the current parsing cursor location, at the end of
-//       // the last matching right-hand-side entity in the rule.
-//         { i.val := o }
-//     | 'obj' o=PDFObj [o ~~ DictObj] s=StreamObj 'endobj'
-//         { i.val := Stream { dict: o.val, stream: s.val } }
-//     )
-//     // At this point, we need to ensure that all attributes are defined for all cases
-//     { i.id  := n.val;
-//       i.gen := g.val;
-//       defs[(n.val, g.val)] := (i, $location())
-//     }
-
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct StreamT {
@@ -241,132 +212,6 @@ impl StreamT {
     pub fn dict(&self) -> &Rc<LocatedVal<DictT>> { &self.dict }
     pub fn stream(&self) -> &LocatedVal<Vec<u8>> { &self.stream }
 }
-
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct IndirectT {
-    num: usize,
-    gen: usize,
-    obj: Rc<LocatedVal<PDFObjT>>,
-}
-
-impl IndirectT {
-    pub fn new(num: usize, gen: usize, obj: Rc<LocatedVal<PDFObjT>>) -> IndirectT {
-        IndirectT { num, gen, obj }
-    }
-    pub fn num(&self) -> usize { self.num }
-    pub fn gen(&self) -> usize { self.gen }
-    pub fn obj(&self) -> &Rc<LocatedVal<PDFObjT>> { &self.obj }
-}
-
-struct IndirectP<'a> {
-    ctxt: &'a mut PDFObjContext
-}
-
-impl IndirectP<'_> {
-    pub fn new<'a>(ctxt: &'a mut PDFObjContext) -> IndirectP<'a> {
-        IndirectP { ctxt }
-    }
-    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<IndirectT> {
-        let mut int = IntegerP;
-        let mut ws = WhitespaceEOL::new(true);
-
-        let start = buf.get_cursor();
-        let mut cursor = start;
-        let num = int.parse(buf)?;
-        if !num.val().is_positive() {
-            let msg = format!("invalid object id: {}", num.val().int_val());
-            let err = ErrorKind::GuardError(msg);
-            buf.set_cursor(cursor);
-            return Err(make_error_with_loc(err, &num))
-        }
-        ws.parse(buf)?;
-        cursor = buf.get_cursor();
-        let gen = int.parse(buf)?;
-        if !(gen.val().is_zero() || gen.val().is_positive()) {
-            let msg = format!("invalid object generation: {}", gen.val().int_val());
-            let err = ErrorKind::GuardError(msg);
-            buf.set_cursor(cursor);
-            return Err(make_error_with_loc(err, &gen))
-        }
-        ws.parse(buf)?;
-        if let Err(e) = buf.exact("obj".as_bytes()) {
-            let err = ErrorKind::GuardError("invalid object tag".to_string());
-            return Err(make_error_with_loc(err, &e))
-        }
-        ws.parse(buf)?;
-
-        let mut p = PDFObjP::new(&mut self.ctxt);
-        let o = p.parse(buf)?;
-
-        // If we parsed a dictionary, check whether this could be a
-        // stream object.
-        let obj =
-            // This is ugly code and should be cleaned up.
-            if let PDFObjT::Dict(_) = o.val() {
-                let mut ws = WhitespaceEOL::new(true); // allow empty whitespace
-                ws.parse(buf)?;
-                if buf.check_prefix("stream".as_bytes())? {
-                    // This is indeed a stream object.
-                    let dict_start = o.loc_start();
-                    let dict_end = o.loc_end();
-                    if let PDFObjT::Dict(dict) = o.unwrap() {
-                        let dict = LocatedVal::new(dict, dict_start, dict_end);
-                        let mut s = StreamContent;
-                        let stream = s.parse(buf)?;
-                        let start = dict_start;
-                        let end = stream.loc_end();
-                        let obj = PDFObjT::Stream(StreamT { dict: Rc::new(dict), stream });
-                        LocatedVal::new(obj, start, end)
-                    } else {
-                        panic!("can never happen")
-                    }
-                } else {
-                    o
-                }
-            } else {
-                o
-            };
-
-        ws.parse(buf)?;
-
-        // Accept either 'endobj' or 'objend'.
-        if let Err(_) = buf.exact("endobj".as_bytes()) {
-            if let Err(e) = buf.exact("objend".as_bytes()) {
-                let err = ErrorKind::GuardError("invalid endobject tag".to_string());
-                return Err(make_error_with_loc(err, &e))
-            }
-        }
-
-        let obj = Rc::new(obj);
-        let ind = IndirectT::new(num.val().usize_val(), gen.val().usize_val(), Rc::clone(&obj));
-        match self.ctxt.register_obj(&ind, Rc::clone(&obj)) {
-            None => Ok(ind),
-            Some(old) => {
-                // Note that this location is inside any 'n g obj' prefix for the indirect object.
-                let loc = old.start();
-                let msg = format!("non-unique object id ({}, {}), first found near offset {}",
-                                  num.val().int_val(), gen.val().int_val(), loc);
-                let err = ErrorKind::GuardError(msg);
-                let end = buf.get_cursor();
-                Err(make_error(err, start, end))
-            }
-        }
-    }
-}
-
-// Reference r { num : int, gen : int } :=
-//
-//     // the constraints check that the matched IntegerObj objects
-//     // are appropriate integers.
-//     n=IntegerObj [ n.val > 0 ]
-//     g=IntegerObj [ g.val > 0 ]
-//
-//     'R'
-//
-//     { r.num := n.val;
-//       r.gen := g.val;
-//       refs[(n.val, g.val)] := $location();
-//     } ;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ReferenceT {
@@ -416,8 +261,6 @@ impl ReferenceP {
             return Err(make_error_with_loc(err, &e))
         }
 
-        // TODO: update refs
-
         Ok(ReferenceT::new(num.val().usize_val(), gen.val().usize_val()))
     }
 }
@@ -428,7 +271,6 @@ pub enum PDFObjT {
     Array(ArrayT),
     Dict(DictT),
     Stream(StreamT),
-    Indirect(IndirectT),
     Reference(ReferenceT),
     Boolean(bool),
     String(Vec<u8>),
@@ -447,7 +289,13 @@ impl PDFObjP<'_> {
     pub fn new<'a>(ctxt: &'a mut PDFObjContext) -> PDFObjP<'a> {
         PDFObjP { ctxt }
     }
-    // The top-level object parser, as an internal helper.
+
+    // The top-level basic object parser, as an internal helper.  Note
+    // that this does not parse streams, even though they are 'basic'
+    // objects according to the PDF spec, since they can only appear
+    // within indirect/labelled objects, and hence do not nest.  This
+    // parser deals with basic objects that can be found at any
+    // nesting.
     fn parse_internal(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<PDFObjT> {
         let c = buf.peek();
         match c {
@@ -519,10 +367,9 @@ impl PDFObjP<'_> {
                 }
                 let cursor = buf.get_cursor();
 
-                // We have to distinguish between an indirect object,
-                // an indirect reference, and a real number.  The
-                // first two will always have two integer numbers as a
-                // prefix.
+                // We have to distinguish between an indirect
+                // reference and a real number.  The first will always
+                // have two integer numbers as a prefix.
 
                 let mut real = RealP;
                 let mut int = IntegerP;
@@ -562,21 +409,8 @@ impl PDFObjP<'_> {
                     return Ok(PDFObjT::Integer(n1))
                 }
 
-                // We have now seen two integers.
-                let prefix = buf.check_prefix("obj".as_bytes());
-                if let Err(_) = prefix {
-                    buf.set_cursor(n1_end_cursor);
-                    return Ok(PDFObjT::Integer(n1))
-                }
-                if prefix.unwrap() {
-                    // This looks like an indirect object.  Rewind and
-                    // call its parser.
-                    buf.set_cursor(cursor);
-
-                    let mut p = IndirectP::new(&mut self.ctxt);
-                    return Ok(PDFObjT::Indirect(p.parse(buf)?))
-                }
-
+                // We have now seen two integers, so this could be an
+                // indirect reference.
                 let prefix = buf.check_prefix("R".as_bytes());
                 if let Err(_) = prefix {
                     buf.set_cursor(n1_end_cursor);
@@ -585,14 +419,16 @@ impl PDFObjP<'_> {
                 if prefix.unwrap() {
                     // This looks like an indirect reference.  Rewind
                     // and call its parser (though we could optimize
-                    // this case).
+                    // this case since we've actually already parsed
+                    // it.).
                     buf.set_cursor(cursor);
 
                     let p = ReferenceP;
                     return Ok(PDFObjT::Reference(p.parse(buf)?))
                 }
 
-                // Fallback case.
+                // Fallback case: these were two integers after all;
+                // rewind to the first.
                 buf.set_cursor(n1_end_cursor);
                 return Ok(PDFObjT::Integer(n1))
             }
@@ -617,15 +453,146 @@ impl ParsleyParser for PDFObjP<'_> {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct IndirectT {
+    num: usize,
+    gen: usize,
+    obj: Rc<LocatedVal<PDFObjT>>,
+}
+
+impl IndirectT {
+    pub fn new(num: usize, gen: usize, obj: Rc<LocatedVal<PDFObjT>>) -> IndirectT {
+        IndirectT { num, gen, obj }
+    }
+    pub fn num(&self) -> usize { self.num }
+    pub fn gen(&self) -> usize { self.gen }
+    pub fn obj(&self) -> &Rc<LocatedVal<PDFObjT>> { &self.obj }
+}
+
+pub struct IndirectP<'a> {
+    ctxt: &'a mut PDFObjContext
+}
+
+impl IndirectP<'_> {
+    pub fn new<'a>(ctxt: &'a mut PDFObjContext) -> IndirectP<'a> {
+        IndirectP { ctxt }
+    }
+    fn parse_internal(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<IndirectT> {
+        let mut int = IntegerP;
+        let mut ws = WhitespaceEOL::new(true);
+
+        let start = buf.get_cursor();
+        let mut cursor = start;
+        let num = int.parse(buf)?;
+        if !num.val().is_positive() {
+            let msg = format!("invalid object id: {}", num.val().int_val());
+            let err = ErrorKind::GuardError(msg);
+            buf.set_cursor(cursor);
+            return Err(make_error_with_loc(err, &num))
+        }
+        ws.parse(buf)?;
+        cursor = buf.get_cursor();
+        let gen = int.parse(buf)?;
+        if !(gen.val().is_zero() || gen.val().is_positive()) {
+            let msg = format!("invalid object generation: {}", gen.val().int_val());
+            let err = ErrorKind::GuardError(msg);
+            buf.set_cursor(cursor);
+            return Err(make_error_with_loc(err, &gen))
+        }
+        ws.parse(buf)?;
+        if let Err(e) = buf.exact("obj".as_bytes()) {
+            let err = ErrorKind::GuardError("invalid object tag".to_string());
+            return Err(make_error_with_loc(err, &e))
+        }
+        ws.parse(buf)?;
+
+        let mut p = PDFObjP::new(&mut self.ctxt);
+        let o = p.parse(buf)?;
+
+        // If we parsed a dictionary, check whether this could be a
+        // stream object.
+        let obj =
+            // This is ugly code and should be cleaned up.
+            if let PDFObjT::Dict(_) = o.val() {
+                let mut ws = WhitespaceEOL::new(true); // allow empty whitespace
+                ws.parse(buf)?;
+                if buf.check_prefix("stream".as_bytes())? {
+                    // This is indeed a stream object.
+                    let dict_start = o.loc_start();
+                    let dict_end = o.loc_end();
+                    if let PDFObjT::Dict(dict) = o.unwrap() {
+                        let dict = LocatedVal::new(dict, dict_start, dict_end);
+                        let mut s = StreamContent;
+                        let stream = s.parse(buf)?;
+                        let start = dict_start;
+                        let end = stream.loc_end();
+                        let obj = PDFObjT::Stream(StreamT { dict: Rc::new(dict), stream });
+                        LocatedVal::new(obj, start, end)
+                    } else {
+                        panic!("can never happen")
+                    }
+                } else {
+                    o
+                }
+            } else {
+                o
+            };
+
+        ws.parse(buf)?;
+
+        if let Err(e) = buf.exact("endobj".as_bytes()) {
+            let err = ErrorKind::GuardError("invalid endobject tag".to_string());
+            return Err(make_error_with_loc(err, &e))
+        }
+
+        let obj = Rc::new(obj);
+        let ind = IndirectT::new(num.val().usize_val(), gen.val().usize_val(), Rc::clone(&obj));
+        match self.ctxt.register_obj(&ind, Rc::clone(&obj)) {
+            None => Ok(ind),
+            Some(old) => {
+                // Note that this location is inside any 'n g obj' prefix for the indirect object.
+                let loc = old.start();
+                let msg = format!("non-unique object id ({}, {}), first found near offset {}",
+                                  num.val().int_val(), gen.val().int_val(), loc);
+                let err = ErrorKind::GuardError(msg);
+                let end = buf.get_cursor();
+                Err(make_error(err, start, end))
+            }
+        }
+    }
+}
+
+impl ParsleyParser for IndirectP<'_> {
+    type T = LocatedVal<IndirectT>;
+
+    // The top-level indirect object parser.
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        // First, consume possibly empty whitespace.
+        // TODO: what about EOL?
+        let mut ws = WhitespaceEOL::new(true);
+        ws.parse(buf)?;
+
+        let start = buf.get_cursor();
+        let val = self.parse_internal(buf)?;
+        let end = buf.get_cursor();
+        Ok(LocatedVal::new(val, start, end))
+    }
+}
+
 #[cfg(test)]
 mod test_pdf_obj {
     use std::rc::Rc;
     use std::borrow::Borrow;
     use std::collections::BTreeMap;
-    use super::super::super::pcore::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyParser, LocatedVal,
-                                                  ErrorKind, make_error};
+    use super::super::super::pcore::parsebuffer::{
+        ParseBuffer, ParseBufferT, ParsleyParser, LocatedVal,
+        ErrorKind, make_error
+    };
     use super::super::pdf_prim::{IntegerT, RealT};
-    use super::{PDFObjContext, PDFObjP, PDFObjT, ReferenceT, ArrayT, DictT, IndirectT, StreamT};
+    use super::{
+        PDFObjContext, PDFObjP, PDFObjT, IndirectT, IndirectP,
+        ReferenceT, ArrayT, DictT, StreamT
+    };
 
     #[test]
     fn empty() {
@@ -811,7 +778,7 @@ mod test_pdf_obj {
     #[test]
     fn indirect() {
         let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut p = IndirectP::new(&mut ctxt);
 //                                   1         2         3         4         5         6
 //                         0123456789012345678901234567890123456789012345678901234567890123
         let v = Vec::from("1 0 obj << /Entry [ 1 0 R ] \r\n >> endobj".as_bytes());
@@ -823,7 +790,7 @@ mod test_pdf_obj {
         let mut map = BTreeMap::new();
         map.insert(LocatedVal::new(Vec::from("Entry".as_bytes()), 11, 17), Rc::new(entval));
         let dict = Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 8, 33));
-        let obj = PDFObjT::Indirect(IndirectT::new(1, 0, Rc::clone(&dict)));
+        let obj = IndirectT::new(1, 0, Rc::clone(&dict));
         assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(obj, 0, 40)));
         assert_eq!(pb.get_cursor(), vlen);
         assert_eq!(ctxt.lookup_obj((1, 0)), Some(dict.borrow()));
@@ -832,7 +799,7 @@ mod test_pdf_obj {
     #[test]
     fn stream() {
         let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut p = IndirectP::new(&mut ctxt);
 //                                   1         2         3         4         5         6
 //                         0123456789012345678901234567890123456789012345678901234567890123
         let v = Vec::from("1 0 obj << /Entry [ 1 0 R ] >> stream\n junk \nendstream\nendobj".as_bytes());
@@ -846,7 +813,7 @@ mod test_pdf_obj {
         let dict = Rc::new(LocatedVal::new(DictT::new(map), 8, 30));
         let content = LocatedVal::new(Vec::from(" junk ".as_bytes()), 31, 54);
         let stream = Rc::new(LocatedVal::new(PDFObjT::Stream(StreamT::new(dict, content)), 8, 54));
-        let obj = PDFObjT::Indirect(IndirectT::new(1, 0, Rc::clone(&stream)));
+        let obj = IndirectT::new(1, 0, Rc::clone(&stream));
         assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(obj, 0, 61)));
         assert_eq!(pb.get_cursor(), vlen);
         assert_eq!(ctxt.lookup_obj((1, 0)), Some(stream.borrow()));
@@ -855,7 +822,7 @@ mod test_pdf_obj {
     #[test]
     fn test_obj_no_embedded_comment() {
         let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut p = IndirectP::new(&mut ctxt);
 //                                   1         2         3         4         5         6
 //                         0123456789012345678901234567890123456789012345678901234567890123
         let v = Vec::from("1 0 obj  \n<<  /Type /Catalog\n  /Pages 2 0 R\n>>\nendobj".as_bytes());
@@ -867,7 +834,7 @@ mod test_pdf_obj {
         map.insert(LocatedVal::new(Vec::from("Pages".as_bytes()), 31, 37),
                    Rc::new(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(2, 0)), 38, 43)));
         let d = Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 10, 46));
-        let o = PDFObjT::Indirect(IndirectT::new(1, 0, Rc::clone(&d)));
+        let o = IndirectT::new(1, 0, Rc::clone(&d));
         assert_eq!(val, Ok(LocatedVal::new(o, 0, 53)));
         assert_eq!(ctxt.lookup_obj((1, 0)), Some(d.borrow()));
     }
@@ -875,7 +842,7 @@ mod test_pdf_obj {
     #[test]
     fn test_dict_null_value() {
         let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut p = IndirectP::new(&mut ctxt);
 //                                    1         2          3         4           5         6
 //                         012345678 9012345678901234567 89012345678901 234 5678901234567890123
         let v = Vec::from("1 0 obj  \n<<  /Type /Catalog\n  /Pages null\n>>\nendobj".as_bytes());
@@ -885,7 +852,7 @@ mod test_pdf_obj {
         map.insert(LocatedVal::new(Vec::from("Type".as_bytes()), 14, 19),
                    Rc::new(LocatedVal::new(PDFObjT::Name(Vec::from("Catalog".as_bytes())), 20, 28)));
         let d = Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 10, 45));
-        let o = PDFObjT::Indirect(IndirectT::new(1, 0, Rc::clone(&d)));
+        let o = IndirectT::new(1, 0, Rc::clone(&d));
         assert_eq!(val, Ok(LocatedVal::new(o, 0, 52)));
         assert_eq!(ctxt.lookup_obj((1, 0)), Some(d.borrow()));
     }
@@ -893,7 +860,7 @@ mod test_pdf_obj {
     #[test]
     fn test_obj_embedded_comment() {
         let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut p = IndirectP::new(&mut ctxt);
 //                                   1         2         3         4         5         6         7
 //                         01234567890123456789012345678901234567890123456789012345678901234567890
         let v = Vec::from("1 0 obj  % entry point\n<<  /Type /Catalog\n  /Pages 2 0 R\n>>\nendobj".as_bytes());
@@ -905,21 +872,21 @@ mod test_pdf_obj {
         map.insert(LocatedVal::new(Vec::from("Pages".as_bytes()), 44, 50),
                    Rc::new(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(2, 0)), 51, 56)));
         let d = Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 23, 59));
-        let o = PDFObjT::Indirect(IndirectT::new(1, 0, Rc::clone(&d)));
+        let o = IndirectT::new(1, 0, Rc::clone(&d));
         assert_eq!(val, Ok(LocatedVal::new(o, 0, 66)));
         assert_eq!(ctxt.lookup_obj((1, 0)), Some(d.borrow()));
     }
 
     #[test]
-    fn test_obj_nonunique() {
+    fn test_nested_indirect() {
         let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut p = IndirectP::new(&mut ctxt);
 //                                   1         2         3         4         5         6
 //                         0123456789012345678901234567890123456789012345678901234567890123
         let v = Vec::from("1 0 obj  \n<<  /Type 1 0 obj true endobj>>\nendobj".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
-        let e = make_error(ErrorKind::GuardError("non-unique object id (1, 0), first found near offset 28".to_string()), 0, 0);
+        let e = make_error(ErrorKind::GuardError("not at name object".to_string()), 22, 22);
         assert_eq!(val, Err(e));
     }
 
@@ -927,7 +894,7 @@ mod test_pdf_obj {
     // Tests extracted from Peter Wyatt's webinar slides.
     fn test_pdf_expert_dict() {
         let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut p = IndirectP::new(&mut ctxt);
 //                                    1         2         3          4
 //                         01234567 890123456789012345678901234 56789012
         let v = Vec::from("10 0 obj\n[/<><</[]>>()[[]]-.1/+0]%]\nendobj");
@@ -947,13 +914,13 @@ mod test_pdf_obj {
         objs.push(Rc::new(LocatedVal::new(PDFObjT::Real(RealT::new(-1, 10)), 26, 29)));
         objs.push(Rc::new(LocatedVal::new(PDFObjT::Name(Vec::from("+0")), 29, 32)));
         let a = Rc::new(LocatedVal::new(PDFObjT::Array(ArrayT::new(objs)), 9, 33));
-        let o = PDFObjT::Indirect(IndirectT::new(10, 0, Rc::clone(&a)));
+        let o = IndirectT::new(10, 0, Rc::clone(&a));
         assert_eq!(pb.get_cursor(), vlen);
         assert_eq!(val, Ok(LocatedVal::new(o, 0, vlen)));
         assert_eq!(ctxt.lookup_obj((10, 0)), Some(a.borrow()));
 
         let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut p = IndirectP::new(&mut ctxt);
 //                         012345678901234567890
         let v = Vec::from("10 0 obj<<//>>endobj");
         let vlen = v.len();
@@ -963,13 +930,13 @@ mod test_pdf_obj {
         map.insert(LocatedVal::new(Vec::from("".as_bytes()), 10, 11),
                    Rc::new(LocatedVal::new(PDFObjT::Name(Vec::from("".as_bytes())), 11, 12)));
         let d = Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 8, 14));
-        let o = PDFObjT::Indirect(IndirectT::new(10, 0, Rc::clone(&d)));
+        let o = IndirectT::new(10, 0, Rc::clone(&d));
         assert_eq!(pb.get_cursor(), vlen);
         assert_eq!(val, Ok(LocatedVal::new(o, 0, vlen)));
         assert_eq!(ctxt.lookup_obj((10, 0)), Some(d.borrow()));
 
         let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut p = IndirectP::new(&mut ctxt);
 //                         0123456789012345678901
         let v = Vec::from("11 0 obj<</<>>>endobj");
         let vlen = v.len();
@@ -979,14 +946,14 @@ mod test_pdf_obj {
         map.insert(LocatedVal::new(Vec::from("".as_bytes()), 10, 11),
                    Rc::new(LocatedVal::new(PDFObjT::String(Vec::from("".as_bytes())), 11, 13)));
         let d = Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 8, 15));
-        let o = PDFObjT::Indirect(IndirectT::new(11, 0, Rc::clone(&d)));
+        let o = IndirectT::new(11, 0, Rc::clone(&d));
         assert_eq!(pb.get_cursor(), vlen);
         assert_eq!(val, Ok(LocatedVal::new(o, 0, vlen)));
         assert_eq!(ctxt.lookup_obj((11, 0)), Some(d.borrow()));
 
         // TODO: handle empty values
         let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut p = IndirectP::new(&mut ctxt);
         let v = Vec::from("12 0 obj/ endobj");
         let mut pb = ParseBuffer::new(v);
         let _val = p.parse(&mut pb);

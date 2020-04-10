@@ -20,8 +20,10 @@
 
 use std::convert::TryFrom;
 use std::collections::HashSet;
-use super::super::pcore::parsebuffer::{ParseBufferT, ParsleyParser, LocatedVal,
-                                       ParseResult, ErrorKind, make_error};
+use super::super::pcore::parsebuffer::{
+    ParseBufferT, ParsleyParser, ParseResult, LocatedVal,
+    ErrorKind, make_error
+};
 
 // There are two whitespace parsers.  This first one does not allow
 // EOL as whitespace.
