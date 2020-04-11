@@ -106,7 +106,7 @@ fn parse_file(test_file: &str) {
                              "Found {} bytes of leading garbage, dropping from buffer.",
                              nbytes);
                     let size = pb.remaining();
-                    pb = pb.restrict_view(nbytes, size).unwrap();
+                    pb = ParseBuffer::restrict_view(&pb, nbytes, size).unwrap();
                 };
                 nbytes
             }

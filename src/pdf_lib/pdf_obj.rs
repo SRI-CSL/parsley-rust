@@ -444,7 +444,7 @@ impl PDFObjP<'_> {
                 // Fallback case: these were two integers after all;
                 // rewind to the first.
                 buf.set_cursor(n1_end_cursor);
-                return Ok(PDFObjT::Integer(n1))
+                Ok(PDFObjT::Integer(n1))
             }
         }
     }

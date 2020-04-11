@@ -24,19 +24,6 @@ use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 use std::fmt;
 
-// The basic parsing buffer.  This implements a (possibly restricted)
-// view of length 'size' into the underlying buffer 'buf'.  The first
-// (0'th byte) of the view corresponds to byte 'start', and the last
-// valid byte of the view is at byte 'start + size - 1'.
-
-#[derive(Debug)]
-pub struct ParseBuffer {
-    buf:   Rc<Vec<u8>>,
-    start: usize,
-    size:  usize,
-    ofs:   usize, // index into the view (added to 'start' for buffer index).
-}
-
 // Location information for objects returned by parsers.
 pub trait Location {
     fn loc_start(&self) -> usize;
@@ -221,6 +208,12 @@ pub trait ParseBufferT {
     fn peek(&self) -> Option<u8>;
     fn buf(&self) -> &[u8];
 
+    // internal api, used for view restrictions.  ideally, this would have visibility
+    //   pub(in self::ParseBuffer)
+    // but this is not supported (surprisingly).
+    fn rc_buf(&self) -> Rc<Vec<u8>>;
+    fn start(&self) -> usize;
+
     // cursor management
 
     fn set_cursor(&mut self, ofs: usize);
@@ -265,6 +258,19 @@ pub trait ParseBufferT {
     fn extract<'a>(&'a mut self, len: usize) -> ParseResult<&'a [u8]>;
 }
 
+// The basic parsing buffer.  This implements a (possibly restricted)
+// view of length 'size' into the underlying buffer 'buf'.  The first
+// (0'th byte) of the view corresponds to byte 'start', and the last
+// valid byte of the view is at byte 'start + size - 1'.
+
+#[derive(Debug)]
+pub struct ParseBuffer {
+    buf:   Rc<Vec<u8>>,
+    start: usize,
+    size:  usize,
+    ofs:   usize, // index into the view (added to 'start' for buffer index).
+}
+
 impl ParseBuffer {
     // Creates a default view into the parse buffer.
     pub fn new(buf: Vec<u8>) -> ParseBuffer {
@@ -274,10 +280,20 @@ impl ParseBuffer {
 
     // Returns a new view restricted as specified if the bounds
     // permit.  In the returned view, the offset is reset to 0.
-    pub fn restrict_view(&self, start: usize, size: usize) -> Option<ParseBuffer> {
-        if start < self.size && start + size <= self.size {
-            Some(ParseBuffer { buf: Rc::clone(&self.buf),
-                               start: self.start + start, ofs: 0, size })
+    pub fn restrict_view(buf: &dyn ParseBufferT, start: usize, size: usize)
+                         -> Option<ParseBuffer> {
+        if size > 0 && start + size <= buf.size() {
+            Some(ParseBuffer { buf: buf.rc_buf(),
+                               start: buf.start() + start, ofs: 0, size })
+        } else {
+            None
+        }
+    }
+
+    pub fn restrict_view_from(buf: &dyn ParseBufferT, start: usize)
+                              -> Option<ParseBuffer> {
+        if start < buf.size() {
+            ParseBuffer::restrict_view(buf, start, buf.size() - start)
         } else {
             None
         }
@@ -312,7 +328,6 @@ pub fn parse_guarded<P: ParsleyPrimitive>(buf: &mut dyn ParseBufferT,
     Ok(t)
 }
 
-
 impl ParseBufferT for ParseBuffer {
     fn size(&self) -> usize {
         self.size
@@ -333,6 +348,13 @@ impl ParseBufferT for ParseBuffer {
 
     fn buf(&self) -> &[u8] {
         &self.buf[(self.start + self.ofs) .. (self.start + self.size)]
+    }
+
+    fn rc_buf(&self) -> Rc<Vec<u8>> {
+        Rc::clone(&self.buf)
+    }
+    fn start(&self) -> usize {
+        self.start
     }
 
     fn get_cursor(&self) -> usize {
@@ -479,7 +501,7 @@ mod test_parsebuffer {
         pb.set_cursor(0);
         assert_eq!(pb.scan("56".as_bytes()), Ok(5));
         let size = pb.remaining();
-        pb = pb.restrict_view(5, size).unwrap();
+        pb = ParseBuffer::restrict_view(&pb, 5, size).unwrap();
         assert_eq!(pb.get_cursor(), 0);
         assert_eq!(pb.remaining(), size);
         assert_eq!(pb.scan("56".as_bytes()), Ok(0));
@@ -489,9 +511,21 @@ mod test_parsebuffer {
         // identical view
         pb.set_cursor(0);
         let size = pb.remaining();
-        pb = pb.restrict_view(0, size).unwrap();
+        pb = ParseBuffer::restrict_view(&pb, 0, size).unwrap();
         assert_eq!(pb.remaining(), size);
         assert_eq!(pb.scan("9".as_bytes()), Ok(4));
+
+        // identical view
+        pb = ParseBuffer::restrict_view_from(&pb, 0).unwrap();
+        assert_eq!(pb.remaining(), size);
+        assert_eq!(pb.scan("9".as_bytes()), Ok(4));
+
+        // view from
+        pb = ParseBuffer::restrict_view_from(&pb, pb.size() - 1).unwrap();
+        assert_eq!(pb.remaining(), 1);
+        assert_eq!(pb.scan("9".as_bytes()), Ok(0));
+        let pb = ParseBuffer::restrict_view_from(&pb, 1);
+        assert!(pb.is_none());
     }
 
     #[test]
@@ -504,7 +538,7 @@ mod test_parsebuffer {
 
         // create a new view
         let size = pb.remaining();
-        let mut pb_new = pb.restrict_view(5, size).unwrap();
+        let mut pb_new = ParseBuffer::restrict_view(&pb, 5, size).unwrap();
         assert_eq!(pb_new.scan("56".as_bytes()), Ok(0));
         pb_new.set_cursor(0);
         assert_eq!(pb_new.scan("9".as_bytes()), Ok(4));
