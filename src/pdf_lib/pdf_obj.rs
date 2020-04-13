@@ -152,6 +152,32 @@ impl DictT {
             }
         })
     }
+    pub fn get_name_obj(&self, k: &[u8]) -> Option<NameT> {
+        self.get(k).map_or(None, |lobj| {
+            match lobj.val() {
+                PDFObjT::Name(n) => Some(n.clone()),
+                _                => None
+            }
+        })
+    }
+    // get the array value of a key
+    pub fn get_array(&self, k: &[u8]) -> Option<&ArrayT> {
+        self.get(k).map_or(None, |lobj| {
+            match lobj.val() {
+                PDFObjT::Array(a) => Some(&a),
+                _                 => None
+            }
+        })
+    }
+    // get the dictionary value of a key
+    pub fn get_dict(&self, k: &[u8]) -> Option<&DictT> {
+        self.get(k).map_or(None, |lobj| {
+            match lobj.val() {
+                PDFObjT::Dict(d) => Some(d),
+                _                => None
+            }
+        })
+    }
 }
 
 pub struct DictP<'a> {
@@ -181,11 +207,8 @@ impl DictP<'_> {
                 // Construct a normalized name usable as a key.
                 let key = n.val().normalize();
                 if names.contains(&key) {
-                    let n_str = match std::str::from_utf8(&key) {
-                        Ok(v)  => v.to_string(),
-                        Err(e) => format!("(error: cannot convert to UTF-8: {})", e)
-                    };
-                    let msg = format!("non-unique dictionary key: {}", n_str);
+                    let msg = format!("non-unique dictionary key: {}",
+                                      n.val().as_string());
                     let err = ErrorKind::GuardError(msg);
                     return Err(make_error_with_loc(err, &n))
                 }
@@ -225,6 +248,82 @@ impl StreamT {
     }
     pub fn dict(&self) -> &Rc<LocatedVal<DictT>> { &self.dict }
     pub fn stream(&self) -> &LocatedVal<Vec<u8>> { &self.stream }
+
+    pub fn filters(&self) -> ParseResult<Vec<(NameT, Option<&DictT>)>> {
+        let mut filters = Vec::new();
+        // check for the single filter case
+        let f = self.dict.val().get_name_obj(b"Filter");
+        if f.is_some() {
+            let name = f.unwrap();
+            // There should be an optional single dictionary
+            // value as filter param.
+            match self.dict.val().get_dict(b"DecodeParms") {
+                Some(d) => {
+                    filters.push((name, Some(d)))
+                },
+                None => {
+                    // Ensure there is no array value.
+                    if self.dict.val().get_array(b"DecodeParms").is_some() {
+                        let msg = format!("Mismatched Filter and DecodeParms in stream");
+                        let err = ErrorKind::GuardError(msg);
+                        return Err(make_error_with_loc(err, &*self.dict))
+                    }
+                    filters.push((name, None))
+                }
+            }
+            return Ok(filters)
+        }
+        // check the array case
+        let fa = self.dict.val().get_array(b"Filter");
+        if fa.is_some() {
+            let fa = fa.unwrap();
+            match self.dict.val().get_array(b"DecodeParms") {
+                Some(da) => {
+                    if da.objs().len() != fa.objs().len() {
+                        let msg = format!("Mismatched lengths for Filter and DecodeParms of stream");
+                        let err = ErrorKind::GuardError(msg);
+                        return Err(make_error_with_loc(err, &*self.dict))
+                    }
+                    for (f, d) in fa.objs().iter().zip(da.objs().iter()) {
+                        match (f.val(), d.val()) {
+                            (PDFObjT::Name(name), PDFObjT::Null(_)) => {
+                                filters.push((name.clone(), None))
+                            },
+                            (PDFObjT::Name(name), PDFObjT::Dict(ref d)) => {
+                                filters.push((name.clone(), Some(d)))
+                            },
+                            (PDFObjT::Name(_), _) => {
+                                let msg = format!("Invalid objects in DecodeParms of stream");
+                                let err = ErrorKind::GuardError(msg);
+                                return Err(make_error_with_loc(err, &*self.dict))
+                            },
+                            (_, _) => {
+                                let msg = format!("Invalid objects in Filter of stream");
+                                let err = ErrorKind::GuardError(msg);
+                                return Err(make_error_with_loc(err, &*self.dict))
+                            }
+                        }
+                    }
+                },
+                None => {
+                    // Ensure that all are name objects.
+                    for f in fa.objs() {
+                        match f.val() {
+                            PDFObjT::Name(name) => {
+                                filters.push((name.clone(), None))
+                            },
+                            _ => {
+                                let msg = format!("Invalid objects in Filter of stream");
+                                let err = ErrorKind::GuardError(msg);
+                                return Err(make_error_with_loc(err, &*self.dict))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(filters)
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]

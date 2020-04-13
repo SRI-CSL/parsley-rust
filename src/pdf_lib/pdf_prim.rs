@@ -484,7 +484,7 @@ impl ParsleyParser for RawLiteralString {
 
 // Raw names: does not perform UTF decoding, and the representation
 // does not include the leading '/'.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct NameT {
     raw_bytes: Vec<u8>
 }
@@ -500,9 +500,15 @@ impl NameT {
         // TODO: normalize according to PDF spec.
         self.raw_bytes.clone()
     }
-    // TODO: allow deferencing to Vec
+    // TODO: allow dereferencing to Vec
     pub fn len(&self) -> usize {
         self.raw_bytes.len()
+    }
+    pub fn as_string(&self) -> String {
+        match std::str::from_utf8(&self.raw_bytes) {
+            Ok(v) => v.to_string(),
+            Err(e) => format!("(cannot convert name: {})", e)
+        }
     }
 }
 

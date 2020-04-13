@@ -39,6 +39,7 @@ use parsley_rust::pcore::parsebuffer::{
 };
 use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, XrefSectP, TrailerP};
 use parsley_rust::pdf_lib::pdf_obj::{PDFObjT, IndirectP, PDFObjContext};
+use parsley_rust::pdf_lib::pdf_streams::{XrefStreamP};
 
 /* from: https://osr.jpl.nasa.gov/wiki/pages/viewpage.action?spaceKey=SD&title=TA2+PDF+Safe+Parser+Evaluation
 
@@ -160,13 +161,36 @@ fn parse_file(test_file: &str) {
              "startxref points to file-offset {} (pdf-offset {}) for xref",
              file_offset(sxref_offset), sxref_offset);
 
-    // Parse xref at that offset.
+    // Create the pdf object context.
+    let mut ctxt = PDFObjContext::new();
+
+    // Parse xref table at that offset.
     pb.set_cursor(sxref.offset().try_into().unwrap());
     let mut p = XrefSectP;
     let xref = p.parse(&mut pb);
-    if let Err(e) = xref {
-        panic!("Could not parse xref in {} at file-offset {} (pdf-offset {}): {}",
-               display, file_offset(e.start()), e.start(), e.val());
+    if let Err(ref e) = xref {
+        ta3_log!(Level::Info, file_offset(sxref_offset),
+                 "Could not parse xref in {} at file-offset {} (pdf-offset {}): {}",
+                 display, file_offset(e.start()), e.start(), e.val());
+        // Check if we have an xref stream
+        let mut sp = IndirectP::new(&mut ctxt);
+        let xref_obj = sp.parse(&mut pb);
+        if let Err(e) = xref_obj {
+            panic!("Could not parse object for xref stream in {} at file-offset {} (pdf-offset {}): {}",
+                   display, file_offset(e.start()), e.start(), e.val());
+        };
+        let xref_obj = xref_obj.unwrap();
+        if let PDFObjT::Stream(ref s) = xref_obj.val().obj().val() {
+            let mut xp = XrefStreamP::new(s);
+            let xref_stm = xp.parse(&mut pb);
+            if let Err(e) = xref_stm {
+                panic!("Could not parse xref stream in {} at file-offset {} (pdf-offset {}): {}",
+                       display, file_offset(e.start()), e.start(), e.val());
+            }
+        } else {
+            panic!("Could not find valid xref information in {} at file-offset {} (pdf-offset {})",
+                   display, file_offset(sxref_offset), sxref_offset);
+        }
     }
 
     let xref_loc = xref.unwrap();
@@ -193,9 +217,6 @@ fn parse_file(test_file: &str) {
             }
         }
     }
-
-    // Create the pdf object context.
-    let mut ctxt = PDFObjContext::new();
 
     // Get trailer following the xref table, which should give us the
     // id of the Root object.
