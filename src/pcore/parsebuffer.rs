@@ -460,11 +460,11 @@ mod test_parsebuffer {
     fn test_scan() {
         let v = Vec::from("0123456789".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(pb.scan("56".as_bytes()), Ok(5));
+        assert_eq!(pb.scan(b"56"), Ok(5));
         assert_eq!(pb.get_cursor(), 5);
-        assert_eq!(pb.scan("56".as_bytes()), Ok(0));
+        assert_eq!(pb.scan(b"56"), Ok(0));
         assert_eq!(pb.get_cursor(), 5);
-        assert_eq!(pb.scan("0".as_bytes()),
+        assert_eq!(pb.scan(b"0"),
                    Err(make_error(ErrorKind::EndOfBuffer, 5, 5)));
         assert_eq!(pb.get_cursor(), 5);
     }
@@ -473,12 +473,12 @@ mod test_parsebuffer {
     fn test_backward_scan() {
         let v = Vec::from("0123456789".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(pb.scan("56".as_bytes()), Ok(5));
+        assert_eq!(pb.scan(b"56"), Ok(5));
         assert_eq!(pb.get_cursor(), 5);
-        assert_eq!(pb.backward_scan("56".as_bytes()),
+        assert_eq!(pb.backward_scan(b"56"),
                    Err(make_error(ErrorKind::EndOfBuffer, 5, 5)));
         assert_eq!(pb.get_cursor(), 5);
-        assert_eq!(pb.backward_scan("012".as_bytes()), Ok(5));
+        assert_eq!(pb.backward_scan(b"012"), Ok(5));
         assert_eq!(pb.get_cursor(), 0);
     }
 
@@ -497,33 +497,33 @@ mod test_parsebuffer {
     fn test_restrict_view() {
         let v = Vec::from("0123456789".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(pb.scan("9".as_bytes()), Ok(9));
+        assert_eq!(pb.scan(b"9"), Ok(9));
         pb.set_cursor(0);
-        assert_eq!(pb.scan("56".as_bytes()), Ok(5));
+        assert_eq!(pb.scan(b"56"), Ok(5));
         let size = pb.remaining();
         pb = ParseBuffer::restrict_view(&pb, 5, size).unwrap();
         assert_eq!(pb.get_cursor(), 0);
         assert_eq!(pb.remaining(), size);
-        assert_eq!(pb.scan("56".as_bytes()), Ok(0));
+        assert_eq!(pb.scan(b"56"), Ok(0));
         pb.set_cursor(0);
-        assert_eq!(pb.scan("9".as_bytes()), Ok(4));
+        assert_eq!(pb.scan(b"9"), Ok(4));
 
         // identical view
         pb.set_cursor(0);
         let size = pb.remaining();
         pb = ParseBuffer::restrict_view(&pb, 0, size).unwrap();
         assert_eq!(pb.remaining(), size);
-        assert_eq!(pb.scan("9".as_bytes()), Ok(4));
+        assert_eq!(pb.scan(b"9"), Ok(4));
 
         // identical view
         pb = ParseBuffer::restrict_view_from(&pb, 0).unwrap();
         assert_eq!(pb.remaining(), size);
-        assert_eq!(pb.scan("9".as_bytes()), Ok(4));
+        assert_eq!(pb.scan(b"9"), Ok(4));
 
         // view from
         pb = ParseBuffer::restrict_view_from(&pb, pb.size() - 1).unwrap();
         assert_eq!(pb.remaining(), 1);
-        assert_eq!(pb.scan("9".as_bytes()), Ok(0));
+        assert_eq!(pb.scan(b"9"), Ok(0));
         let pb = ParseBuffer::restrict_view_from(&pb, 1);
         assert!(pb.is_none());
     }
@@ -532,19 +532,19 @@ mod test_parsebuffer {
     fn test_multiple_view() {
         let v = Vec::from("0123456789".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        assert_eq!(pb.scan("9".as_bytes()), Ok(9));
+        assert_eq!(pb.scan(b"9"), Ok(9));
         pb.set_cursor(0);
-        assert_eq!(pb.scan("56".as_bytes()), Ok(5));
+        assert_eq!(pb.scan(b"56"), Ok(5));
 
         // create a new view
         let size = pb.remaining();
         let mut pb_new = ParseBuffer::restrict_view(&pb, 5, size).unwrap();
-        assert_eq!(pb_new.scan("56".as_bytes()), Ok(0));
+        assert_eq!(pb_new.scan(b"56"), Ok(0));
         pb_new.set_cursor(0);
-        assert_eq!(pb_new.scan("9".as_bytes()), Ok(4));
+        assert_eq!(pb_new.scan(b"9"), Ok(4));
 
         // ensure the old view is still usable
         pb.set_cursor(0);
-        assert_eq!(pb.scan("56".as_bytes()), Ok(5));
+        assert_eq!(pb.scan(b"56"), Ok(5));
     }
 }

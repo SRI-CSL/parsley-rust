@@ -198,7 +198,7 @@ mod test_sequence {
 
         // pre invalid
         let mut v = Vec::new();
-        v.extend_from_slice("C".as_bytes());
+        v.extend_from_slice(b"C");
         let mut pb = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
         let e = ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name().to_string());
@@ -208,7 +208,7 @@ mod test_sequence {
 
         // mid invalid
         let mut v = Vec::new();
-        v.extend_from_slice("AC".as_bytes());
+        v.extend_from_slice(b"AC");
         let mut pb = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
         let e = ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name().to_string());
@@ -219,7 +219,7 @@ mod test_sequence {
 
         // valid
         let mut v = Vec::new();
-        v.extend_from_slice("AB".as_bytes());
+        v.extend_from_slice(b"AB");
         let mut pb = ParseBuffer::new(v);
         let r = seq.parse(&mut pb).unwrap();
         let r = r.unwrap();
@@ -251,7 +251,7 @@ mod test_alternate {
 
         // pre invalid
         let mut v = Vec::new();
-        v.extend_from_slice("CA".as_bytes());
+        v.extend_from_slice(b"CA");
         let mut pb = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
         let e = ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name().to_string());
@@ -261,7 +261,7 @@ mod test_alternate {
 
         // left valid
         let mut v = Vec::new();
-        v.extend_from_slice("A".as_bytes());
+        v.extend_from_slice(b"A");
         let mut pb = ParseBuffer::new(v);
         let r = seq.parse(&mut pb).unwrap();
         assert_eq!(*r.val(), Alt::Left(LocatedVal::new('A', 0, 1)));
@@ -269,7 +269,7 @@ mod test_alternate {
 
         // right valid
         let mut v = Vec::new();
-        v.extend_from_slice("B".as_bytes());
+        v.extend_from_slice(b"B");
         let mut pb = ParseBuffer::new(v);
         let r = seq.parse(&mut pb).unwrap();
         assert_eq!(*r.val(), Alt::Right(LocatedVal::new('B', 0, 1)));
@@ -298,7 +298,7 @@ mod test_star {
 
         // valid
         let mut v = Vec::new();
-        v.extend_from_slice("AAA".as_bytes());
+        v.extend_from_slice(b"AAA");
         let mut pb = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
         let e = vec![LocatedVal::new('A', 0, 1),
@@ -309,7 +309,7 @@ mod test_star {
 
         // valid with trailer
         let mut v = Vec::new();
-        v.extend_from_slice("AAAB".as_bytes());
+        v.extend_from_slice(b"AAAB");
         let mut pb = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
         let e = vec![LocatedVal::new('A', 0, 1),
@@ -325,7 +325,7 @@ mod test_star {
         let mut seq = Star::new(&mut p);
 
         let mut v = Vec::new();
-        v.extend_from_slice("AAAB".as_bytes());
+        v.extend_from_slice(b"AAAB");
         let mut pb = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
         let e = vec![LocatedVal::new('A', 0, 1),
@@ -363,7 +363,7 @@ mod test_combined {
 
         // only a
         let mut v = Vec::new();
-        v.extend_from_slice("AAA".as_bytes());
+        v.extend_from_slice(b"AAA");
         let mut pb = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
         let a = LocatedVal::new(vec![LocatedVal::new('A', 0, 1),
@@ -375,7 +375,7 @@ mod test_combined {
 
         // only b
         let mut v = Vec::new();
-        v.extend_from_slice("BBBA".as_bytes());
+        v.extend_from_slice(b"BBBA");
         let mut pb = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
         let a = LocatedVal::new(vec![], 0, 0);
@@ -387,7 +387,7 @@ mod test_combined {
 
         // a then b
         let mut v = Vec::new();
-        v.extend_from_slice("AAABBB".as_bytes());
+        v.extend_from_slice(b"AAABBB");
         let mut pb = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
         let a = LocatedVal::new(vec![LocatedVal::new('A', 0, 1),
@@ -416,7 +416,7 @@ mod test_combined {
 
         // match
         let mut v = Vec::new();
-        v.extend_from_slice("BAABC".as_bytes());
+        v.extend_from_slice(b"BAABC");
         let mut pb = ParseBuffer::new(v);
         let r = star.parse(&mut pb);
         let v = vec![LocatedVal::new(Alt::Right(LocatedVal::new('B', 0, 1)), 0, 1),
@@ -436,7 +436,7 @@ mod test_combined {
 
         // match
         let mut v = Vec::new();
-        v.extend_from_slice("ABABC".as_bytes());
+        v.extend_from_slice(b"ABABC");
         let mut pb = ParseBuffer::new(v);
         let r = star.parse(&mut pb);
         let v = vec![LocatedVal::new((LocatedVal::new('A', 0, 1),
@@ -459,7 +459,7 @@ mod test_combined {
 
         // match
         let mut v = Vec::new();
-        v.extend_from_slice("AABBC".as_bytes());
+        v.extend_from_slice(b"AABBC");
         let mut pb = ParseBuffer::new(v);
         let r = abs.parse(&mut pb);
         let v = Alt::Left(LocatedVal::new(vec![LocatedVal::new('A', 0, 1),
@@ -469,7 +469,7 @@ mod test_combined {
 
         // match
         let mut v = Vec::new();
-        v.extend_from_slice("BBAAC".as_bytes());
+        v.extend_from_slice(b"BBAAC");
         let mut pb = ParseBuffer::new(v);
         let r = abs.parse(&mut pb);
         let v = Alt::Left(LocatedVal::new(vec![], 0, 0));
@@ -489,7 +489,7 @@ mod test_combined {
 
         // match
         let mut v = Vec::new();
-        v.extend_from_slice("ABABC".as_bytes());
+        v.extend_from_slice(b"ABABC");
         let mut pb = ParseBuffer::new(v);
         let r = p.parse(&mut pb);
         let v = Alt::Left(LocatedVal::new((LocatedVal::new('A', 0, 1),
@@ -504,7 +504,7 @@ mod test_combined {
 
         // match
         let mut v = Vec::new();
-        v.extend_from_slice("BABAC".as_bytes());
+        v.extend_from_slice(b"BABAC");
         let mut pb = ParseBuffer::new(v);
         let r = p.parse(&mut pb);
         let v = Alt::Right(LocatedVal::new((LocatedVal::new('B', 0, 1),
@@ -530,7 +530,7 @@ mod test_combined {
 
         // match
         let mut v = Vec::new();
-        v.extend_from_slice("ABABC".as_bytes());
+        v.extend_from_slice(b"ABABC");
         let mut pb = ParseBuffer::new(v);
         let r = p.parse(&mut pb);
         let v = (LocatedVal::new(Alt::Left(LocatedVal::new('A', 0, 1)), 0, 1),
@@ -550,7 +550,7 @@ mod test_combined {
 
         // match
         let mut v = Vec::new();
-        v.extend_from_slice("BAABC".as_bytes());
+        v.extend_from_slice(b"BAABC");
 
         let mut pb = ParseBuffer::new(v);
         let r = p.parse(&mut pb);
@@ -585,7 +585,7 @@ mod test_combined {
 
         // match-case
         let mut v = Vec::new();
-        v.extend_from_slice("B".as_bytes());
+        v.extend_from_slice(b"B");
         let mut pb = ParseBuffer::new(v);
         let r = not.parse(&mut pb);
         let e = Err(make_error(ErrorKind::GuardError("not".to_string()), 0, 0));
@@ -594,7 +594,7 @@ mod test_combined {
 
         // not-case
         let mut v = Vec::new();
-        v.extend_from_slice("C".as_bytes());
+        v.extend_from_slice(b"C");
         let mut pb = ParseBuffer::new(v);
         let r = not.parse(&mut pb);
         assert_eq!(r, Ok(LocatedVal::new((), 0, 0)));

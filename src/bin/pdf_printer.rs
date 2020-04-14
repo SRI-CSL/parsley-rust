@@ -100,7 +100,7 @@ fn parse_file(test_file: &str) {
 
     // Handle leading garbage.
     let pdf_hdr_ofs =
-        match pb.scan("%PDF-".as_bytes()) {
+        match pb.scan(b"%PDF-") {
             Ok(nbytes) => {
                 if nbytes != 0 {
                     ta3_log!(Level::Info, nbytes,
@@ -128,7 +128,7 @@ fn parse_file(test_file: &str) {
 
     // From end of buffer, scan backwards for %EOF, if present.
     pb.set_cursor(buflen);
-    let eof = pb.backward_scan("%%EOF".as_bytes());
+    let eof = pb.backward_scan(b"%%EOF");
     if let Err(e) = eof {
         ta3_log!(Level::Info, file_offset(0), "No %%EOF in {}: {}", display, e.val());
     } else {
@@ -138,7 +138,7 @@ fn parse_file(test_file: &str) {
     }
 
     // Scan backward for startxref.
-    let sxref = pb.backward_scan("startxref".as_bytes());
+    let sxref = pb.backward_scan(b"startxref");
     if let Err(e) = sxref {
         panic!("Could not find startxref in {}: {}", display, e.val());
     }
@@ -220,7 +220,7 @@ fn parse_file(test_file: &str) {
 
     // Get trailer following the xref table, which should give us the
     // id of the Root object.
-    match pb.scan("trailer".as_bytes()) {
+    match pb.scan(b"trailer") {
         Ok(nbytes) =>
             ta3_log!(Level::Info, file_offset(xref_loc_end + nbytes),
                      "Found trailer {} bytes from end of xref table.",
@@ -235,7 +235,7 @@ fn parse_file(test_file: &str) {
     }
     let trlr = trlr.unwrap().unwrap();
     // TODO: this constraint should be enforced in the library.
-    let root_ref = match trlr.dict().get("Root".as_bytes()) {
+    let root_ref = match trlr.dict().get(b"Root") {
         Some(rt) => rt,
         None => {
             panic!("No root reference found!");

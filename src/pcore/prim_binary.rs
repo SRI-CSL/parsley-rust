@@ -128,7 +128,7 @@ mod test_binary {
     #[test]
     fn scan() {
         // The fact that this has to be mutable is a defect in the current API.
-        let mut s = BinaryScanner::new("%PDF-".as_bytes());
+        let mut s = BinaryScanner::new(b"%PDF-");
 
         let mut pb = ParseBuffer::new(Vec::from("%PDF-".as_bytes()));
         assert_eq!(s.parse(&mut pb), Ok(LocatedVal::new(0, 0, 0)));
@@ -149,7 +149,7 @@ mod test_binary {
     #[test]
     fn exact() {
         // The fact that this has to be mutable is a defect in the current API.
-        let mut s = BinaryMatcher::new("%PDF-".as_bytes());
+        let mut s = BinaryMatcher::new(b"%PDF-");
 
         let mut pb = ParseBuffer::new(Vec::from("".as_bytes()));
         let e = make_error(ErrorKind::GuardError("match".to_string()), 0, 0);

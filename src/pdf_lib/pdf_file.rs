@@ -105,7 +105,7 @@ impl XrefEntP {
         let info = info.unwrap();
 
         // Single space seperator.
-        let _ = buf.exact(" ".as_bytes())?;
+        let _ = buf.exact(b" ")?;
 
         // The generation number is 5 digits.
         let mut gen = buf.extract(5)?;
@@ -130,7 +130,7 @@ impl XrefEntP {
         let gen = gen.unwrap();
 
         // Single space seperator.
-        let _ = buf.exact(" ".as_bytes())?;
+        let _ = buf.exact(b" ")?;
 
         // Entry type is a single character.
         let flg = buf.extract(1)?;
@@ -147,7 +147,7 @@ impl XrefEntP {
 
         // Xrefent-specific EOL.
         let eol = buf.extract(2)?;
-        if eol != " \r".as_bytes() && eol != " \n".as_bytes() && eol != "\r\n".as_bytes() {
+        if eol != b" \r" && eol != b" \n" && eol != b"\r\n" {
             let err = ErrorKind::GuardError("bad eol gen".to_string());
             let end = buf.get_cursor();
             return Err(make_error(err, start, end))
@@ -234,7 +234,7 @@ impl XrefSubSectP {
         }
         let xstart = xstart.unwrap();
 
-        let _ = buf.exact(" ".as_bytes())?;
+        let _ = buf.exact(b" ")?;
         let xcount = usize::try_from(int.parse(buf)?.val().int_val());
         if let Err(_) = xcount {
             let err = ErrorKind::GuardError("conversion error on xref-subsect count".to_string());
@@ -390,7 +390,7 @@ impl ParsleyParser for XrefSectP {
         let mut ws = WhitespaceEOL::new(true);
         ws.parse(buf)?;
 
-        if let Err(_) = buf.exact("xref".as_bytes()) {
+        if let Err(_) = buf.exact(b"xref") {
             let err = ErrorKind::GuardError("not at xref".to_string());
             let end = buf.get_cursor();
             return Err(make_error(err, start, end))
@@ -484,7 +484,7 @@ impl ParsleyParser for TrailerP<'_> {
     // This assumes we are positioned at 'trailer'.
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
-        if let Err(_) = buf.exact("trailer".as_bytes()) {
+        if let Err(_) = buf.exact(b"trailer") {
             let err = ErrorKind::GuardError("not at trailer".to_string());
             let end = buf.get_cursor();
             return Err(make_error(err, start, end))
@@ -525,7 +525,7 @@ impl ParsleyParser for StartXrefP {
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
 
-        if let Err(_) = buf.exact("startxref".as_bytes()) {
+        if let Err(_) = buf.exact(b"startxref") {
             let err = ErrorKind::GuardError("not at startxref".to_string());
             let end = buf.get_cursor();
             return Err(make_error(err, start, end))

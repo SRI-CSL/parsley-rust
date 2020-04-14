@@ -42,7 +42,7 @@ impl ParsleyParser for WhitespaceNoEOL {
 
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
-        let ws = buf.parse_allowed_bytes(" \0\t\r\x0c".as_bytes())?;
+        let ws = buf.parse_allowed_bytes(b" \0\t\r\x0c")?;
         if ws.len() == 0 && !self.empty_ok {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not at whitespace-noeol".to_string());
@@ -75,7 +75,7 @@ impl ParsleyParser for Comment {
             return Err(LocatedVal::new(err, start, end));
         }
         buf.incr_cursor();
-        let c = buf.parse_bytes_until("\n".as_bytes())?;
+        let c = buf.parse_bytes_until(b"\n")?;
         if buf.peek() == Some(10) { buf.incr_cursor(); }
         let end = buf.get_cursor();
         Ok(LocatedVal::new(c, start, end))
@@ -103,7 +103,7 @@ impl ParsleyParser for WhitespaceEOL {
         // loop to consume comments
         let mut is_empty = true;
         loop {
-            let v = buf.parse_allowed_bytes(" \0\t\r\n\x0c".as_bytes())?;
+            let v = buf.parse_allowed_bytes(b" \0\t\r\n\x0c")?;
             if v.len() > 0 { is_empty = false }
             // Check if we are at a comment.
             if let Some(37) = buf.peek() { // '%'
@@ -135,9 +135,9 @@ impl ParsleyParser for Boolean {
 
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
-        let mut b = buf.exact("true".as_bytes());
+        let mut b = buf.exact(b"true");
         if let Err(_) = b {
-            b = buf.exact("false".as_bytes());
+            b = buf.exact(b"false");
             if let Err(_) = b {
                 let end = buf.get_cursor();
                 let err = ErrorKind::GuardError("not at boolean".to_string());
@@ -161,7 +161,7 @@ impl ParsleyParser for Null {
 
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
-        let null = buf.exact("null".as_bytes());
+        let null = buf.exact(b"null");
         if let Err(_) = null {
             let end = buf.get_cursor();
             Err(make_error(ErrorKind::GuardError("not at null".to_string()), start, end))
@@ -214,7 +214,7 @@ impl ParsleyParser for IntegerP {
             } else {
                 false
             };
-        let num_str = buf.parse_allowed_bytes("0123456789".as_bytes())?;
+        let num_str = buf.parse_allowed_bytes(b"0123456789")?;
         if (num_str.len() == 0) && (buf.peek() != Some(46)) {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not at number".to_string());
@@ -289,7 +289,7 @@ impl ParsleyParser for RealP {
             } else {
                 false
             };
-        let num_str = buf.parse_allowed_bytes("0123456789".as_bytes())?;
+        let num_str = buf.parse_allowed_bytes(b"0123456789")?;
         if (num_str.len() == 0) && (buf.peek() != Some(46)) {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not at number".to_string());
@@ -318,7 +318,7 @@ impl ParsleyParser for RealP {
         if buf.peek() == Some(46) {            // '.'
             let mut den: i64 = 1;
             buf.incr_cursor();
-            let s = buf.parse_allowed_bytes("0123456789".as_bytes());
+            let s = buf.parse_allowed_bytes(b"0123456789");
             if let Ok(den_str) = s {
                 for c in den_str.iter() {
                     let tmp = i64::checked_mul(num, 10);
@@ -383,7 +383,7 @@ impl ParsleyParser for HexString {
             return Err(LocatedVal::new(err, start, start))
         };
         buf.incr_cursor();
-        let bytes = buf.parse_allowed_bytes("0123456789abcdefABCDEF \n\r\t\0\x0c".as_bytes())?;
+        let bytes = buf.parse_allowed_bytes(b"0123456789abcdefABCDEF \n\r\t\0\x0c")?;
         if buf.peek() != Some(62) {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not at valid hex string".to_string());
@@ -434,19 +434,19 @@ impl ParsleyParser for RawLiteralString {
         buf.incr_cursor();
 
         loop {
-            let bytes = buf.parse_bytes_until("()".as_bytes())?;
+            let bytes = buf.parse_bytes_until(b"()")?;
             match buf.peek() {
                 Some(40) => { // '('
                     buf.incr_cursor();
                     if let Some(last) = bytes.last() {
                         let escaped = *last == 92; // '\' escaped '('
                         v.extend_from_slice(&bytes);
-                        v.extend_from_slice("(".as_bytes());
+                        v.extend_from_slice(b"(");
                         if !escaped { depth += 1 }
                     } else {
                         depth += 1;      // unescaped '('
                         v.extend_from_slice(&bytes);
-                        v.extend_from_slice("(".as_bytes());
+                        v.extend_from_slice(b"(");
                     }
                 }
                 Some(41) => { // ')'
@@ -458,12 +458,12 @@ impl ParsleyParser for RawLiteralString {
                             depth -= 1;
                             if depth == 0 { break }
                         }
-                        v.extend_from_slice(")".as_bytes());
+                        v.extend_from_slice(b")");
                     } else {
                         v.extend_from_slice(&bytes);
                         depth -= 1;
                         if depth == 0 { break }
-                        v.extend_from_slice(")".as_bytes());
+                        v.extend_from_slice(b")");
                     }
                 }
                 Some(_) => {
@@ -527,7 +527,7 @@ impl ParsleyParser for NameP {
 
         // terminated by whitespace or delimiter characters.  empty
         // names are considered valid.
-        let v = buf.parse_bytes_until(" \0\t\r\n\x0c()<>[]{}/%".as_bytes())?;
+        let v = buf.parse_bytes_until(b" \0\t\r\n\x0c()<>[]{}/%")?;
         let end = buf.get_cursor();
 
         // Normalize hex-codes if length permits.
@@ -609,7 +609,7 @@ impl ParsleyParser for StreamContent {
     // has been consumed.
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
-        let is_stream = buf.exact("stream".as_bytes());
+        let is_stream = buf.exact(b"stream");
         if let Err(_) = is_stream {
             let err = ErrorKind::GuardError("not at stream content".to_string());
             return Err(make_error(err, start, start))
@@ -627,7 +627,7 @@ impl ParsleyParser for StreamContent {
         }
         let stream_start_cursor = buf.get_cursor();
 
-        let len = buf.scan("endstream".as_bytes());
+        let len = buf.scan(b"endstream");
         if let Err(e) = len {
             buf.set_cursor(start);
             return Err(e)
@@ -654,7 +654,7 @@ impl ParsleyParser for StreamContent {
 
         // Go back to the end of the content
         buf.set_cursor(stream_end_cursor);
-        if let Err(_) = buf.exact("endstream".as_bytes()) {
+        if let Err(_) = buf.exact(b"endstream") {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("invalid endstream".to_string());
             buf.set_cursor(start);

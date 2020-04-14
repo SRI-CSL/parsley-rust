@@ -89,7 +89,7 @@ impl ArrayP<'_> {
     }
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<LocatedVal<ArrayT>> {
         let start = buf.get_cursor();
-        if let Err(e) = buf.exact("[".as_bytes()) {
+        if let Err(e) = buf.exact(b"[") {
             let msg = format!("not at array object: {}", e.val());
             let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
@@ -104,7 +104,7 @@ impl ArrayP<'_> {
             // for now in the handwritten case, just be close enough.
             let mut ws = WhitespaceEOL::new(true);
             ws.parse(buf)?;
-            if let Err(_) = buf.exact("]".as_bytes()) {
+            if let Err(_) = buf.exact(b"]") {
                 let mut p = PDFObjP::new(&mut self.ctxt);
                 let o = p.parse(buf)?;
                 objs.push(Rc::new(o));
@@ -189,7 +189,7 @@ impl DictP<'_> {
         DictP { ctxt }
     }
     pub fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<DictT> {
-        buf.exact("<<".as_bytes())?;
+        buf.exact(b"<<")?;
         let mut end = false;
         let mut map = BTreeMap::new();
         let mut names = HashSet::new();
@@ -201,7 +201,7 @@ impl DictP<'_> {
             let mut ws = WhitespaceEOL::new(true); // allow empty whitespace for now
             ws.parse(buf)?;
 
-            if let Err(_) = buf.exact(">>".as_bytes()) {
+            if let Err(_) = buf.exact(b">>") {
                 let mut p = NameP;
                 let n = p.parse(buf)?;
                 // Construct a normalized name usable as a key.
@@ -369,7 +369,7 @@ impl ReferenceP {
             return Err(make_error(err, cursor, end))
         }
         ws.parse(buf)?;
-        if let Err(e) = buf.exact("R".as_bytes()) {
+        if let Err(e) = buf.exact(b"R") {
             let err = ErrorKind::GuardError("invalid reference tag".to_string());
             return Err(make_error_with_loc(err, &e))
         }
@@ -524,7 +524,7 @@ impl PDFObjP<'_> {
 
                 // We have now seen two integers, so this could be an
                 // indirect reference.
-                let prefix = buf.check_prefix("R".as_bytes());
+                let prefix = buf.check_prefix(b"R");
                 if let Err(_) = prefix {
                     buf.set_cursor(n1_end_cursor);
                     return Ok(PDFObjT::Integer(n1))
@@ -613,7 +613,7 @@ impl IndirectP<'_> {
             return Err(make_error_with_loc(err, &gen))
         }
         ws.parse(buf)?;
-        if let Err(e) = buf.exact("obj".as_bytes()) {
+        if let Err(e) = buf.exact(b"obj") {
             let err = ErrorKind::GuardError("invalid object tag".to_string());
             return Err(make_error_with_loc(err, &e))
         }
@@ -629,7 +629,7 @@ impl IndirectP<'_> {
             if let PDFObjT::Dict(_) = o.val() {
                 let mut ws = WhitespaceEOL::new(true); // allow empty whitespace
                 ws.parse(buf)?;
-                if buf.check_prefix("stream".as_bytes())? {
+                if buf.check_prefix(b"stream")? {
                     // This is indeed a stream object.
                     let dict_start = o.loc_start();
                     let dict_end = o.loc_end();
@@ -653,7 +653,7 @@ impl IndirectP<'_> {
 
         ws.parse(buf)?;
 
-        if let Err(e) = buf.exact("endobj".as_bytes()) {
+        if let Err(e) = buf.exact(b"endobj") {
             let err = ErrorKind::GuardError("invalid endobject tag".to_string());
             return Err(make_error_with_loc(err, &e))
         }
