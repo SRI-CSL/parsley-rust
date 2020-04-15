@@ -159,18 +159,6 @@ impl XrefEntP {
     }
 }
 
-// XrefSubSect x { start: int, count: int, ents: [XrefEnt] } :=
-//
-//    s=IntegerObj [ s.val >= 0 ]
-//    c=IntegerObj [ s.val >  0 ]
-//
-//   '\n'  // EOL-type is not specified in the spec.
-//
-//   { x.start := s.val;
-//     x.count := c.val }
-//
-//   ( e=XrefEnt [ x.ents.len() < x.count() ] { x.ents.append(e) } )* ;
-
 #[derive(Debug, PartialEq)]
 pub struct XrefSubSectT {
     start: usize,
@@ -263,10 +251,6 @@ impl XrefSubSectP {
         Ok(LocatedVal::new(XrefSubSectT { start: xstart, count: xcount, ents }, start, end))
     }
 }
-
-// XrefSect x { sects: [XrefSubSect] } :=
-//
-//    'xref' ( s=XrefSubSect { x.sects.append(s) } )* ;
 
 #[derive(Debug, PartialEq)]
 pub struct XrefSectT {
@@ -458,7 +442,6 @@ impl ParsleyParser for BodyP<'_> {
     }
 }
 
-// Trailer t { dict: DictObj } := 'trailer' d=DictObj { t.dict = d } ;
 #[derive(Debug, PartialEq)]
 pub struct TrailerT {
     dict: DictT
