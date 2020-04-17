@@ -1,7 +1,10 @@
 use std::rc::Rc;
 use super::super::pcore::parsebuffer::{
-    ParseBuffer, ParseBufferT, ParsleyParser, ParseResult, LocatedVal,
+    ParseBufferT, ParsleyParser, ParseResult, LocatedVal,
     ErrorKind, locate_value
+};
+use super::super::pcore::transforms::{
+    BufferTransformT, RestrictView, RestrictViewFrom
 };
 
 use super::pdf_prim::{WhitespaceEOL, IntegerP, NameT};
@@ -164,28 +167,35 @@ impl ParsleyParser for ObjStreamP<'_> {
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let (num_objs, first) = self.get_dict_info()?;
-        // First parse the metadata.
-        let mut md_view = match ParseBuffer::restrict_view(buf, 0, first) {
-            Some(v) => v,
-            None => {
+
+        // TODO: the error-chaining from transforms to parse-errors
+        // needs to compose with the ? operator in a way that allows
+        // good error-messages.
+
+        // Create a view bounding the metadata, and parse it.
+        let view = RestrictView::new(0, first);
+        let mut md_buf = match view.transform(buf, &buf.get_location()) {
+            Ok(b)  => b,
+            Err(_) => {
                 let msg = format!("Unable to parse object-stream metadata, /First may be invalid: {}",
                                   first);
                 let err = ErrorKind::GuardError(msg);
                 return Err(locate_value(err, start, start))
             }
         };
-        let meta = self.parse_metadata(&mut md_view, num_objs)?;
-        // Then the content.
-        let mut objs_view = match ParseBuffer::restrict_view_from(buf, first) {
-            Some(v) => v,
-            None => {
+        let meta = self.parse_metadata(&mut md_buf, num_objs)?;
+        // Create a view for the content, and parse it using the metadata.
+        let view = RestrictViewFrom::new(first);
+        let mut objs_buf = match view.transform(buf, &buf.get_location()) {
+            Ok(v)  => v,
+            Err(_) => {
                 let msg = format!("Unable to parse object-stream content, /First may be invalid: {}",
                                   first);
                 let err = ErrorKind::GuardError(msg);
                 return Err(locate_value(err, first, first))
             }
         };
-        let objs = self.parse_stream(&mut objs_view, &meta)?;
+        let objs = self.parse_stream(&mut objs_buf, &meta)?;
         let end = buf.get_cursor();
         Ok(LocatedVal::new(ObjStreamT::new(Rc::clone(&self.dict), objs), start, end))
     }

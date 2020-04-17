@@ -37,6 +37,7 @@ use std::collections::{VecDeque, BTreeSet};
 use parsley_rust::pcore::parsebuffer::{
     ParseBufferT, ParseBuffer, ParsleyParser, Location, LocatedVal
 };
+use parsley_rust::pcore::transforms::{RestrictView, BufferTransformT};
 use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, XrefSectP, TrailerP};
 use parsley_rust::pdf_lib::pdf_obj::{PDFObjT, IndirectP, PDFObjContext};
 use parsley_rust::pdf_lib::pdf_streams::{XrefStreamP};
@@ -107,7 +108,10 @@ fn parse_file(test_file: &str) {
                              "Found {} bytes of leading garbage, dropping from buffer.",
                              nbytes);
                     let size = pb.remaining();
-                    pb = ParseBuffer::restrict_view(&pb, nbytes, size).unwrap();
+                    // Restrict the view to the pdf content.
+                    let view = RestrictView::new(nbytes, size);
+                    let loc = pb.get_location();
+                    pb = view.transform(&pb, &loc).unwrap();
                 };
                 nbytes
             }
