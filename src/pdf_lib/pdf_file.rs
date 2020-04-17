@@ -24,7 +24,7 @@ use std::io::Read;
 use std::convert::TryFrom;
 use super::super::pcore::parsebuffer::{
     ParseBufferT, ParsleyParser, ParseResult, LocatedVal,
-    ErrorKind, make_error};
+    ErrorKind, locate_value};
 use super::pdf_prim::{IntegerP, WhitespaceEOL, WhitespaceNoEOL, Comment};
 use super::pdf_obj::{PDFObjContext, IndirectT, IndirectP, DictT, DictP};
 
@@ -88,19 +88,19 @@ impl XrefEntP {
         if let Err(_) = inf.read_to_string(&mut infs) {
             let err = ErrorKind::GuardError("bad xref ofs".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end))
+            return Err(locate_value(err, start, end))
         }
         // check if all bytes read are digits
         if infs.matches(&mut |c: char| { c.is_ascii_digit() }).count() != 10 {
             let err = ErrorKind::GuardError("bad format for xref ofs".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end))
+            return Err(locate_value(err, start, end))
         }
         let info = usize::from_str_radix(&infs, 10);
         if let Err(_) = info {
             let err = ErrorKind::GuardError("bad xref ofs conversion".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end))
+            return Err(locate_value(err, start, end))
         }
         let info = info.unwrap();
 
@@ -113,19 +113,19 @@ impl XrefEntP {
         if let Err(_) = gen.read_to_string(&mut gens) {
             let err = ErrorKind::GuardError("bad xref gen".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end))
+            return Err(locate_value(err, start, end))
         }
         // check if all bytes read are digits
         if gens.matches(&mut |c: char| { c.is_ascii_digit() }).count() != 5 {
             let err = ErrorKind::GuardError("bad format for xref gen".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end))
+            return Err(locate_value(err, start, end))
         }
         let gen = usize::from_str_radix(&gens, 10);
         if let Err(_) = gen {
             let err = ErrorKind::GuardError("bad xref gen".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end))
+            return Err(locate_value(err, start, end))
         }
         let gen = gen.unwrap();
 
@@ -141,7 +141,7 @@ impl XrefEntP {
             _ => {
                 let err = ErrorKind::GuardError("bad xref code".to_string());
                 let end = buf.get_cursor();
-                return Err(make_error(err, start, end))
+                return Err(locate_value(err, start, end))
             }
         };
 
@@ -150,7 +150,7 @@ impl XrefEntP {
         if eol != b" \r" && eol != b" \n" && eol != b"\r\n" {
             let err = ErrorKind::GuardError("bad eol gen".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end))
+            return Err(locate_value(err, start, end))
         }
 
         let ent = XrefEntT { info, gen, in_use };
@@ -218,7 +218,7 @@ impl XrefSubSectP {
         if let Err(_) = xstart {
             let err = ErrorKind::GuardError("conversion error on xref-subsect start".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end))
+            return Err(locate_value(err, start, end))
         }
         let xstart = xstart.unwrap();
 
@@ -227,7 +227,7 @@ impl XrefSubSectP {
         if let Err(_) = xcount {
             let err = ErrorKind::GuardError("conversion error on xref-subsect count".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end))
+            return Err(locate_value(err, start, end))
         }
         let xcount = xcount.unwrap();
 
@@ -377,7 +377,7 @@ impl ParsleyParser for XrefSectP {
         if let Err(_) = buf.exact(b"xref") {
             let err = ErrorKind::GuardError("not at xref".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end))
+            return Err(locate_value(err, start, end))
         }
         // Since the xref subsections follow this line, there is an
         // implied EOL.
@@ -470,7 +470,7 @@ impl ParsleyParser for TrailerP<'_> {
         if let Err(_) = buf.exact(b"trailer") {
             let err = ErrorKind::GuardError("not at trailer".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end))
+            return Err(locate_value(err, start, end))
         }
         let mut ws = WhitespaceEOL::new(false); // need to consume an EOL
         ws.parse(buf)?;
@@ -481,7 +481,7 @@ impl ParsleyParser for TrailerP<'_> {
             let msg = format!("error parsing trailer dictionary: {}", e.val());
             let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end))
+            return Err(locate_value(err, start, end))
         }
         let dict = dict.unwrap();
         let end = buf.get_cursor();
@@ -511,7 +511,7 @@ impl ParsleyParser for StartXrefP {
         if let Err(_) = buf.exact(b"startxref") {
             let err = ErrorKind::GuardError("not at startxref".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end))
+            return Err(locate_value(err, start, end))
         }
         let mut ws = WhitespaceEOL::new(false); // need to consume an EOL
         ws.parse(buf)?;
@@ -521,7 +521,7 @@ impl ParsleyParser for StartXrefP {
         if let Err(_) = offset {
             let err = ErrorKind::GuardError("conversion error on startxref".to_string());
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end))
+            return Err(locate_value(err, start, end))
         }
         let offset = offset.unwrap();
         let end = buf.get_cursor();
@@ -534,7 +534,7 @@ mod test_pdf_file {
     use std::rc::Rc;
     use std::collections::BTreeMap;
     use super::super::super::pcore::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyParser, LocatedVal,
-                                                  ErrorKind, make_error};
+                                                  ErrorKind, locate_value};
     use super::super::super::pdf_lib::pdf_obj::{PDFObjContext, PDFObjT, ReferenceT, DictT};
     use super::super::super::pdf_lib::pdf_prim::{IntegerT, NameT};
     use super::{HeaderT, HeaderP, BodyT, BodyP, StartXrefT, StartXrefP, TrailerT, TrailerP};
@@ -596,7 +596,7 @@ mod test_pdf_file {
         let v = Vec::from("1234567890 12345 f  \r".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let ent = p.parse(&mut pb);
-        let e = make_error(ErrorKind::GuardError("bad eol gen".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("bad eol gen".to_string()), 0, 0);
         assert_eq!(ent, Err(e));
 
         // bad generation

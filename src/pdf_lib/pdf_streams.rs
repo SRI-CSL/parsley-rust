@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use super::super::pcore::parsebuffer::{
     ParseBuffer, ParseBufferT, ParsleyParser, ParseResult, LocatedVal,
-    ErrorKind, make_error, make_error_with_loc
+    ErrorKind, locate_value
 };
 
 use super::pdf_prim::{WhitespaceEOL, IntegerP, NameT};
@@ -45,7 +45,7 @@ impl ObjStreamP<'_> {
         if stream_type.is_none() {
             let msg = format!("No valid /Type in object stream dictionary.");
             let err = ErrorKind::GuardError(msg);
-            return Err(make_error(err, self.dict.start(), self.dict.end()))
+            return Err(locate_value(err, self.dict.start(), self.dict.end()))
         }
         let stream_type = stream_type.unwrap();
         if stream_type != b"ObjStm" {
@@ -55,14 +55,14 @@ impl ObjStreamP<'_> {
             };
             let msg = format!("Invalid /Type in object stream dictionary: {}", t_str);
             let err = ErrorKind::GuardError(msg);
-            return Err(make_error(err, self.dict.start(), self.dict.end()))
+            return Err(locate_value(err, self.dict.start(), self.dict.end()))
         }
 
         let num_objs = self.dict.val().get_usize(b"N");
         if num_objs.is_none() {
             let msg = format!("No valid /N in object stream dictionary.");
             let err = ErrorKind::GuardError(msg);
-            return Err(make_error(err, self.dict.start(), self.dict.end()))
+            return Err(locate_value(err, self.dict.start(), self.dict.end()))
         }
         let num_objs = num_objs.unwrap();
 
@@ -70,7 +70,7 @@ impl ObjStreamP<'_> {
         if first.is_none() {
             let msg = format!("No valid /First in object stream dictionary.");
             let err = ErrorKind::GuardError(msg);
-            return Err(make_error(err, self.dict.start(), self.dict.end()))
+            return Err(locate_value(err, self.dict.start(), self.dict.end()))
         }
         let first = first.unwrap();
         Ok((num_objs, first))
@@ -101,7 +101,7 @@ impl ObjStreamP<'_> {
                 let msg = format!("invalid object id: {}", obj.val().int_val());
                 let err = ErrorKind::GuardError(msg);
                 buf.set_cursor(cursor);
-                return Err(make_error_with_loc(err, &obj))
+                return Err(obj.place(err))
             }
             let obj = obj.val().usize_val();
 
@@ -116,7 +116,7 @@ impl ObjStreamP<'_> {
                                   ofs_val, obj, last_ofs);
                 let err = ErrorKind::GuardError(msg);
                 buf.set_cursor(cursor);
-                return Err(make_error_with_loc(err, &ofs))
+                return Err(ofs.place(err))
             }
 
             last_ofs = ofs_val;
@@ -143,7 +143,7 @@ impl ObjStreamP<'_> {
                 let msg = format!("parsed past offset {} for object #{} with id {}",
                                   ofs, i, onum);
                 let err = ErrorKind::GuardError(msg);
-                return Err(make_error(err, *ofs, buf.get_cursor()))
+                return Err(locate_value(err, *ofs, buf.get_cursor()))
             }
             ws.parse(buf)?;
 
@@ -171,7 +171,7 @@ impl ParsleyParser for ObjStreamP<'_> {
                 let msg = format!("Unable to parse object-stream metadata, /First may be invalid: {}",
                                   first);
                 let err = ErrorKind::GuardError(msg);
-                return Err(make_error(err, start, start))
+                return Err(locate_value(err, start, start))
             }
         };
         let meta = self.parse_metadata(&mut md_view, num_objs)?;
@@ -182,7 +182,7 @@ impl ParsleyParser for ObjStreamP<'_> {
                 let msg = format!("Unable to parse object-stream content, /First may be invalid: {}",
                                   first);
                 let err = ErrorKind::GuardError(msg);
-                return Err(make_error(err, first, first))
+                return Err(locate_value(err, first, first))
             }
         };
         let objs = self.parse_stream(&mut objs_view, &meta)?;
@@ -241,7 +241,7 @@ impl XrefStreamP<'_> {
         if stream_type.is_none() {
             let msg = format!("No /Type in xref stream dictionary.");
             let err = ErrorKind::GuardError(msg);
-            return Err(make_error(err, dict.start(), dict.end()))
+            return Err(locate_value(err, dict.start(), dict.end()))
         }
         let stream_type = stream_type.unwrap();
         if stream_type != b"XRef" {
@@ -251,14 +251,14 @@ impl XrefStreamP<'_> {
             };
             let msg = format!("Invalid /Type in xref stream dictionary: {}", t_str);
             let err = ErrorKind::GuardError(msg);
-            return Err(make_error(err, dict.start(), dict.end()))
+            return Err(locate_value(err, dict.start(), dict.end()))
         }
 
         let size = dict.val().get_usize(b"Size");
         if size.is_none() {
             let msg = format!("No valid /Size in xref stream dictionary.");
             let err = ErrorKind::GuardError(msg);
-            return Err(make_error(err, dict.start(), dict.end()))
+            return Err(locate_value(err, dict.start(), dict.end()))
         }
         let size = size.unwrap();
 
@@ -266,7 +266,7 @@ impl XrefStreamP<'_> {
         if prev.is_none() {
             let msg = format!("No valid /Prev in xref stream dictionary.");
             let err = ErrorKind::GuardError(msg);
-            return Err(make_error(err, dict.start(), dict.end()))
+            return Err(locate_value(err, dict.start(), dict.end()))
         }
         let prev = prev.unwrap();
 
@@ -277,7 +277,7 @@ impl XrefStreamP<'_> {
                 let msg = format!("Invalid non-even length {} for /Index in xref stream dictionary.",
                                   i.objs().len());
                 let err = ErrorKind::GuardError(msg);
-                return Err(make_error(err, dict.start(), dict.end()))
+                return Err(locate_value(err, dict.start(), dict.end()))
             }
             for (s, c) in i.objs().iter().step_by(2).zip(i.objs().iter().skip(1).step_by(2)) {
                 if let (PDFObjT::Integer(s), PDFObjT::Integer(c)) = (s.val(), c.val()) {
@@ -285,7 +285,7 @@ impl XrefStreamP<'_> {
                 } else {
                     let msg = format!("Invalid non-integer entries in /Index in xref stream dictionary.");
                     let err = ErrorKind::GuardError(msg);
-                    return Err(make_error(err, dict.start(), dict.end()))
+                    return Err(locate_value(err, dict.start(), dict.end()))
                 }
             }
             // TODO: ensure that subsections cannot overlap
@@ -295,13 +295,13 @@ impl XrefStreamP<'_> {
         if w.is_none() {
             let msg = format!("No valid /W in xref stream dictionary.");
             let err = ErrorKind::GuardError(msg);
-            return Err(make_error(err, dict.start(), dict.end()))
+            return Err(locate_value(err, dict.start(), dict.end()))
         }
         let w = w.unwrap();
         if w.objs().len() != 3 {
             let msg = format!("Invalid length for /W in xref stream dictionary.");
             let err = ErrorKind::GuardError(msg);
-            return Err(make_error(err, dict.start(), dict.end()))
+            return Err(locate_value(err, dict.start(), dict.end()))
         }
         let mut w_array = Vec::new();
         for o in w.objs() {
@@ -312,19 +312,19 @@ impl XrefStreamP<'_> {
                     let msg = format!("Cannot handle {}-byte integer in /W in xref stream dictionary.",
                                       sz);
                     let err = ErrorKind::GuardError(msg);
-                    return Err(make_error(err, dict.start(), dict.end()))
+                    return Err(locate_value(err, dict.start(), dict.end()))
                 }
                 w_array.push(sz);
                 continue;
             }
             let msg = format!("Invalid length for /W in xref stream dictionary.");
             let err = ErrorKind::GuardError(msg);
-            return Err(make_error(err, dict.start(), dict.end()))
+            return Err(locate_value(err, dict.start(), dict.end()))
         }
         if w_array[1] == 0 {
             let msg = format!("Invalid zero-width field #2 in /W in xref stream dictionary.");
             let err = ErrorKind::GuardError(msg);
-            return Err(make_error(err, dict.start(), dict.end()))
+            return Err(locate_value(err, dict.start(), dict.end()))
         }
         let widths = [w_array[0], w_array[1], w_array[2]];
 
@@ -340,7 +340,7 @@ impl XrefStreamP<'_> {
             let peek = buf.peek();
             if peek.is_none() {
                 let cur = buf.get_cursor();
-                return Err(make_error(ErrorKind::EndOfBuffer, cur, cur))
+                return Err(locate_value(ErrorKind::EndOfBuffer, cur, cur))
             }
             let peek = peek.unwrap();
             val = (val << 8) | usize::from(peek);
@@ -371,7 +371,7 @@ impl XrefStreamP<'_> {
                             let msg = format!("Invalid type {} in field #1 of entry in xref stream.",
                                               f);
                             let err = ErrorKind::GuardError(msg);
-                            return Err(make_error(err, start, cur))
+                            return Err(locate_value(err, start, cur))
                         }
                         f
                     };
@@ -389,7 +389,7 @@ impl XrefStreamP<'_> {
                             let cur = buf.get_cursor();
                             let msg = format!("No Type 2 default for field #3 in xref stream.");
                             let err = ErrorKind::GuardError(msg);
-                            return Err(make_error(err, start, cur))
+                            return Err(locate_value(err, start, cur))
                         }
                         0
                     };
@@ -424,7 +424,7 @@ impl ParsleyParser for XrefStreamP<'_> {
             let f = meta.filters[0].0.as_string();
             let msg = format!("Cannot handle filter {} in xref stream", f);
             let err = ErrorKind::GuardError(msg);
-            return Err(make_error_with_loc(err, self.stream.dict().as_ref()))
+            return Err(self.stream.dict().place(err))
         }
 
         let ents = self.parse_stream(buf, &meta)?;
@@ -440,7 +440,7 @@ mod test_object_stream {
     use std::rc::Rc;
     use std::collections::BTreeMap;
     use super::super::super::pcore::parsebuffer::{
-        ParsleyParser, ParseBuffer, LocatedVal, ErrorKind, make_error
+        ParsleyParser, ParseBuffer, LocatedVal, ErrorKind, locate_value
     };
     use super::super::pdf_obj::{PDFObjContext, DictP, DictT, IndirectT, ArrayT, PDFObjT};
     use super::{ObjStreamP, ObjStreamT};
@@ -482,19 +482,19 @@ mod test_object_stream {
         let mut buf = ParseBuffer::new(Vec::from("10 0 20 0 30".as_bytes()));
         let chk = osp.parse_metadata(&mut buf, 3).err().unwrap();
         let err = "offset 0 of object 20 is not greater than previous offset 0";
-        assert_eq!(chk, make_error(ErrorKind::GuardError(String::from(err)), 0, 0));
+        assert_eq!(chk, locate_value(ErrorKind::GuardError(String::from(err)), 0, 0));
 
         // insufficient metadata
         let mut buf = ParseBuffer::new(Vec::from("10 0 20 1 30".as_bytes()));
         let chk = osp.parse_metadata(&mut buf, 3).err().unwrap();
         let err = "not at number";
-        assert_eq!(chk, make_error(ErrorKind::GuardError(String::from(err)), 0, 0));
+        assert_eq!(chk, locate_value(ErrorKind::GuardError(String::from(err)), 0, 0));
 
         // invalid object id
         let mut buf = ParseBuffer::new(Vec::from("10 0 0 1 30".as_bytes()));
         let chk = osp.parse_metadata(&mut buf, 3).err().unwrap();
         let err = "invalid object id: 0";
-        assert_eq!(chk, make_error(ErrorKind::GuardError(String::from(err)), 0, 0));
+        assert_eq!(chk, locate_value(ErrorKind::GuardError(String::from(err)), 0, 0));
     }
 
     #[test]

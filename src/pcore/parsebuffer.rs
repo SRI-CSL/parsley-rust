@@ -45,6 +45,10 @@ impl<T> LocatedVal<T>
     pub fn new(val: T, start: usize, end: usize) -> LocatedVal<T> {
         LocatedVal { val, start, end }
     }
+    pub fn place<U>(&self, val: U) -> LocatedVal<U> {
+        LocatedVal { val, start: self.start, end: self.end }
+    }
+
     pub fn val(&self) -> &T { &self.val }
     pub fn unwrap(self) -> T { self.val }
     pub fn start(&self) -> usize { self.start }
@@ -160,17 +164,15 @@ pub enum ErrorKind {
     GuardError(String),
 }
 
-// function to report located errors with sensible location
-pub fn make_error(val: ErrorKind, s: usize, e: usize) -> LocatedVal<ErrorKind> {
+// function to create values at sensible locations
+pub fn locate_value<T>(val: T, s: usize, e: usize) -> LocatedVal<T>
+    where T: PartialEq
+{
     if s < e {
         LocatedVal::new(val, s, e)
     } else {
         LocatedVal::new(val, e, s)
     }
-}
-
-pub fn make_error_with_loc(val: ErrorKind, l: &dyn Location) -> LocatedVal<ErrorKind> {
-    LocatedVal::new(val, l.loc_start(), l.loc_end())
 }
 
 impl fmt::Display for ErrorKind {
@@ -282,7 +284,7 @@ impl ParseBuffer {
     // permit.  In the returned view, the offset is reset to 0.
     pub fn restrict_view(buf: &dyn ParseBufferT, start: usize, size: usize)
                          -> Option<ParseBuffer> {
-        if size > 0 && start + size <= buf.size() {
+        if start + size <= buf.size() {
             Some(ParseBuffer { buf: buf.rc_buf(),
                                start: buf.start() + start, ofs: 0, size })
         } else {
@@ -322,7 +324,7 @@ pub fn parse_guarded<P: ParsleyPrimitive>(buf: &mut dyn ParseBufferT,
     if !guard(&t) {
         let end = buf.get_cursor();
         let err = ErrorKind::GuardError(P::name().to_string());
-        return Err(make_error(err, start, end))
+        return Err(locate_value(err, start, end))
     };
     buf.set_cursor(start + consumed);
     Ok(t)
@@ -412,7 +414,7 @@ impl ParseBufferT for ParseBuffer {
             }
             skip += 1;
         }
-        Err(make_error(ErrorKind::EndOfBuffer, start, start))
+        Err(locate_value(ErrorKind::EndOfBuffer, start, start))
     }
 
     fn backward_scan(&mut self, tag: &[u8]) -> ParseResult<usize> {
@@ -426,7 +428,7 @@ impl ParseBufferT for ParseBuffer {
             }
             skip += 1;
         }
-        Err(make_error(ErrorKind::EndOfBuffer, start, start))
+        Err(locate_value(ErrorKind::EndOfBuffer, start, start))
     }
 
     fn exact(&mut self, tag: &[u8]) -> ParseResult<bool> {
@@ -435,14 +437,14 @@ impl ParseBufferT for ParseBuffer {
             self.ofs = self.ofs + tag.len();
             Ok(true)
         } else {
-            Err(make_error(ErrorKind::GuardError("match".to_string()), start, start))
+            Err(locate_value(ErrorKind::GuardError("match".to_string()), start, start))
         }
     }
 
     fn extract<'a>(&'a mut self, len: usize) -> ParseResult<&'a [u8]> {
         if self.remaining() < len {
             let start = self.get_cursor();
-            Err(make_error(ErrorKind::EndOfBuffer, start, start))
+            Err(locate_value(ErrorKind::EndOfBuffer, start, start))
         } else {
             let ret = &self.buf[(self.start + self.ofs) .. (self.start + self.ofs + len)];
             self.ofs += len;
@@ -454,7 +456,7 @@ impl ParseBufferT for ParseBuffer {
 #[cfg(test)]
 mod test_parsebuffer {
     use std::collections::HashMap;
-    use super::{ParseBuffer, ParseBufferT, LocatedVal, ErrorKind, make_error};
+    use super::{ParseBuffer, ParseBufferT, LocatedVal, ErrorKind, locate_value};
 
     #[test]
     fn test_scan() {
@@ -465,7 +467,7 @@ mod test_parsebuffer {
         assert_eq!(pb.scan(b"56"), Ok(0));
         assert_eq!(pb.get_cursor(), 5);
         assert_eq!(pb.scan(b"0"),
-                   Err(make_error(ErrorKind::EndOfBuffer, 5, 5)));
+                   Err(locate_value(ErrorKind::EndOfBuffer, 5, 5)));
         assert_eq!(pb.get_cursor(), 5);
     }
 
@@ -476,7 +478,7 @@ mod test_parsebuffer {
         assert_eq!(pb.scan(b"56"), Ok(5));
         assert_eq!(pb.get_cursor(), 5);
         assert_eq!(pb.backward_scan(b"56"),
-                   Err(make_error(ErrorKind::EndOfBuffer, 5, 5)));
+                   Err(locate_value(ErrorKind::EndOfBuffer, 5, 5)));
         assert_eq!(pb.get_cursor(), 5);
         assert_eq!(pb.backward_scan(b"012"), Ok(5));
         assert_eq!(pb.get_cursor(), 0);

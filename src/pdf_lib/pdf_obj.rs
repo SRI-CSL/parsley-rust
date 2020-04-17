@@ -22,7 +22,7 @@ use std::rc::Rc;
 use std::collections::{HashSet, BTreeMap};
 use super::super::pcore::parsebuffer::{
     ParseBufferT, ParsleyParser, ParseResult, Location, LocatedVal,
-    ErrorKind, make_error, make_error_with_loc
+    ErrorKind, locate_value
 };
 use super::pdf_prim::{
     WhitespaceEOL, Comment, Null,
@@ -93,7 +93,7 @@ impl ArrayP<'_> {
             let msg = format!("not at array object: {}", e.val());
             let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
-            return Err(make_error(err, start, end))
+            return Err(locate_value(err, start, end))
         }
         let mut objs = Vec::new();
         let mut end = false;
@@ -210,7 +210,7 @@ impl DictP<'_> {
                     let msg = format!("non-unique dictionary key: {}",
                                       n.val().as_string());
                     let err = ErrorKind::GuardError(msg);
-                    return Err(make_error_with_loc(err, &n))
+                    return Err(n.place(err))
                 }
 
                 // do not require whitespace between key/value pairs
@@ -266,7 +266,7 @@ impl StreamT {
                     if self.dict.val().get_array(b"DecodeParms").is_some() {
                         let msg = format!("Mismatched Filter and DecodeParms in stream");
                         let err = ErrorKind::GuardError(msg);
-                        return Err(make_error_with_loc(err, &*self.dict))
+                        return Err(self.dict.place(err))
                     }
                     filters.push((name, None))
                 }
@@ -282,7 +282,7 @@ impl StreamT {
                     if da.objs().len() != fa.objs().len() {
                         let msg = format!("Mismatched lengths for Filter and DecodeParms of stream");
                         let err = ErrorKind::GuardError(msg);
-                        return Err(make_error_with_loc(err, &*self.dict))
+                        return Err(self.dict.place(err))
                     }
                     for (f, d) in fa.objs().iter().zip(da.objs().iter()) {
                         match (f.val(), d.val()) {
@@ -295,12 +295,12 @@ impl StreamT {
                             (PDFObjT::Name(_), _) => {
                                 let msg = format!("Invalid objects in DecodeParms of stream");
                                 let err = ErrorKind::GuardError(msg);
-                                return Err(make_error_with_loc(err, &*self.dict))
+                                return Err(self.dict.place(err))
                             },
                             (_, _) => {
                                 let msg = format!("Invalid objects in Filter of stream");
                                 let err = ErrorKind::GuardError(msg);
-                                return Err(make_error_with_loc(err, &*self.dict))
+                                return Err(self.dict.place(err))
                             }
                         }
                     }
@@ -315,7 +315,7 @@ impl StreamT {
                             _ => {
                                 let msg = format!("Invalid objects in Filter of stream");
                                 let err = ErrorKind::GuardError(msg);
-                                return Err(make_error_with_loc(err, &*self.dict))
+                                return Err(self.dict.place(err))
                             }
                         }
                     }
@@ -355,7 +355,7 @@ impl ReferenceP {
             let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             buf.set_cursor(cursor);
-            return Err(make_error(err, cursor, end))
+            return Err(locate_value(err, cursor, end))
         }
         ws.parse(buf)?;
 
@@ -366,12 +366,12 @@ impl ReferenceP {
             let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             buf.set_cursor(cursor);
-            return Err(make_error(err, cursor, end))
+            return Err(locate_value(err, cursor, end))
         }
         ws.parse(buf)?;
         if let Err(e) = buf.exact(b"R") {
             let err = ErrorKind::GuardError("invalid reference tag".to_string());
-            return Err(make_error_with_loc(err, &e))
+            return Err(e.place(err))
         }
 
         Ok(ReferenceT::new(num.val().usize_val(), gen.val().usize_val()))
@@ -415,7 +415,7 @@ impl PDFObjP<'_> {
             None => {
                 let start = buf.get_cursor();
                 let err = ErrorKind::EndOfBuffer;
-                Err(make_error(err, start, start))
+                Err(locate_value(err, start, start))
             }
 
             Some(116) | Some(102) => { // 't' | 'f'
@@ -476,7 +476,7 @@ impl PDFObjP<'_> {
                 {
                     let start = buf.get_cursor();
                     let err = ErrorKind::GuardError("not at PDF object".to_string());
-                    return Err(make_error(err, start, start))
+                    return Err(locate_value(err, start, start))
                 }
                 let cursor = buf.get_cursor();
 
@@ -601,7 +601,7 @@ impl IndirectP<'_> {
             let msg = format!("invalid object id: {}", num.val().int_val());
             let err = ErrorKind::GuardError(msg);
             buf.set_cursor(cursor);
-            return Err(make_error_with_loc(err, &num))
+            return Err(num.place(err))
         }
         ws.parse(buf)?;
         cursor = buf.get_cursor();
@@ -610,12 +610,12 @@ impl IndirectP<'_> {
             let msg = format!("invalid object generation: {}", gen.val().int_val());
             let err = ErrorKind::GuardError(msg);
             buf.set_cursor(cursor);
-            return Err(make_error_with_loc(err, &gen))
+            return Err(gen.place(err))
         }
         ws.parse(buf)?;
         if let Err(e) = buf.exact(b"obj") {
             let err = ErrorKind::GuardError("invalid object tag".to_string());
-            return Err(make_error_with_loc(err, &e))
+            return Err(e.place(err))
         }
         ws.parse(buf)?;
 
@@ -655,7 +655,7 @@ impl IndirectP<'_> {
 
         if let Err(e) = buf.exact(b"endobj") {
             let err = ErrorKind::GuardError("invalid endobject tag".to_string());
-            return Err(make_error_with_loc(err, &e))
+            return Err(e.place(err))
         }
 
         let obj = Rc::new(obj);
@@ -669,7 +669,7 @@ impl IndirectP<'_> {
                                   num.val().int_val(), gen.val().int_val(), loc);
                 let err = ErrorKind::GuardError(msg);
                 let end = buf.get_cursor();
-                Err(make_error(err, start, end))
+                Err(locate_value(err, start, end))
             }
         }
     }
@@ -699,7 +699,7 @@ mod test_pdf_obj {
     use std::collections::BTreeMap;
     use super::super::super::pcore::parsebuffer::{
         ParseBuffer, ParseBufferT, ParsleyParser, LocatedVal,
-        ErrorKind, make_error
+        ErrorKind, locate_value
     };
     use super::super::pdf_prim::{IntegerT, RealT, NameT};
     use super::{
@@ -714,7 +714,7 @@ mod test_pdf_obj {
 
         let v = Vec::from("".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::EndOfBuffer, 0, 0);
+        let e = locate_value(ErrorKind::EndOfBuffer, 0, 0);
         assert_eq!(p.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
     }
@@ -727,7 +727,7 @@ mod test_pdf_obj {
         // Comments are essentially whitespace.
         let v = Vec::from("\r\n %PDF-1.0 \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::EndOfBuffer, 0, 14);
+        let e = locate_value(ErrorKind::EndOfBuffer, 0, 14);
         assert_eq!(p.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 14);
     }
@@ -747,14 +747,14 @@ mod test_pdf_obj {
 //                         012345678901234567890
         let v = Vec::from("\r\n -1 0 R \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("invalid ref-object id: -1".to_string()), 5, 7);
+        let e = locate_value(ErrorKind::GuardError("invalid ref-object id: -1".to_string()), 5, 7);
         assert_eq!(p.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 3);
 
 //                         012345678901234567890
         let v = Vec::from("\r\n 1 -1 R \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("invalid ref-object generation: -1".to_string()), 7, 9);
+        let e = locate_value(ErrorKind::GuardError("invalid ref-object generation: -1".to_string()), 7, 9);
         assert_eq!(p.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 5);
     }
@@ -826,7 +826,7 @@ mod test_pdf_obj {
 
         let v = Vec::from("[ -1 0 R ] \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("invalid ref-object id: -1".to_string()), 2, 4);
+        let e = locate_value(ErrorKind::GuardError("invalid ref-object id: -1".to_string()), 2, 4);
         assert_eq!(p.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 2);
     }
@@ -869,7 +869,7 @@ mod test_pdf_obj {
 //                         0123456789012345678901234567890123456789012345678901234567890123
         let v = Vec::from("<< /Entry [ 1 0 R ] /Entry \r\n >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("non-unique dictionary key: Entry".to_string()), 20, 26);
+        let e = locate_value(ErrorKind::GuardError("non-unique dictionary key: Entry".to_string()), 20, 26);
         assert_eq!(p.parse(&mut pb), Err(e));
     }
 
@@ -1011,7 +1011,7 @@ mod test_pdf_obj {
         let v = Vec::from("1 0 obj  \n<<  /Type 1 0 obj true endobj>>\nendobj".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
-        let e = make_error(ErrorKind::GuardError("not at name object".to_string()), 22, 22);
+        let e = locate_value(ErrorKind::GuardError("not at name object".to_string()), 22, 22);
         assert_eq!(val, Err(e));
     }
 

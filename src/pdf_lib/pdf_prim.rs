@@ -22,7 +22,7 @@ use std::convert::TryFrom;
 use std::collections::HashSet;
 use super::super::pcore::parsebuffer::{
     ParseBufferT, ParsleyParser, ParseResult, LocatedVal,
-    ErrorKind, make_error
+    ErrorKind, locate_value
 };
 
 // There are two whitespace parsers.  This first one does not allow
@@ -164,7 +164,7 @@ impl ParsleyParser for Null {
         let null = buf.exact(b"null");
         if let Err(_) = null {
             let end = buf.get_cursor();
-            Err(make_error(ErrorKind::GuardError("not at null".to_string()), start, end))
+            Err(locate_value(ErrorKind::GuardError("not at null".to_string()), start, end))
         } else {
             let end = buf.get_cursor();
             Ok(LocatedVal::new((), start, end))
@@ -219,7 +219,7 @@ impl ParsleyParser for IntegerP {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not at number".to_string());
             buf.set_cursor(start);
-            return Err(make_error(err, start, end))
+            return Err(locate_value(err, start, end))
         }
         let mut num: i64 = 0;
         for c in num_str.iter() {
@@ -228,7 +228,7 @@ impl ParsleyParser for IntegerP {
                 let end = buf.get_cursor();
                 let err = ErrorKind::GuardError("numerical overflow".to_string());
                 buf.set_cursor(start);
-                return Err(make_error(err, start, end))
+                return Err(locate_value(err, start, end))
             }
             num = tmp.unwrap();
             let tmp = i64::checked_add(num, i64::from(c - 48));
@@ -236,7 +236,7 @@ impl ParsleyParser for IntegerP {
                 let end = buf.get_cursor();
                 let err = ErrorKind::GuardError("numerical overflow".to_string());
                 buf.set_cursor(start);
-                return Err(make_error(err, start, end))
+                return Err(locate_value(err, start, end))
             }
             num = tmp.unwrap();
         }
@@ -294,7 +294,7 @@ impl ParsleyParser for RealP {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not at number".to_string());
             buf.set_cursor(start);
-            return Err(make_error(err, start, end))
+            return Err(locate_value(err, start, end))
         }
         let mut num: i64 = 0;
         for c in num_str.iter() {
@@ -303,7 +303,7 @@ impl ParsleyParser for RealP {
                 let end = buf.get_cursor();
                 let err = ErrorKind::GuardError("numerical overflow".to_string());
                 buf.set_cursor(start);
-                return Err(make_error(err, start, end))
+                return Err(locate_value(err, start, end))
             }
             num = tmp.unwrap();
             let tmp = i64::checked_add(num, i64::from(c - 48));
@@ -311,7 +311,7 @@ impl ParsleyParser for RealP {
                 let end = buf.get_cursor();
                 let err = ErrorKind::GuardError("numerical overflow".to_string());
                 buf.set_cursor(start);
-                return Err(make_error(err, start, end))
+                return Err(locate_value(err, start, end))
             }
             num = tmp.unwrap();
         }
@@ -326,7 +326,7 @@ impl ParsleyParser for RealP {
                         let end = buf.get_cursor();
                         let err = ErrorKind::GuardError("numerical overflow".to_string());
                         buf.set_cursor(start);
-                        return Err(make_error(err, start, end))
+                        return Err(locate_value(err, start, end))
                     }
                     num = tmp.unwrap();
                     let tmp = i64::checked_add(num, i64::from(c - 48));
@@ -334,7 +334,7 @@ impl ParsleyParser for RealP {
                         let end = buf.get_cursor();
                         let err = ErrorKind::GuardError("numerical overflow".to_string());
                         buf.set_cursor(start);
-                        return Err(make_error(err, start, end))
+                        return Err(locate_value(err, start, end))
                     }
                     num = tmp.unwrap();
                     let tmp = i64::checked_mul(den, 10);
@@ -342,7 +342,7 @@ impl ParsleyParser for RealP {
                         let end = buf.get_cursor();
                         let err = ErrorKind::GuardError("numerical overflow".to_string());
                         buf.set_cursor(start);
-                        return Err(make_error(err, start, end))
+                        return Err(locate_value(err, start, end))
                     }
                     den = tmp.unwrap();
                 }
@@ -388,7 +388,7 @@ impl ParsleyParser for HexString {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not at valid hex string".to_string());
             buf.set_cursor(start);
-            return Err(make_error(err, start, end))
+            return Err(locate_value(err, start, end))
         }
         buf.incr_cursor();
 
@@ -473,7 +473,7 @@ impl ParsleyParser for RawLiteralString {
                 None => {
                     let end = buf.get_cursor();
                     buf.set_cursor(start);
-                    return Err(make_error(ErrorKind::EndOfBuffer, start, end))
+                    return Err(locate_value(ErrorKind::EndOfBuffer, start, end))
                 }
             }
         }
@@ -557,7 +557,7 @@ impl ParsleyParser for NameP {
                         if ch == 0 {
                             let err = ErrorKind::GuardError("null char in name".to_string());
                             buf.set_cursor(start);
-                            return Err(make_error(err, start, end))
+                            return Err(locate_value(err, start, end))
                         }
                         r.push(ch);
                         // adjust iterator to skip the next two windows if present.
@@ -612,7 +612,7 @@ impl ParsleyParser for StreamContent {
         let is_stream = buf.exact(b"stream");
         if let Err(_) = is_stream {
             let err = ErrorKind::GuardError("not at stream content".to_string());
-            return Err(make_error(err, start, start))
+            return Err(locate_value(err, start, start))
         }
         if buf.peek() == Some(13) { // '\r'
             buf.incr_cursor();
@@ -623,7 +623,7 @@ impl ParsleyParser for StreamContent {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not a valid stream marker".to_string());
             buf.set_cursor(start);
-            return Err(make_error(err, start, end))
+            return Err(locate_value(err, start, end))
         }
         let stream_start_cursor = buf.get_cursor();
 
@@ -658,7 +658,7 @@ impl ParsleyParser for StreamContent {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("invalid endstream".to_string());
             buf.set_cursor(start);
-            return Err(make_error(err, start, end))
+            return Err(locate_value(err, start, end))
         }
         let end = buf.get_cursor();
         Ok(LocatedVal::new(v, start, end))
@@ -668,7 +668,7 @@ impl ParsleyParser for StreamContent {
 #[cfg(test)]
 mod test_pdf_prim {
     use super::super::super::pcore::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyParser, LocatedVal,
-                                                  ErrorKind, make_error};
+                                                  ErrorKind, locate_value};
     use super::{WhitespaceNoEOL, WhitespaceEOL, Comment, Boolean, Null};
     use super::{IntegerT, IntegerP, RealT, RealP, NameT, NameP};
     use super::{HexString, RawLiteralString, StreamContent};
@@ -679,7 +679,7 @@ mod test_pdf_prim {
 
         let v = Vec::new();
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at whitespace-noeol".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at whitespace-noeol".to_string()), 0, 0);
         assert_eq!(ws.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
@@ -700,7 +700,7 @@ mod test_pdf_prim {
 
         let v = Vec::new();
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at whitespace-eol".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at whitespace-eol".to_string()), 0, 0);
         assert_eq!(ws.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
@@ -761,7 +761,7 @@ mod test_pdf_prim {
 
         let v = Vec::new();
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at comment".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at comment".to_string()), 0, 0);
         assert_eq!(com.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
@@ -787,13 +787,13 @@ mod test_pdf_prim {
 
         let v = Vec::new();
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at boolean".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at boolean".to_string()), 0, 0);
         assert_eq!(bl.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
         let v = Vec::from(" ".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at boolean".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at boolean".to_string()), 0, 0);
         assert_eq!(bl.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
@@ -814,13 +814,13 @@ mod test_pdf_prim {
 
         let v = Vec::new();
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at null".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at null".to_string()), 0, 0);
         assert_eq!(null.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
         let v = Vec::from(" ".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at null".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at null".to_string()), 0, 0);
         assert_eq!(null.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
@@ -841,25 +841,25 @@ mod test_pdf_prim {
 
         let v = Vec::new();
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at number".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at number".to_string()), 0, 0);
         assert_eq!(int.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
         let v = Vec::from(" 1".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at number".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at number".to_string()), 0, 0);
         assert_eq!(int.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
         let v = Vec::from("-".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at number".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at number".to_string()), 0, 0);
         assert_eq!(int.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
         let v = Vec::from("+".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at number".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at number".to_string()), 0, 0);
         assert_eq!(int.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
@@ -912,25 +912,25 @@ mod test_pdf_prim {
 
         let v = Vec::new();
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at number".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at number".to_string()), 0, 0);
         assert_eq!(real.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
         let v = Vec::from(" 1".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at number".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at number".to_string()), 0, 0);
         assert_eq!(real.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
         let v = Vec::from("-".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at number".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at number".to_string()), 0, 0);
         assert_eq!(real.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
         let v = Vec::from("+".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at number".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at number".to_string()), 0, 0);
         assert_eq!(real.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
@@ -1007,19 +1007,19 @@ mod test_pdf_prim {
 
         let v = Vec::new();
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at hex string".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at hex string".to_string()), 0, 0);
         assert_eq!(hex.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
         let v = Vec::from(" ".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at hex string".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at hex string".to_string()), 0, 0);
         assert_eq!(hex.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
         let v = Vec::from("< ".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at valid hex string".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at valid hex string".to_string()), 0, 0);
         assert_eq!(hex.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
@@ -1040,7 +1040,7 @@ mod test_pdf_prim {
 
         let v = Vec::from("<1a9q> ".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at valid hex string".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at valid hex string".to_string()), 0, 0);
         assert_eq!(hex.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
@@ -1056,19 +1056,19 @@ mod test_pdf_prim {
 
         let v = Vec::new();
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at literal string".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at literal string".to_string()), 0, 0);
         assert_eq!(lit.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
         let v = Vec::from(" ".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at literal string".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at literal string".to_string()), 0, 0);
         assert_eq!(lit.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
         let v = Vec::from("( ".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::EndOfBuffer, 0, 0);
+        let e = locate_value(ErrorKind::EndOfBuffer, 0, 0);
         assert_eq!(lit.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
@@ -1081,7 +1081,7 @@ mod test_pdf_prim {
         let mut pb = ParseBuffer::new(v);
         assert_eq!(lit.parse(&mut pb).unwrap().unwrap().len(), 0);
         assert_eq!(pb.get_cursor(), 2);
-        let e = make_error(ErrorKind::GuardError("not at literal string".to_string()), 2, 2);
+        let e = locate_value(ErrorKind::GuardError("not at literal string".to_string()), 2, 2);
         assert_eq!(lit.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 2);
 
@@ -1092,7 +1092,7 @@ mod test_pdf_prim {
 
         let v = Vec::from("(() ".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::EndOfBuffer, 0, 0);
+        let e = locate_value(ErrorKind::EndOfBuffer, 0, 0);
         assert_eq!(lit.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
@@ -1108,7 +1108,7 @@ mod test_pdf_prim {
 
         let v = Vec::from("(1a(90) ".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::EndOfBuffer, 0, 0);
+        let e = locate_value(ErrorKind::EndOfBuffer, 0, 0);
         assert_eq!(lit.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
@@ -1139,13 +1139,13 @@ mod test_pdf_prim {
 
         let v = Vec::new();
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at name object".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at name object".to_string()), 0, 0);
         assert_eq!(name.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
         let v = Vec::from(" ".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at name object".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at name object".to_string()), 0, 0);
         assert_eq!(name.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
@@ -1189,7 +1189,7 @@ mod test_pdf_prim {
 
         let v = vec![47, 35, 48, 48];
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("null char in name".to_string()), 0, 2);
+        let e = locate_value(ErrorKind::GuardError("null char in name".to_string()), 0, 2);
         assert_eq!(name.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
@@ -1254,19 +1254,19 @@ mod test_pdf_prim {
 
         let v = Vec::new();
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at stream content".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at stream content".to_string()), 0, 0);
         assert_eq!(sc.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
         let v = Vec::from(" ".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at stream content".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at stream content".to_string()), 0, 0);
         assert_eq!(sc.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
         let v = Vec::from("strea ".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not at stream content".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not at stream content".to_string()), 0, 0);
         assert_eq!(sc.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
@@ -1293,7 +1293,7 @@ mod test_pdf_prim {
         // wrong starting eol
         let v = Vec::from("stream\r  \r\nendstream ".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let e = make_error(ErrorKind::GuardError("not a valid stream marker".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("not a valid stream marker".to_string()), 0, 0);
         assert_eq!(sc.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 

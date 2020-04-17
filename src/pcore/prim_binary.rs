@@ -123,7 +123,7 @@ impl ParsleyParser for BinaryBuffer {
 #[cfg(test)]
 mod test_binary {
     use super::{BinaryScanner, BinaryMatcher, BinaryBuffer};
-    use super::super::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyParser, LocatedVal, ErrorKind, make_error};
+    use super::super::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyParser, LocatedVal, ErrorKind, locate_value};
 
     #[test]
     fn scan() {
@@ -141,7 +141,7 @@ mod test_binary {
         assert_eq!(pb.get_cursor(), 8);
 
         let mut pb = ParseBuffer::new(Vec::from("".as_bytes()));
-        let e = make_error(ErrorKind::EndOfBuffer, 0, 0);
+        let e = locate_value(ErrorKind::EndOfBuffer, 0, 0);
         assert_eq!(s.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
     }
@@ -152,7 +152,7 @@ mod test_binary {
         let mut s = BinaryMatcher::new(b"%PDF-");
 
         let mut pb = ParseBuffer::new(Vec::from("".as_bytes()));
-        let e = make_error(ErrorKind::GuardError("match".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("match".to_string()), 0, 0);
         assert_eq!(s.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
@@ -161,7 +161,7 @@ mod test_binary {
         assert_eq!(pb.get_cursor(), 5);
 
         let mut pb = ParseBuffer::new(Vec::from(" %PDF-".as_bytes()));
-        let e = make_error(ErrorKind::GuardError("match".to_string()), 0, 0);
+        let e = locate_value(ErrorKind::GuardError("match".to_string()), 0, 0);
         assert_eq!(s.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
     }
@@ -170,7 +170,7 @@ mod test_binary {
     fn buffer() {
         let mut s = BinaryBuffer::new(3);
         let mut pb = ParseBuffer::new(Vec::from("".as_bytes()));
-        let e = make_error(ErrorKind::EndOfBuffer, 0, 0);
+        let e = locate_value(ErrorKind::EndOfBuffer, 0, 0);
         assert_eq!(s.parse(&mut pb), Err(e));
 
         let mut s = BinaryBuffer::new(3);
