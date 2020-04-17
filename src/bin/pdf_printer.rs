@@ -110,8 +110,7 @@ fn parse_file(test_file: &str) {
                     let size = pb.remaining();
                     // Restrict the view to the pdf content.
                     let view = RestrictView::new(nbytes, size);
-                    let loc = pb.get_location();
-                    pb = view.transform(&pb, &loc).unwrap();
+                    pb = view.transform(&pb).unwrap();
                 };
                 nbytes
             }

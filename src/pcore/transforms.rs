@@ -19,15 +19,15 @@
 /// Transformations of parse buffers.
 
 use super::parsebuffer::{
-    ParseBufferT, ParseBuffer, ErrorKind, Location, LocatedVal, locate_value
+    ParseResult, ParseBufferT, ParseBuffer, ErrorKind,
+    Location, locate_value
 };
 
-pub type TransformResult = std::result::Result<ParseBuffer, LocatedVal<ErrorKind>>;
+pub type TransformResult = ParseResult<ParseBuffer>;
 
 pub trait BufferTransformT {
-    // Transform the given parsebuffer into another, using the given
-    // location as a base for any errors.
-    fn transform(&self, buf: &dyn ParseBufferT, loc: &dyn Location) -> TransformResult;
+    // Transform the given parsebuffer into another.
+    fn transform(&self, buf: &dyn ParseBufferT) -> TransformResult;
 }
 
 // View restrictions are a form of buffer transformations.
@@ -44,11 +44,12 @@ impl RestrictView {
 }
 
 impl BufferTransformT for RestrictView {
-    fn transform(&self, buf: &dyn ParseBufferT, loc: &dyn Location) -> TransformResult {
+    fn transform(&self, buf: &dyn ParseBufferT) -> TransformResult {
         if self.start + self.size <= buf.size() {
             Ok(ParseBuffer::new_view(buf, self.start, self.size))
         } else {
             let err = ErrorKind::BoundsError;
+            let loc = buf.get_location();
             Err(locate_value(err, loc.loc_start(), loc.loc_end()))
         }
     }
@@ -65,11 +66,12 @@ impl RestrictViewFrom {
 }
 
 impl BufferTransformT for RestrictViewFrom {
-    fn transform(&self, buf: &dyn ParseBufferT, loc: &dyn Location) -> TransformResult {
+    fn transform(&self, buf: &dyn ParseBufferT) -> TransformResult {
         if self.start < buf.size() {
             Ok(ParseBuffer::new_view(buf, self.start, buf.size() - self.start))
         } else {
             let err = ErrorKind::BoundsError;
+            let loc = buf.get_location();
             Err(locate_value(err, loc.loc_start(), loc.loc_end()))
         }
     }
@@ -89,7 +91,7 @@ mod test_transforms {
         assert_eq!(pb.scan(b"56"), Ok(5));
         let size = pb.remaining();
         let view = RestrictView::new(5, size);
-        pb = view.transform(&pb, &pb.get_location()).unwrap();
+        pb = view.transform(&pb).unwrap();
         assert_eq!(pb.get_cursor(), 0);
         assert_eq!(pb.remaining(), size);
         assert_eq!(pb.scan(b"56"), Ok(0));
@@ -100,23 +102,23 @@ mod test_transforms {
         pb.set_cursor(0);
         let size = pb.remaining();
         let view = RestrictView::new(0, size);
-        pb = view.transform(&pb, &pb.get_location()).unwrap();
+        pb = view.transform(&pb).unwrap();
         assert_eq!(pb.remaining(), size);
         assert_eq!(pb.scan(b"9"), Ok(4));
 
         // identical view
         let view = RestrictViewFrom::new(0);
-        pb = view.transform(&pb, &pb.get_location()).unwrap();
+        pb = view.transform(&pb).unwrap();
         assert_eq!(pb.remaining(), size);
         assert_eq!(pb.scan(b"9"), Ok(4));
 
         // view from
         let view = RestrictViewFrom::new(pb.size() - 1);
-        pb = view.transform(&pb, &pb.get_location()).unwrap();
+        pb = view.transform(&pb).unwrap();
         assert_eq!(pb.remaining(), 1);
         assert_eq!(pb.scan(b"9"), Ok(0));
         let view = RestrictViewFrom::new(1);
-        let pb = view.transform(&pb, &pb.get_location());
+        let pb = view.transform(&pb);
         assert!(pb.is_err());
     }
 }

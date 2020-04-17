@@ -174,7 +174,7 @@ impl ParsleyParser for ObjStreamP<'_> {
 
         // Create a view bounding the metadata, and parse it.
         let view = RestrictView::new(0, first);
-        let mut md_buf = match view.transform(buf, &buf.get_location()) {
+        let mut md_buf = match view.transform(buf) {
             Ok(b)  => b,
             Err(_) => {
                 let msg = format!("Unable to parse object-stream metadata, /First may be invalid: {}",
@@ -186,7 +186,7 @@ impl ParsleyParser for ObjStreamP<'_> {
         let meta = self.parse_metadata(&mut md_buf, num_objs)?;
         // Create a view for the content, and parse it using the metadata.
         let view = RestrictViewFrom::new(first);
-        let mut objs_buf = match view.transform(buf, &buf.get_location()) {
+        let mut objs_buf = match view.transform(buf) {
             Ok(v)  => v,
             Err(_) => {
                 let msg = format!("Unable to parse object-stream content, /First may be invalid: {}",
