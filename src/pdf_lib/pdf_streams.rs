@@ -1,3 +1,21 @@
+// Copyright (c) 2020 SRI International.
+// All rights reserved.
+//
+//    This file is part of the Parsley parser.
+//
+//    Parsley is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    Parsley is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 use std::rc::Rc;
 use super::super::pcore::parsebuffer::{
     ParseBufferT, ParsleyParser, ParseResult, LocatedVal,
@@ -173,7 +191,7 @@ impl ParsleyParser for ObjStreamP<'_> {
         // good error-messages.
 
         // Create a view bounding the metadata, and parse it.
-        let view = RestrictView::new(0, first);
+        let mut view = RestrictView::new(0, first);
         let mut md_buf = match view.transform(buf) {
             Ok(b)  => b,
             Err(_) => {
@@ -185,7 +203,7 @@ impl ParsleyParser for ObjStreamP<'_> {
         };
         let meta = self.parse_metadata(&mut md_buf, num_objs)?;
         // Create a view for the content, and parse it using the metadata.
-        let view = RestrictViewFrom::new(first);
+        let mut view = RestrictViewFrom::new(first);
         let mut objs_buf = match view.transform(buf) {
             Ok(v)  => v,
             Err(_) => {

@@ -27,7 +27,7 @@ pub type TransformResult = ParseResult<ParseBuffer>;
 
 pub trait BufferTransformT {
     // Transform the given parsebuffer into another.
-    fn transform(&self, buf: &dyn ParseBufferT) -> TransformResult;
+    fn transform(&mut self, buf: &dyn ParseBufferT) -> TransformResult;
 }
 
 // View restrictions are a form of buffer transformations.
@@ -44,7 +44,7 @@ impl RestrictView {
 }
 
 impl BufferTransformT for RestrictView {
-    fn transform(&self, buf: &dyn ParseBufferT) -> TransformResult {
+    fn transform(&mut self, buf: &dyn ParseBufferT) -> TransformResult {
         if self.start + self.size <= buf.size() {
             Ok(ParseBuffer::new_view(buf, self.start, self.size))
         } else {
@@ -66,7 +66,7 @@ impl RestrictViewFrom {
 }
 
 impl BufferTransformT for RestrictViewFrom {
-    fn transform(&self, buf: &dyn ParseBufferT) -> TransformResult {
+    fn transform(&mut self, buf: &dyn ParseBufferT) -> TransformResult {
         if self.start < buf.size() {
             Ok(ParseBuffer::new_view(buf, self.start, buf.size() - self.start))
         } else {
@@ -90,7 +90,7 @@ mod test_transforms {
         pb.set_cursor(0);
         assert_eq!(pb.scan(b"56"), Ok(5));
         let size = pb.remaining();
-        let view = RestrictView::new(5, size);
+        let mut view = RestrictView::new(5, size);
         pb = view.transform(&pb).unwrap();
         assert_eq!(pb.get_cursor(), 0);
         assert_eq!(pb.remaining(), size);
@@ -101,23 +101,23 @@ mod test_transforms {
         // identical view
         pb.set_cursor(0);
         let size = pb.remaining();
-        let view = RestrictView::new(0, size);
+        let mut view = RestrictView::new(0, size);
         pb = view.transform(&pb).unwrap();
         assert_eq!(pb.remaining(), size);
         assert_eq!(pb.scan(b"9"), Ok(4));
 
         // identical view
-        let view = RestrictViewFrom::new(0);
+        let mut view = RestrictViewFrom::new(0);
         pb = view.transform(&pb).unwrap();
         assert_eq!(pb.remaining(), size);
         assert_eq!(pb.scan(b"9"), Ok(4));
 
         // view from
-        let view = RestrictViewFrom::new(pb.size() - 1);
+        let mut view = RestrictViewFrom::new(pb.size() - 1);
         pb = view.transform(&pb).unwrap();
         assert_eq!(pb.remaining(), 1);
         assert_eq!(pb.scan(b"9"), Ok(0));
-        let view = RestrictViewFrom::new(1);
+        let mut view = RestrictViewFrom::new(1);
         let pb = view.transform(&pb);
         assert!(pb.is_err());
     }
