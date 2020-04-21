@@ -220,28 +220,43 @@ impl ParsleyParser for ObjStreamP<'_> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum EntStatus {
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub enum XrefEntStatus {
     Free { next: usize },
     InUse { file_ofs: usize },
     InStream { stream_obj: usize, obj_index: usize }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct XrefStreamEntT {
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub struct XrefEntT {
     obj: usize,
     gen: usize,
-    status: EntStatus
+    status: XrefEntStatus
+}
+
+impl XrefEntT {
+    pub fn new(obj: usize, gen: usize, status: XrefEntStatus) -> XrefEntT {
+        XrefEntT { obj, gen, status }
+    }
+    pub fn obj(&self)    -> usize { self.obj }
+    pub fn gen(&self)    -> usize { self.gen }
+    pub fn in_use(&self) -> bool  {
+        match self.status {
+            XrefEntStatus::Free{..} => false,
+            _                       => true
+        }
+    }
+    pub fn status(&self) -> &XrefEntStatus { &self.status }
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct XrefStreamT {
     dict: Rc<LocatedVal<DictT>>,
-    ents: Vec<LocatedVal<XrefStreamEntT>>
+    ents: Vec<LocatedVal<XrefEntT>>
 }
 
 impl XrefStreamT {
-    pub fn new(dict: Rc<LocatedVal<DictT>>, ents: Vec<LocatedVal<XrefStreamEntT>>)
+    pub fn new(dict: Rc<LocatedVal<DictT>>, ents: Vec<LocatedVal<XrefEntT>>)
                -> XrefStreamT {
         XrefStreamT { dict, ents }
     }
@@ -379,7 +394,7 @@ impl XrefStreamP<'_> {
     }
 
     fn parse_stream(&self, buf: &mut dyn ParseBufferT, meta: &XrefStreamDictInfo)
-                    -> ParseResult<Vec<LocatedVal<XrefStreamEntT>>> {
+                    -> ParseResult<Vec<LocatedVal<XrefEntT>>> {
         let mut ents = Vec::new();
         let index = match meta.index {
             Some(ref i) => i.clone(),
@@ -426,13 +441,13 @@ impl XrefStreamP<'_> {
                 // Construct the entry
                 let (status, gen) =
                     match typ {
-                        0 => (EntStatus::Free { next: field2 }, field3),
-                        1 => (EntStatus::InUse { file_ofs: field2 }, field3),
-                        2 => (EntStatus::InStream { stream_obj: field2, obj_index: field3 }, 0),
+                        0 => (XrefEntStatus::Free { next: field2 }, field3),
+                        1 => (XrefEntStatus::InUse { file_ofs: field2 }, field3),
+                        2 => (XrefEntStatus::InStream { stream_obj: field2, obj_index: field3 }, 0),
                         // we checked for valid entry typ above, so this should never happen
                         _ => panic!("unhandled entry type in xref stream")
                     };
-                let ent = XrefStreamEntT { obj: start_obj + c, gen, status };
+                let ent = XrefEntT::new(start_obj + c, gen, status);
                 let end = buf.get_cursor();
                 ents.push(LocatedVal::new(ent, start, end));
             }

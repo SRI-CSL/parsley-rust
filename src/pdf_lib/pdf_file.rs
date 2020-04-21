@@ -27,6 +27,7 @@ use super::super::pcore::parsebuffer::{
     ErrorKind, locate_value};
 use super::pdf_prim::{IntegerP, WhitespaceEOL, WhitespaceNoEOL, Comment};
 use super::pdf_obj::{PDFObjContext, IndirectT, IndirectP, DictT, DictP};
+use super::pdf_streams::{XrefEntStatus, XrefEntT};
 
 #[derive(Debug, PartialEq)]
 pub struct HeaderT {
@@ -55,31 +56,6 @@ impl ParsleyParser for HeaderP {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub enum EntStatus {
-    Free { next: usize },
-    InUse { file_ofs: usize },
-//  InStream { stream_obj: usize, obj_index: usize }
-}
-
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub struct XrefEntT {
-    obj: usize,
-    gen: usize,
-    status: EntStatus,
-}
-
-impl XrefEntT {
-    pub fn obj(&self)    -> usize { self.obj }
-    pub fn gen(&self)    -> usize { self.gen }
-    pub fn in_use(&self) -> bool  {
-        match self.status {
-            EntStatus::Free{..} => false,
-            _                   => true
-        }
-    }
-    pub fn status(&self) -> &EntStatus { &self.status }
-}
 
 struct XrefEntP {
     ent_idx: usize
@@ -179,10 +155,10 @@ impl ParsleyParser for XrefEntP {
         }
 
         let status =
-            if in_use { EntStatus::InUse { file_ofs: info }}
-            else      { EntStatus::Free  { next: info } };
+            if in_use { XrefEntStatus::InUse { file_ofs: info }}
+            else      { XrefEntStatus::Free  { next: info } };
 
-        let ent = XrefEntT { obj: self.ent_idx, gen, status };
+        let ent = XrefEntT::new(self.ent_idx, gen, status);
         let end = buf.get_cursor();
         Ok(LocatedVal::new(ent, start, end))
     }
@@ -309,19 +285,23 @@ impl XrefSectT {
             assert!(ent.obj() == o);
             if o == next_free {
                 match ent.status() {
-                    EntStatus::InUse {..} => {
+                    XrefEntStatus::InUse {..} => {
                         return Some(InvalidXrefSect::ObjectNotFree(o))
                     },
-                    EntStatus::Free { next } => {
+                    XrefEntStatus::Free { next } => {
                         next_free = *next;
                         continue
+                    },
+                    XrefEntStatus::InStream {..} => {
+                        // This should never happen in xref tables.
+                        assert!(false)
                     }
                 }
             }
             if !ent.in_use() {
                 // This should be a dead object.
                 match (ent.gen(), ent.status()) {
-                    (65535, EntStatus::Free { next: 0 }) =>
+                    (65535, XrefEntStatus::Free { next: 0 }) =>
                         (),
                     _ =>
                         return Some(InvalidXrefSect::BadDeadObject(o))
@@ -536,7 +516,8 @@ mod test_pdf_file {
     use super::super::super::pdf_lib::pdf_obj::{PDFObjContext, PDFObjT, ReferenceT, DictT};
     use super::super::super::pdf_lib::pdf_prim::{IntegerT, NameT};
     use super::{HeaderT, HeaderP, BodyT, BodyP, StartXrefT, StartXrefP, TrailerT, TrailerP};
-    use super::{XrefEntT, XrefEntP, XrefSubSectT, XrefSubSectP, XrefSectT, XrefSectP, EntStatus};
+    use super::{XrefEntT, XrefEntP, XrefSubSectT, XrefSubSectP, XrefSectT, XrefSectP};
+    use super::super::pdf_streams::{XrefEntStatus};
     use super::{InvalidXrefSect};
 
     #[test]
@@ -572,22 +553,22 @@ mod test_pdf_file {
         let v = Vec::from("1234567890 12345 f\r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let ent = p.parse(&mut pb);
-        let status = EntStatus::Free { next: 1234567890 };
-        let xref = XrefEntT { obj: 0, gen: 12345, status };
+        let status = XrefEntStatus::Free { next: 1234567890 };
+        let xref = XrefEntT::new(0, 12345, status);
         assert_eq!(ent, Ok(LocatedVal::new(xref, 0, 20)));
         //                 01234567890123456789012345678
         let v = Vec::from("1234567890 12345 n \n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let ent = p.parse(&mut pb);
-        let status = EntStatus::InUse { file_ofs: 1234567890 };
-        let xref = XrefEntT { obj: 0, gen: 12345, status };
+        let status = XrefEntStatus::InUse { file_ofs: 1234567890 };
+        let xref = XrefEntT::new(0, 12345, status);
         assert_eq!(ent, Ok(LocatedVal::new(xref, 0, 20)));
         //                 01234567890123456789012345678
         let v = Vec::from("1234567890 12345 f \r".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let ent = p.parse(&mut pb);
-        let status = EntStatus::Free { next: 1234567890 };
-        let xref = XrefEntT { obj: 0, gen: 12345, status };
+        let status = XrefEntStatus::Free { next: 1234567890 };
+        let xref = XrefEntT::new(0, 12345, status);
         assert_eq!(ent, Ok(LocatedVal::new(xref, 0, 20)));
 
         // bad eol
@@ -613,8 +594,8 @@ mod test_pdf_file {
         let v = Vec::from("0 1\n1234567890 12345 f\r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
-        let status = EntStatus::Free { next: 1234567890 };
-        let xref = LocatedVal::new(XrefEntT { obj: 0, gen: 12345, status }, 4, 24);
+        let status = XrefEntStatus::Free { next: 1234567890 };
+        let xref = LocatedVal::new(XrefEntT::new(0, 12345, status), 4, 24);
         let s = XrefSubSectT { start: 0, count: 1, ents: vec![xref] };
         assert_eq!(val, Ok(LocatedVal::new(s, 0, 24)));
 
@@ -623,8 +604,8 @@ mod test_pdf_file {
         let v = Vec::from(" 0 1 \r\n1234567890 12345 f\r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
-        let status = EntStatus::Free { next: 1234567890 };
-        let xref = LocatedVal::new(XrefEntT { obj: 0, gen: 12345, status }, 7, 27);
+        let status = XrefEntStatus::Free { next: 1234567890 };
+        let xref = LocatedVal::new(XrefEntT::new(0, 12345, status), 7, 27);
         let s = XrefSubSectT { start: 0, count: 1, ents: vec![xref] };
         assert_eq!(val, Ok(LocatedVal::new(s, 0, 27)));
     }
@@ -637,8 +618,8 @@ mod test_pdf_file {
         let v = Vec::from("xref\n0 1\n1234567890 12345 f\r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
-        let status = EntStatus::Free { next: 1234567890 };
-        let xref = LocatedVal::new(XrefEntT { obj: 0, gen: 12345, status }, 9, 29);
+        let status = XrefEntStatus::Free { next: 1234567890 };
+        let xref = LocatedVal::new(XrefEntT::new(0, 12345, status), 9, 29);
         let ssect = LocatedVal::new(XrefSubSectT { start: 0, count: 1, ents: vec![xref] }, 5, 29);
         let s = XrefSectT { sects: vec![ssect] };
         assert_eq!(val, Ok(LocatedVal::new(s, 0, 29)));
@@ -650,8 +631,8 @@ mod test_pdf_file {
         let v = Vec::from("xref\r\n0 1\n1234567890 12345 f\r\ntrailer".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
-        let status = EntStatus::Free { next: 1234567890 };
-        let xref = LocatedVal::new(XrefEntT { obj: 0, gen: 12345, status }, 10, 30);
+        let status = XrefEntStatus::Free { next: 1234567890 };
+        let xref = LocatedVal::new(XrefEntT::new(0, 12345, status), 10, 30);
         let ssect = LocatedVal::new(XrefSubSectT { start: 0, count: 1, ents: vec![xref] }, 6, 30);
         let s = XrefSectT { sects: vec![ssect] };
         assert_eq!(val, Ok(LocatedVal::new(s, 0, 30)));
@@ -681,18 +662,18 @@ mod test_pdf_file {
         let val = p.parse(&mut pb);
 
         let mut ents = Vec::new();
-        let status = EntStatus::Free { next: 0 };
-        ents.push(LocatedVal::new(XrefEntT { obj: 0, gen: 65535, status }, 9, 29));
-        let status = EntStatus::InUse { file_ofs: 10 };
-        ents.push(LocatedVal::new(XrefEntT { obj: 1, gen: 0, status }, 29, 49));
-        let status = EntStatus::InUse { file_ofs: 79 };
-        ents.push(LocatedVal::new(XrefEntT { obj: 2, gen: 0, status }, 49, 69));
-        let status = EntStatus::InUse { file_ofs: 173 };
-        ents.push(LocatedVal::new(XrefEntT { obj: 3, gen: 0, status }, 69, 89));
-        let status = EntStatus::InUse { file_ofs: 301 };
-        ents.push(LocatedVal::new(XrefEntT { obj: 4, gen: 0, status }, 89, 109));
-        let status = EntStatus::InUse { file_ofs: 380 };
-        ents.push(LocatedVal::new(XrefEntT { obj: 5, gen: 0, status }, 109, 129));
+        let status = XrefEntStatus::Free { next: 0 };
+        ents.push(LocatedVal::new(XrefEntT::new(0, 65535, status), 9, 29));
+        let status = XrefEntStatus::InUse { file_ofs: 10 };
+        ents.push(LocatedVal::new(XrefEntT::new(1, 0, status), 29, 49));
+        let status = XrefEntStatus::InUse { file_ofs: 79 };
+        ents.push(LocatedVal::new(XrefEntT::new(2, 0, status), 49, 69));
+        let status = XrefEntStatus::InUse { file_ofs: 173 };
+        ents.push(LocatedVal::new(XrefEntT::new(3, 0, status), 69, 89));
+        let status = XrefEntStatus::InUse { file_ofs: 301 };
+        ents.push(LocatedVal::new(XrefEntT::new(4, 0, status), 89, 109));
+        let status = XrefEntStatus::InUse { file_ofs: 380 };
+        ents.push(LocatedVal::new(XrefEntT::new(5, 0, status), 109, 129));
         let ssect = LocatedVal::new(XrefSubSectT { start: 0, count: 6, ents }, 5, 129);
         let s = LocatedVal::new(XrefSectT { sects: vec![ssect] }, 0, 129);
         assert_eq!(val, Ok(s));

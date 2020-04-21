@@ -38,9 +38,9 @@ use parsley_rust::pcore::parsebuffer::{
     ParseBufferT, ParseBuffer, ParsleyParser, Location, LocatedVal
 };
 use parsley_rust::pcore::transforms::{RestrictView, BufferTransformT};
-use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, XrefSectP, EntStatus, TrailerP};
+use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, XrefSectP, TrailerP};
 use parsley_rust::pdf_lib::pdf_obj::{PDFObjT, IndirectP, PDFObjContext};
-use parsley_rust::pdf_lib::pdf_streams::{XrefStreamP};
+use parsley_rust::pdf_lib::pdf_streams::{XrefStreamP, XrefEntStatus};
 
 /* from: https://osr.jpl.nasa.gov/wiki/pages/viewpage.action?spaceKey=SD&title=TA2+PDF+Safe+Parser+Evaluation
 
@@ -211,14 +211,18 @@ fn parse_file(test_file: &str) {
         for (idx, o) in s.ents().iter().enumerate() {
             let ent = o.val();
             match ent.status() {
-                EntStatus::Free { next } => {
+                XrefEntStatus::Free { next } => {
                     ta3_log!(Level::Info, file_offset(o.loc_start()), "   free object (next is {}).",
                              *next)
                 },
-                EntStatus::InUse { file_ofs } => {
+                XrefEntStatus::InUse { file_ofs } => {
                     ta3_log!(Level::Info, file_offset(o.loc_start()), "   inuse object at {}.",
                              *file_ofs);
                     id_offsets.push(((s.start() + idx, ent.gen()), (*file_ofs).try_into().unwrap()))
+                },
+                XrefEntStatus::InStream {..} => {
+                    // TODO:
+                    assert!(false)
                 }
             }
         }
