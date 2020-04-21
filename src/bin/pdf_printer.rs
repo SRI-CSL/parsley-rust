@@ -38,7 +38,7 @@ use parsley_rust::pcore::parsebuffer::{
     ParseBufferT, ParseBuffer, ParsleyParser, Location, LocatedVal
 };
 use parsley_rust::pcore::transforms::{RestrictView, BufferTransformT};
-use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, XrefSectP, TrailerP};
+use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, XrefSectP, EntStatus, TrailerP};
 use parsley_rust::pdf_lib::pdf_obj::{PDFObjT, IndirectP, PDFObjContext};
 use parsley_rust::pdf_lib::pdf_streams::{XrefStreamP};
 
@@ -210,13 +210,16 @@ fn parse_file(test_file: &str) {
                  s.count(), s.start());
         for (idx, o) in s.ents().iter().enumerate() {
             let ent = o.val();
-            if ent.in_use() {
-                ta3_log!(Level::Info, file_offset(o.loc_start()), "   inuse object at {}.",
-                         ent.info());
-                id_offsets.push(((s.start() + idx, ent.gen()), ent.info().try_into().unwrap()))
-            } else {
-                ta3_log!(Level::Info, file_offset(o.loc_start()), "   free object (next is {}).",
-                         ent.info())
+            match ent.status() {
+                EntStatus::Free { next } => {
+                    ta3_log!(Level::Info, file_offset(o.loc_start()), "   free object (next is {}).",
+                             *next)
+                },
+                EntStatus::InUse { file_ofs } => {
+                    ta3_log!(Level::Info, file_offset(o.loc_start()), "   inuse object at {}.",
+                             *file_ofs);
+                    id_offsets.push(((s.start() + idx, ent.gen()), (*file_ofs).try_into().unwrap()))
+                }
             }
         }
     }
