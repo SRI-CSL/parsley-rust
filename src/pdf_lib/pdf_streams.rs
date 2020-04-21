@@ -18,17 +18,18 @@
 
 use std::rc::Rc;
 use super::super::pcore::parsebuffer::{
-    ParseBufferT, ParsleyParser, ParseResult, LocatedVal,
+    ParseBufferT, ParseBuffer, ParsleyParser, ParseResult, LocatedVal,
     ErrorKind, locate_value
 };
 use super::super::pcore::transforms::{
     BufferTransformT, RestrictView, RestrictViewFrom
 };
 
-use super::pdf_prim::{WhitespaceEOL, IntegerP, NameT};
+use super::pdf_prim::{WhitespaceEOL, IntegerP};
 use super::pdf_obj::{
-    PDFObjContext, PDFObjP, PDFObjT, DictT, IndirectT, StreamT
+    PDFObjContext, PDFObjP, PDFObjT, DictT, IndirectT, StreamT, Filter
 };
+use super::pdf_filters::{FlateDecode};
 
 type ObjStreamMetadata = Vec<(usize, usize)>; // (object#, offset) pairs
 type ObjStreamContent  = Vec<LocatedVal<IndirectT>>;
@@ -255,7 +256,7 @@ struct XrefStreamDictInfo<'a> {
     pub prev: usize,
     index: Option<Vec<(usize, usize)>>,  // like pdf_file::XrefSubSectT but without entries
     widths: [usize; 3],
-    filters: Vec<(NameT, Option<&'a DictT>)>
+    filters: Vec<Filter<'a>>
 }
 
 impl XrefStreamP<'_> {
@@ -447,17 +448,40 @@ impl ParsleyParser for XrefStreamP<'_> {
         let start = buf.get_cursor();
         let meta = self.get_dict_info()?;
 
-        // TODO: handle filters
-        if meta.filters.len() > 0 {
-            let f = meta.filters[0].0.as_string();
-            let msg = format!("Cannot handle filter {} in xref stream", f);
-            let err = ErrorKind::GuardError(msg);
-            return Err(self.stream.dict().place(err))
+        // This vector is just being used to hoist the view generated
+        // by a loop iteration to use as input in the next iteration.
+        // There might be a standard idiomatic way of doing this; for
+        // now, this seems the simplest that avoids an unsafe block.
+        let mut views : Vec<ParseBuffer> = Vec::new();
+        // Selects the input for the iteration
+        fn get_input<'a>(views: &'a mut Vec<ParseBuffer>, buf: &'a mut dyn ParseBufferT)
+                     -> &'a mut dyn ParseBufferT {
+            if views.is_empty() {
+                buf
+            } else {
+                let last = views.len() - 1;
+                &mut views[last]
+            }
         }
-
-        let ents = self.parse_stream(buf, &meta)?;
+        for filter in &meta.filters {
+            let input = get_input(&mut views, buf);
+            let f = filter.name().as_string();
+            let mut decoder =
+                match f.as_str() {
+                    "FlateDecode" => FlateDecode::new(filter.options()),
+                    _ => {
+                        let msg = format!("Cannot handle filter {} in xref stream", f);
+                        let err = ErrorKind::GuardError(msg);
+                        return Err(self.stream.dict().place(err))
+                    }
+                };
+            let output = decoder.transform(input)?;
+            views.push(output);
+        }
+        let input = get_input(&mut views, buf);
+        let ents = self.parse_stream(input, &meta)?;
         let xref = XrefStreamT::new(Rc::clone(&self.stream.dict()), ents);
-        let end = buf.get_cursor();
+        let end = input.get_cursor();
         Ok(LocatedVal::new(xref, start, end))
     }
 }

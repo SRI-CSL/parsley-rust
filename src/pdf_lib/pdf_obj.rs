@@ -242,6 +242,23 @@ pub struct StreamT {
     stream: LocatedVal<Vec<u8>>,
 }
 
+pub struct Filter<'a> {
+    name: NameT,
+    options: Option<&'a DictT>,
+}
+
+impl Filter<'_> {
+    fn new<'a>(name: NameT, options: Option<&'a DictT>) -> Filter<'a> {
+        Filter { name, options }
+    }
+    pub fn name(&self) -> &NameT {
+        &self.name
+    }
+    pub fn options(&self) -> &Option<&DictT> {
+        &self.options
+    }
+}
+
 impl StreamT {
     pub fn new(dict: Rc<LocatedVal<DictT>>, stream: LocatedVal<Vec<u8>>) -> StreamT {
         StreamT { dict, stream }
@@ -249,7 +266,7 @@ impl StreamT {
     pub fn dict(&self) -> &Rc<LocatedVal<DictT>> { &self.dict }
     pub fn stream(&self) -> &LocatedVal<Vec<u8>> { &self.stream }
 
-    pub fn filters(&self) -> ParseResult<Vec<(NameT, Option<&DictT>)>> {
+    pub fn filters(&self) -> ParseResult<Vec<Filter>> {
         let mut filters = Vec::new();
         // check for the single filter case
         let f = self.dict.val().get_name_obj(b"Filter");
@@ -259,7 +276,7 @@ impl StreamT {
             // value as filter param.
             match self.dict.val().get_dict(b"DecodeParms") {
                 Some(d) => {
-                    filters.push((name, Some(d)))
+                    filters.push(Filter::new(name, Some(d)))
                 },
                 None => {
                     // Ensure there is no array value.
@@ -268,7 +285,7 @@ impl StreamT {
                         let err = ErrorKind::GuardError(msg);
                         return Err(self.dict.place(err))
                     }
-                    filters.push((name, None))
+                    filters.push(Filter::new(name, None))
                 }
             }
             return Ok(filters)
@@ -287,10 +304,10 @@ impl StreamT {
                     for (f, d) in fa.objs().iter().zip(da.objs().iter()) {
                         match (f.val(), d.val()) {
                             (PDFObjT::Name(name), PDFObjT::Null(_)) => {
-                                filters.push((name.clone(), None))
+                                filters.push(Filter::new(name.clone(), None))
                             },
                             (PDFObjT::Name(name), PDFObjT::Dict(ref d)) => {
-                                filters.push((name.clone(), Some(d)))
+                                filters.push(Filter::new(name.clone(), Some(d)))
                             },
                             (PDFObjT::Name(_), _) => {
                                 let msg = format!("Invalid objects in DecodeParms of stream");
@@ -310,7 +327,7 @@ impl StreamT {
                     for f in fa.objs() {
                         match f.val() {
                             PDFObjT::Name(name) => {
-                                filters.push((name.clone(), None))
+                                filters.push(Filter::new(name.clone(), None))
                             },
                             _ => {
                                 let msg = format!("Invalid objects in Filter of stream");
