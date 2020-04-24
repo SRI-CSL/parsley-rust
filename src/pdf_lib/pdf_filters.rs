@@ -25,14 +25,23 @@ use super::super::pcore::parsebuffer::{
 use super::super::pcore::transforms::{BufferTransformT, TransformResult};
 use super::super::pdf_lib::pdf_obj::DictT;
 
-pub struct FlateDecode;
-
-impl FlateDecode {
-    pub fn new(_: &Option<&DictT>) -> Self { Self }
+pub struct FlateDecode<'a> {
+    options: &'a Option<&'a DictT>,
 }
 
-impl BufferTransformT for FlateDecode {
+impl FlateDecode<'_> {
+    pub fn new<'a>(options: &'a Option<&'a DictT>) -> FlateDecode { FlateDecode { options } }
+}
+
+impl BufferTransformT for FlateDecode<'_> {
     fn transform(&mut self, buf: &dyn ParseBufferT) -> TransformResult {
+        if self.options.is_some() {
+            let err = ErrorKind::TransformError(format!(
+                "flatedecode error: filter options not yet supported"
+            ));
+            let loc = buf.get_location();
+            return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+        }
         let mut decoder = DeflateDecoder::new(Vec::new());
         match decoder.write_all(buf.buf()) {
             Err(e) => {
