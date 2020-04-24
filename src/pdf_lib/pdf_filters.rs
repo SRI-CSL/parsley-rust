@@ -16,16 +16,14 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::io::Write;
 use flate2::write::DeflateDecoder;
+use std::io::Write;
 
 use super::super::pcore::parsebuffer::{
-    ParseBufferT, ParseBuffer, ErrorKind, Location, locate_value
+    locate_value, ErrorKind, Location, ParseBuffer, ParseBufferT,
 };
-use super::super::pcore::transforms::{
-    BufferTransformT, TransformResult
-};
-use super::super::pdf_lib::pdf_obj::{DictT};
+use super::super::pcore::transforms::{BufferTransformT, TransformResult};
+use super::super::pdf_lib::pdf_obj::DictT;
 
 pub struct FlateDecode;
 
@@ -42,7 +40,7 @@ impl BufferTransformT for FlateDecode {
                 let loc = buf.get_location();
                 return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
             },
-            Ok(()) => {}
+            Ok(()) => {},
         }
         match decoder.finish() {
             Err(e) => {
@@ -50,9 +48,7 @@ impl BufferTransformT for FlateDecode {
                 let loc = buf.get_location();
                 return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
             },
-            Ok(decoded) => {
-                Ok(ParseBuffer::new(decoded))
-            }
+            Ok(decoded) => Ok(ParseBuffer::new(decoded)),
         }
     }
 }

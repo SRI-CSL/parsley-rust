@@ -16,13 +16,13 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-/// Basic parsing buffer manager, and the traits defining the parsing interface.
+// Basic parsing buffer manager, and the traits defining the parsing interface.
 
-use std::cmp::{PartialEq, PartialOrd, Ordering};
 use std::borrow::Borrow;
+use std::cmp::{Ordering, PartialEq, PartialOrd};
+use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
-use std::fmt;
 
 // Location information for objects returned by parsers.
 pub trait Location {
@@ -32,21 +32,23 @@ pub trait Location {
 
 // Values returned by parsers should provide location annotations.
 #[derive(Debug)]
-pub struct LocatedVal<T>
-{
-    val: T,
+pub struct LocatedVal<T> {
+    val:   T,
     start: usize,
-    end: usize,
+    end:   usize,
 }
 
 impl<T> LocatedVal<T>
-    where T: PartialEq
+where
+    T: PartialEq,
 {
-    pub fn new(val: T, start: usize, end: usize) -> LocatedVal<T> {
-        LocatedVal { val, start, end }
-    }
+    pub fn new(val: T, start: usize, end: usize) -> LocatedVal<T> { LocatedVal { val, start, end } }
     pub fn place<U>(&self, val: U) -> LocatedVal<U> {
-        LocatedVal { val, start: self.start, end: self.end }
+        LocatedVal {
+            val,
+            start: self.start,
+            end: self.end,
+        }
     }
 
     pub fn val(&self) -> &T { &self.val }
@@ -60,19 +62,17 @@ impl<T> LocatedVal<T>
 // (i.e. HashMap) as the key-type, the matching should be performed
 // over the T.
 impl<T> PartialEq for LocatedVal<T>
-    where T: PartialEq
+where
+    T: PartialEq,
 {
-    fn eq(&self, other: &Self) -> bool {
-        PartialEq::eq(&self.val, &other.val)
-    }
+    fn eq(&self, other: &Self) -> bool { PartialEq::eq(&self.val, &other.val) }
 }
 
-impl<T> Eq for LocatedVal<T>
-    where T: PartialEq
-{}
+impl<T> Eq for LocatedVal<T> where T: PartialEq {}
 
 impl<T> PartialOrd for LocatedVal<T>
-    where T: PartialOrd
+where
+    T: PartialOrd,
 {
     fn partial_cmp(&self, other: &LocatedVal<T>) -> Option<Ordering> {
         PartialOrd::partial_cmp(&self.val, &other.val)
@@ -80,15 +80,16 @@ impl<T> PartialOrd for LocatedVal<T>
 }
 
 impl<T> Ord for LocatedVal<T>
-    where T: Ord
+where
+    T: Ord,
 {
-    fn cmp(&self, other: &LocatedVal<T>) -> Ordering {
-        Ord::cmp(&self.val, &other.val)
-    }
+    fn cmp(&self, other: &LocatedVal<T>) -> Ordering { Ord::cmp(&self.val, &other.val) }
 }
 
 impl<T> Hash for LocatedVal<T>
-    where T: PartialEq, T: Hash
+where
+    T: PartialEq,
+    T: Hash,
 {
     fn hash<H: Hasher>(&self, state: &mut H) { self.val.hash(state) }
 }
@@ -96,14 +97,16 @@ impl<T> Hash for LocatedVal<T>
 // This allows HashMap lookup using T even when the HashMap is keyed
 // by LocatedVal<T>.
 impl<T> Borrow<T> for LocatedVal<T>
-    where T: PartialEq
+where
+    T: PartialEq,
 {
     fn borrow(&self) -> &T { &self.val }
 }
 
 // Provide location information.
 impl<T> Location for LocatedVal<T>
-    where T: PartialEq
+where
+    T: PartialEq,
 {
     fn loc_start(&self) -> usize { self.start }
     fn loc_end(&self) -> usize { self.end }
@@ -111,12 +114,14 @@ impl<T> Location for LocatedVal<T>
 
 #[derive(Debug, PartialEq)]
 pub struct ParseError {
-    msg: String
+    msg: String,
 }
 
 impl ParseError {
     pub fn new(s: &str) -> ParseError {
-        ParseError { msg: String::from(s) }
+        ParseError {
+            msg: String::from(s),
+        }
     }
 }
 
@@ -165,12 +170,13 @@ pub enum ErrorKind {
     // Errors during guarded primitive parsing.
     GuardError(String),
     // Errors during transformations
-    TransformError(String)
+    TransformError(String),
 }
 
 // function to create values at sensible locations
 pub fn locate_value<T>(val: T, s: usize, e: usize) -> LocatedVal<T>
-    where T: PartialEq
+where
+    T: PartialEq,
 {
     if s < e {
         LocatedVal::new(val, s, e)
@@ -182,24 +188,19 @@ pub fn locate_value<T>(val: T, s: usize, e: usize) -> LocatedVal<T>
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ErrorKind::EndOfBuffer =>
-                write!(f, "end of buffer"),
-            ErrorKind::BoundsError =>
-                write!(f, "out of bounds error"),
-            ErrorKind::PrimitiveError(ParseError { msg }) =>
-                write!(f, "primitive parse failure: {}", msg),
-            ErrorKind::GuardError(prim) =>
-                write!(f, "primitive guard error: {}", prim),
-            ErrorKind::TransformError(s) =>
-                write!(f, "transform error: {}", s)
+            ErrorKind::EndOfBuffer => write!(f, "end of buffer"),
+            ErrorKind::BoundsError => write!(f, "out of bounds error"),
+            ErrorKind::PrimitiveError(ParseError { msg }) => {
+                write!(f, "primitive parse failure: {}", msg)
+            },
+            ErrorKind::GuardError(prim) => write!(f, "primitive guard error: {}", prim),
+            ErrorKind::TransformError(s) => write!(f, "transform error: {}", s),
         }
     }
 }
 
 impl From<ParseError> for ErrorKind {
-    fn from(err: ParseError) -> ErrorKind {
-        ErrorKind::PrimitiveError(err)
-    }
+    fn from(err: ParseError) -> ErrorKind { ErrorKind::PrimitiveError(err) }
 }
 
 // The interface provided by every parsebuffer view.  All cursor
@@ -219,8 +220,8 @@ pub trait ParseBufferT {
     fn peek(&self) -> Option<u8>;
     fn buf(&self) -> &[u8];
 
-    // internal api, used for view restrictions.  ideally, this would have visibility
-    //   pub(in self::ParseBuffer)
+    // internal api, used for view restrictions.  ideally, this would have
+    // visibility   pub(in self::ParseBuffer)
     // but this is not supported (surprisingly).
     fn rc_buf(&self) -> Rc<Vec<u8>>;
     fn start(&self) -> usize;
@@ -286,16 +287,23 @@ impl ParseBuffer {
     // Creates a default view into the parse buffer.
     pub fn new(buf: Vec<u8>) -> ParseBuffer {
         let size = buf.len();
-        ParseBuffer { buf: Rc::new(buf), start: 0, ofs: 0, size }
+        ParseBuffer {
+            buf: Rc::new(buf),
+            start: 0,
+            ofs: 0,
+            size,
+        }
     }
 
     // Creates a subset view.
     pub fn new_view(buf: &dyn ParseBufferT, start: usize, size: usize) -> ParseBuffer {
         assert!(start + size <= buf.size());
-        ParseBuffer { buf: buf.rc_buf(),
-                      start: buf.start() + start,
-                      ofs: 0,
-                      size }
+        ParseBuffer {
+            buf: buf.rc_buf(),
+            start: buf.start() + start,
+            ofs: 0,
+            size,
+        }
     }
 }
 
@@ -313,9 +321,9 @@ pub fn parse_prim<P: ParsleyPrimitive>(buf: &mut dyn ParseBufferT) -> ParseResul
 // constrained by a predicate 'guard'; it returns a value of the Rust
 // representation type P::T when successful.  The 'guard' is specified
 // in terms of the values of the representation type P::T.
-pub fn parse_guarded<P: ParsleyPrimitive>(buf: &mut dyn ParseBufferT,
-                                          guard: &mut dyn FnMut(&P::T) -> bool)
-                                          -> ParseResult<P::T> {
+pub fn parse_guarded<P: ParsleyPrimitive>(
+    buf: &mut dyn ParseBufferT, guard: &mut dyn FnMut(&P::T) -> bool,
+) -> ParseResult<P::T> {
     let start = buf.get_cursor();
     let (t, consumed) = P::parse(buf.buf())?;
     if !guard(&t) {
@@ -328,9 +336,7 @@ pub fn parse_guarded<P: ParsleyPrimitive>(buf: &mut dyn ParseBufferT,
 }
 
 impl ParseBufferT for ParseBuffer {
-    fn size(&self) -> usize {
-        self.size
-    }
+    fn size(&self) -> usize { self.size }
 
     fn remaining(&self) -> usize {
         assert!(self.ofs <= self.size);
@@ -345,23 +351,13 @@ impl ParseBufferT for ParseBuffer {
         }
     }
 
-    fn buf(&self) -> &[u8] {
-        &self.buf[(self.start + self.ofs) .. (self.start + self.size)]
-    }
+    fn buf(&self) -> &[u8] { &self.buf[(self.start + self.ofs) .. (self.start + self.size)] }
 
-    fn rc_buf(&self) -> Rc<Vec<u8>> {
-        Rc::clone(&self.buf)
-    }
-    fn start(&self) -> usize {
-        self.start
-    }
+    fn rc_buf(&self) -> Rc<Vec<u8>> { Rc::clone(&self.buf) }
+    fn start(&self) -> usize { self.start }
 
-    fn get_location(&self) -> LocatedVal<()> {
-        LocatedVal::new((), self.ofs, self.size)
-    }
-    fn get_cursor(&self) -> usize {
-        self.ofs
-    }
+    fn get_location(&self) -> LocatedVal<()> { LocatedVal::new((), self.ofs, self.size) }
+    fn get_cursor(&self) -> usize { self.ofs }
     fn set_cursor(&mut self, ofs: usize) {
         assert!(ofs <= self.size);
         self.ofs = ofs
@@ -380,7 +376,9 @@ impl ParseBufferT for ParseBuffer {
         let mut consumed = 0;
         let mut r = Vec::new();
         for b in self.buf[(self.start + self.ofs) .. (self.start + self.size)].iter() {
-            if !allow.contains(b) { break }
+            if !allow.contains(b) {
+                break
+            }
             r.push(*b);
             consumed += 1;
         }
@@ -392,7 +390,9 @@ impl ParseBufferT for ParseBuffer {
         let mut consumed = 0;
         let mut r = Vec::new();
         for b in self.buf[(self.start + self.ofs) .. (self.start + self.size)].iter() {
-            if terminators.contains(b) { break }
+            if terminators.contains(b) {
+                break
+            }
             r.push(*b);
             consumed += 1;
         }
@@ -420,7 +420,10 @@ impl ParseBufferT for ParseBuffer {
     fn backward_scan(&mut self, tag: &[u8]) -> ParseResult<usize> {
         let start = self.get_cursor();
         let mut skip = 1;
-        for w in self.buf[self.start .. (self.start + self.ofs)].windows(tag.len()).rev() {
+        for w in self.buf[self.start .. (self.start + self.ofs)]
+            .windows(tag.len())
+            .rev()
+        {
             if w.starts_with(tag) {
                 skip = skip + tag.len() - 1;
                 self.ofs = self.ofs - skip;
@@ -437,7 +440,11 @@ impl ParseBufferT for ParseBuffer {
             self.ofs = self.ofs + tag.len();
             Ok(true)
         } else {
-            Err(locate_value(ErrorKind::GuardError("match".to_string()), start, start))
+            Err(locate_value(
+                ErrorKind::GuardError("match".to_string()),
+                start,
+                start,
+            ))
         }
     }
 
@@ -455,8 +462,8 @@ impl ParseBufferT for ParseBuffer {
 
 #[cfg(test)]
 mod test_parsebuffer {
+    use super::{locate_value, ErrorKind, LocatedVal, ParseBuffer, ParseBufferT};
     use std::collections::HashMap;
-    use super::{ParseBuffer, ParseBufferT, LocatedVal, ErrorKind, locate_value};
 
     #[test]
     fn test_scan() {
@@ -466,8 +473,10 @@ mod test_parsebuffer {
         assert_eq!(pb.get_cursor(), 5);
         assert_eq!(pb.scan(b"56"), Ok(0));
         assert_eq!(pb.get_cursor(), 5);
-        assert_eq!(pb.scan(b"0"),
-                   Err(locate_value(ErrorKind::EndOfBuffer, 5, 5)));
+        assert_eq!(
+            pb.scan(b"0"),
+            Err(locate_value(ErrorKind::EndOfBuffer, 5, 5))
+        );
         assert_eq!(pb.get_cursor(), 5);
     }
 
@@ -477,8 +486,10 @@ mod test_parsebuffer {
         let mut pb = ParseBuffer::new(v);
         assert_eq!(pb.scan(b"56"), Ok(5));
         assert_eq!(pb.get_cursor(), 5);
-        assert_eq!(pb.backward_scan(b"56"),
-                   Err(locate_value(ErrorKind::EndOfBuffer, 5, 5)));
+        assert_eq!(
+            pb.backward_scan(b"56"),
+            Err(locate_value(ErrorKind::EndOfBuffer, 5, 5))
+        );
         assert_eq!(pb.get_cursor(), 5);
         assert_eq!(pb.backward_scan(b"012"), Ok(5));
         assert_eq!(pb.get_cursor(), 0);

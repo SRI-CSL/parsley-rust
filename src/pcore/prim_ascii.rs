@@ -17,9 +17,11 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use std::convert::TryFrom;
-use super::parsebuffer::{ParsleyPrimitive, ParsleyParser, ParseBufferT,
-                         ParseResult, ParseError, LocatedVal, ErrorKind};
-use super::parsebuffer::{parse_prim, parse_guarded};
+
+use super::parsebuffer::{parse_guarded, parse_prim};
+use super::parsebuffer::{
+    ErrorKind, LocatedVal, ParseBufferT, ParseError, ParseResult, ParsleyParser, ParsleyPrimitive,
+};
 
 pub struct AsciiCharPrimitive;
 
@@ -41,7 +43,8 @@ impl ParsleyPrimitive for AsciiCharPrimitive {
         }
         let c = c.unwrap();
         if !c.is_ascii() {
-            let err = ErrorKind::PrimitiveError(ParseError::new("ascii-prim: invalid ascii character"));
+            let err =
+                ErrorKind::PrimitiveError(ParseError::new("ascii-prim: invalid ascii character"));
             return Err(LocatedVal::new(err, 0, 0))
         }
         Ok((c, 1))
@@ -52,13 +55,11 @@ impl ParsleyPrimitive for AsciiCharPrimitive {
 // use with the primitive combinators.
 
 pub struct AsciiChar {
-    guard: Option<Box<dyn FnMut(&char) -> bool>>
+    guard: Option<Box<dyn FnMut(&char) -> bool>>,
 }
 
 impl AsciiChar {
-    pub fn new() -> AsciiChar {
-        AsciiChar { guard: None }
-    }
+    pub fn new() -> AsciiChar { AsciiChar { guard: None } }
 
     pub fn new_guarded(g: Box<dyn FnMut(&char) -> bool>) -> AsciiChar {
         AsciiChar { guard: Some(g) }
@@ -72,7 +73,7 @@ impl ParsleyParser for AsciiChar {
         let start = buf.get_cursor();
         let c = match &mut self.guard {
             None => parse_prim::<AsciiCharPrimitive>(buf)?,
-            Some(b) => parse_guarded::<AsciiCharPrimitive>(buf, b)?
+            Some(b) => parse_guarded::<AsciiCharPrimitive>(buf, b)?,
         };
         let end = buf.get_cursor();
         Ok(LocatedVal::new(c, start, end))
@@ -82,10 +83,11 @@ impl ParsleyParser for AsciiChar {
 // test the primitive parser
 #[cfg(test)]
 mod test_prim_ascii {
+    use super::super::parsebuffer::{locate_value, parse_guarded, parse_prim};
+    use super::super::parsebuffer::{
+        ErrorKind, ParseBuffer, ParseBufferT, ParseError, ParsleyPrimitive,
+    };
     use super::AsciiCharPrimitive;
-    use super::super::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyPrimitive,
-                                    ErrorKind, ParseError};
-    use super::super::parsebuffer::{parse_prim, parse_guarded, locate_value};
 
     // this raw interface would not normally be used; we would be
     // going via the ParseBuffer as in the remaining tests.
@@ -117,8 +119,8 @@ mod test_prim_ascii {
     fn ascii() {
         let mut v: Vec<u8> = Vec::new();
         v.extend_from_slice(b"A");
-        v.push(128);  // non-ascii
-        v.push(0);    // nul; ascii
+        v.push(128); // non-ascii
+        v.push(0); // nul; ascii
         let mut pb = ParseBuffer::new(v);
         assert_eq!(pb.get_cursor(), 0);
 
@@ -151,11 +153,11 @@ mod test_prim_ascii {
         let mut pb = ParseBuffer::new(v);
         assert_eq!(pb.get_cursor(), 0);
 
-        let r = parse_guarded::<AsciiCharPrimitive>(&mut pb, &mut |c: &char| { *c == 'A' });
+        let r = parse_guarded::<AsciiCharPrimitive>(&mut pb, &mut |c: &char| *c == 'A');
         assert_eq!(r, Ok('A'));
         assert_eq!(pb.get_cursor(), 1);
 
-        let r = parse_guarded::<AsciiCharPrimitive>(&mut pb, &mut |c: &char| { *c == 'A' });
+        let r = parse_guarded::<AsciiCharPrimitive>(&mut pb, &mut |c: &char| *c == 'A');
         let e = ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name().to_string());
         let e = Err(locate_value(e, 1, 1));
         assert_eq!(r, e);
@@ -167,9 +169,11 @@ mod test_prim_ascii {
 // test the convenience wrapper
 #[cfg(test)]
 mod test_ascii {
-    use super::{AsciiCharPrimitive, AsciiChar};
-    use super::super::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyPrimitive, ParsleyParser,
-                                    ParseError, LocatedVal, ErrorKind, locate_value};
+    use super::super::parsebuffer::{
+        locate_value, ErrorKind, LocatedVal, ParseBuffer, ParseBufferT, ParseError, ParsleyParser,
+        ParsleyPrimitive,
+    };
+    use super::{AsciiChar, AsciiCharPrimitive};
 
     #[test]
     fn empty() {
@@ -186,8 +190,8 @@ mod test_ascii {
         let mut ascii_parser = AsciiChar::new_guarded(Box::new(|c: &char| *c == 'A'));
         let mut v: Vec<u8> = Vec::new();
         v.extend_from_slice(b"A");
-        v.push(128);  // non-ascii
-        v.push(0);    // nul; ascii
+        v.push(128); // non-ascii
+        v.push(0); // nul; ascii
         let mut pb = ParseBuffer::new(v);
         assert_eq!(pb.get_cursor(), 0);
 

@@ -16,8 +16,8 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-pub mod pdf_prim;
-pub mod pdf_obj;
-pub mod pdf_streams;
-pub mod pdf_filters;
 pub mod pdf_file;
+pub mod pdf_filters;
+pub mod pdf_obj;
+pub mod pdf_prim;
+pub mod pdf_streams;

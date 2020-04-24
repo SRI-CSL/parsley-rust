@@ -17,48 +17,39 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use std::rc::Rc;
-use super::super::pcore::parsebuffer::{
-    ParseBufferT, ParseBuffer, ParsleyParser, ParseResult, LocatedVal,
-    ErrorKind, locate_value
-};
-use super::super::pcore::transforms::{
-    BufferTransformT, RestrictView, RestrictViewFrom
-};
 
-use super::pdf_prim::{WhitespaceEOL, IntegerP};
-use super::pdf_obj::{
-    PDFObjContext, PDFObjP, PDFObjT, DictT, IndirectT, StreamT, Filter
+use super::super::pcore::parsebuffer::{
+    locate_value, ErrorKind, LocatedVal, ParseBuffer, ParseBufferT, ParseResult, ParsleyParser,
 };
-use super::pdf_filters::{FlateDecode};
+use super::super::pcore::transforms::{BufferTransformT, RestrictView, RestrictViewFrom};
+
+use super::pdf_filters::FlateDecode;
+use super::pdf_obj::{DictT, Filter, IndirectT, PDFObjContext, PDFObjP, PDFObjT, StreamT};
+use super::pdf_prim::{IntegerP, WhitespaceEOL};
 
 type ObjStreamMetadata = Vec<(usize, usize)>; // (object#, offset) pairs
-type ObjStreamContent  = Vec<LocatedVal<IndirectT>>;
+type ObjStreamContent = Vec<LocatedVal<IndirectT>>;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ObjStreamT {
     dict: Rc<LocatedVal<DictT>>,
-    objs: ObjStreamContent
+    objs: ObjStreamContent,
 }
 
 impl ObjStreamT {
-    pub fn new(dict: Rc<LocatedVal<DictT>>, objs: ObjStreamContent)
-               -> ObjStreamT {
+    pub fn new(dict: Rc<LocatedVal<DictT>>, objs: ObjStreamContent) -> ObjStreamT {
         ObjStreamT { dict, objs }
     }
-    pub fn objs(&self) -> &[LocatedVal<IndirectT>] {
-        self.objs.as_slice()
-    }
+    pub fn objs(&self) -> &[LocatedVal<IndirectT>] { self.objs.as_slice() }
 }
 
 pub struct ObjStreamP<'a> {
     ctxt: &'a mut PDFObjContext,
-    dict: Rc<LocatedVal<DictT>>
+    dict: Rc<LocatedVal<DictT>>,
 }
 
-
 impl ObjStreamP<'_> {
-    pub fn new<'a>(ctxt: &'a mut PDFObjContext, dict: Rc<LocatedVal<DictT>>)
-                   -> ObjStreamP<'a> {
+    pub fn new<'a>(ctxt: &'a mut PDFObjContext, dict: Rc<LocatedVal<DictT>>) -> ObjStreamP<'a> {
         ObjStreamP { ctxt, dict }
     }
 
@@ -72,8 +63,8 @@ impl ObjStreamP<'_> {
         let stream_type = stream_type.unwrap();
         if stream_type != b"ObjStm" {
             let t_str = match std::str::from_utf8(stream_type) {
-                Ok(v)  => v.to_string(),
-                Err(e) => format!("(error: cannot convert to UTF-8: {})", e)
+                Ok(v) => v.to_string(),
+                Err(e) => format!("(error: cannot convert to UTF-8: {})", e),
             };
             let msg = format!("Invalid /Type in object stream dictionary: {}", t_str);
             let err = ErrorKind::GuardError(msg);
@@ -102,12 +93,13 @@ impl ObjStreamP<'_> {
     // - the parsing view corresponds to the metadata section of the stream content,
     //   delimited by the /First offset
     // - /N provides the number of integer pairs expected in the metadata
-    // - parsing is done until the expected metadata is consumed, or
-    //   an end-of-buffer error; i.e. it is not illegal to have more
-    //   data after the end of the metadata and before /First
+    // - parsing is done until the expected metadata is consumed, or an
+    //   end-of-buffer error; i.e. it is not illegal to have more data after the end
+    //   of the metadata and before /First
     // [This assumes certain future fixes to the PDF spec.]
-    fn parse_metadata(&mut self, buf: &mut dyn ParseBufferT, n: usize)
-                      -> ParseResult<ObjStreamMetadata> {
+    fn parse_metadata(
+        &mut self, buf: &mut dyn ParseBufferT, n: usize,
+    ) -> ParseResult<ObjStreamMetadata> {
         let mut obj_ofs = Vec::new();
         let mut last_ofs = 0; // to ensure offset ordering.
         loop {
@@ -134,8 +126,10 @@ impl ObjStreamP<'_> {
             // ensure that the offset is ordered.
             let ofs_val = ofs.val().usize_val();
             if ofs_val <= last_ofs && obj_ofs.len() > 0 {
-                let msg = format!("offset {} of object {} is not greater than previous offset {}",
-                                  ofs_val, obj, last_ofs);
+                let msg = format!(
+                    "offset {} of object {} is not greater than previous offset {}",
+                    ofs_val, obj, last_ofs
+                );
                 let err = ErrorKind::GuardError(msg);
                 buf.set_cursor(cursor);
                 return Err(ofs.place(err))
@@ -143,7 +137,9 @@ impl ObjStreamP<'_> {
 
             last_ofs = ofs_val;
             obj_ofs.push((obj, ofs_val));
-            if obj_ofs.len() == n { break }
+            if obj_ofs.len() == n {
+                break
+            }
         }
         Ok(obj_ofs)
     }
@@ -151,19 +147,22 @@ impl ObjStreamP<'_> {
     // The assumptions are that:
     // - the parsing view corresponds to the content section of the stream content,
     //   beginning at the /First offset
-    // - parsing is done until the expected metadata is consumed, or
-    //   an end-of-buffer error; i.e. it is not illegal to have more
-    //   data after the end of the last offset specified in the metadata
+    // - parsing is done until the expected metadata is consumed, or an
+    //   end-of-buffer error; i.e. it is not illegal to have more data after the end
+    //   of the last offset specified in the metadata
     // [This assumes certain future fixes to the PDF spec.]
-    fn parse_stream(&mut self, buf: &mut dyn ParseBufferT, meta: &ObjStreamMetadata)
-                    -> ParseResult<ObjStreamContent> {
+    fn parse_stream(
+        &mut self, buf: &mut dyn ParseBufferT, meta: &ObjStreamMetadata,
+    ) -> ParseResult<ObjStreamContent> {
         let mut ws = WhitespaceEOL::new(true);
         let mut objs = Vec::new();
         for (i, (onum, ofs)) in meta.iter().enumerate() {
             // Ensure we are not past the specified offset.
             if buf.get_cursor() > *ofs {
-                let msg = format!("parsed past offset {} for object #{} with id {}",
-                                  ofs, i, onum);
+                let msg = format!(
+                    "parsed past offset {} for object #{} with id {}",
+                    ofs, i, onum
+                );
                 let err = ErrorKind::GuardError(msg);
                 return Err(locate_value(err, *ofs, buf.get_cursor()))
             }
@@ -194,56 +193,71 @@ impl ParsleyParser for ObjStreamP<'_> {
         // Create a view bounding the metadata, and parse it.
         let mut view = RestrictView::new(0, first);
         let mut md_buf = match view.transform(buf) {
-            Ok(b)  => b,
+            Ok(b) => b,
             Err(_) => {
-                let msg = format!("Unable to parse object-stream metadata, /First may be invalid: {}",
-                                  first);
+                let msg = format!(
+                    "Unable to parse object-stream metadata, /First may be invalid: {}",
+                    first
+                );
                 let err = ErrorKind::GuardError(msg);
                 return Err(locate_value(err, start, start))
-            }
+            },
         };
         let meta = self.parse_metadata(&mut md_buf, num_objs)?;
         // Create a view for the content, and parse it using the metadata.
         let mut view = RestrictViewFrom::new(first);
         let mut objs_buf = match view.transform(buf) {
-            Ok(v)  => v,
+            Ok(v) => v,
             Err(_) => {
-                let msg = format!("Unable to parse object-stream content, /First may be invalid: {}",
-                                  first);
+                let msg = format!(
+                    "Unable to parse object-stream content, /First may be invalid: {}",
+                    first
+                );
                 let err = ErrorKind::GuardError(msg);
                 return Err(locate_value(err, first, first))
-            }
+            },
         };
         let objs = self.parse_stream(&mut objs_buf, &meta)?;
         let end = buf.get_cursor();
-        Ok(LocatedVal::new(ObjStreamT::new(Rc::clone(&self.dict), objs), start, end))
+        Ok(LocatedVal::new(
+            ObjStreamT::new(Rc::clone(&self.dict), objs),
+            start,
+            end,
+        ))
     }
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum XrefEntStatus {
-    Free { next: usize },
-    InUse { file_ofs: usize },
-    InStream { stream_obj: usize, obj_index: usize }
+    Free {
+        next: usize,
+    },
+    InUse {
+        file_ofs: usize,
+    },
+    InStream {
+        stream_obj: usize,
+        obj_index:  usize,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct XrefEntT {
-    obj: usize,
-    gen: usize,
-    status: XrefEntStatus
+    obj:    usize,
+    gen:    usize,
+    status: XrefEntStatus,
 }
 
 impl XrefEntT {
     pub fn new(obj: usize, gen: usize, status: XrefEntStatus) -> XrefEntT {
         XrefEntT { obj, gen, status }
     }
-    pub fn obj(&self)    -> usize { self.obj }
-    pub fn gen(&self)    -> usize { self.gen }
-    pub fn in_use(&self) -> bool  {
+    pub fn obj(&self) -> usize { self.obj }
+    pub fn gen(&self) -> usize { self.gen }
+    pub fn in_use(&self) -> bool {
         match self.status {
-            XrefEntStatus::Free{..} => false,
-            _                       => true
+            XrefEntStatus::Free { .. } => false,
+            _ => true,
         }
     }
     pub fn status(&self) -> &XrefEntStatus { &self.status }
@@ -252,32 +266,29 @@ impl XrefEntT {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct XrefStreamT {
     dict: Rc<LocatedVal<DictT>>,
-    ents: Vec<LocatedVal<XrefEntT>>
+    ents: Vec<LocatedVal<XrefEntT>>,
 }
 
 impl XrefStreamT {
-    pub fn new(dict: Rc<LocatedVal<DictT>>, ents: Vec<LocatedVal<XrefEntT>>)
-               -> XrefStreamT {
+    pub fn new(dict: Rc<LocatedVal<DictT>>, ents: Vec<LocatedVal<XrefEntT>>) -> XrefStreamT {
         XrefStreamT { dict, ents }
     }
 }
 
 pub struct XrefStreamP<'a> {
-    stream: &'a StreamT
+    stream: &'a StreamT,
 }
 
 struct XrefStreamDictInfo<'a> {
-    size: usize,
+    size:     usize,
     pub prev: usize,
-    index: Option<Vec<(usize, usize)>>,  // like pdf_file::XrefSubSectT but without entries
-    widths: [usize; 3],
-    filters: Vec<Filter<'a>>
+    index:    Option<Vec<(usize, usize)>>, // like pdf_file::XrefSubSectT but without entries
+    widths:   [usize; 3],
+    filters:  Vec<Filter<'a>>,
 }
 
 impl XrefStreamP<'_> {
-    pub fn new(stream: &StreamT) -> XrefStreamP {
-        XrefStreamP { stream }
-    }
+    pub fn new(stream: &StreamT) -> XrefStreamP { XrefStreamP { stream } }
 
     fn get_dict_info(&self) -> ParseResult<XrefStreamDictInfo> {
         let dict = self.stream.dict();
@@ -290,8 +301,8 @@ impl XrefStreamP<'_> {
         let stream_type = stream_type.unwrap();
         if stream_type != b"XRef" {
             let t_str = match std::str::from_utf8(stream_type) {
-                Ok(v)  => v.to_string(),
-                Err(e) => format!("(error: cannot convert to UTF-8: {})", e)
+                Ok(v) => v.to_string(),
+                Err(e) => format!("(error: cannot convert to UTF-8: {})", e),
             };
             let msg = format!("Invalid /Type in xref stream dictionary: {}", t_str);
             let err = ErrorKind::GuardError(msg);
@@ -318,16 +329,24 @@ impl XrefStreamP<'_> {
         let mut index = Vec::new();
         if let Some(i) = idx {
             if i.objs().len() % 2 != 0 {
-                let msg = format!("Invalid non-even length {} for /Index in xref stream dictionary.",
-                                  i.objs().len());
+                let msg = format!(
+                    "Invalid non-even length {} for /Index in xref stream dictionary.",
+                    i.objs().len()
+                );
                 let err = ErrorKind::GuardError(msg);
                 return Err(locate_value(err, dict.start(), dict.end()))
             }
-            for (s, c) in i.objs().iter().step_by(2).zip(i.objs().iter().skip(1).step_by(2)) {
+            for (s, c) in i
+                .objs()
+                .iter()
+                .step_by(2)
+                .zip(i.objs().iter().skip(1).step_by(2))
+            {
                 if let (PDFObjT::Integer(s), PDFObjT::Integer(c)) = (s.val(), c.val()) {
                     index.push((s.usize_val(), c.usize_val()))
                 } else {
-                    let msg = format!("Invalid non-integer entries in /Index in xref stream dictionary.");
+                    let msg =
+                        format!("Invalid non-integer entries in /Index in xref stream dictionary.");
                     let err = ErrorKind::GuardError(msg);
                     return Err(locate_value(err, dict.start(), dict.end()))
                 }
@@ -353,13 +372,15 @@ impl XrefStreamP<'_> {
                 let sz = i.usize_val();
                 // Implementation detail: do not handle integer widths larger than 4 bytes
                 if sz > 4 {
-                    let msg = format!("Cannot handle {}-byte integer in /W in xref stream dictionary.",
-                                      sz);
+                    let msg = format!(
+                        "Cannot handle {}-byte integer in /W in xref stream dictionary.",
+                        sz
+                    );
                     let err = ErrorKind::GuardError(msg);
                     return Err(locate_value(err, dict.start(), dict.end()))
                 }
                 w_array.push(sz);
-                continue;
+                continue
             }
             let msg = format!("Invalid length for /W in xref stream dictionary.");
             let err = ErrorKind::GuardError(msg);
@@ -374,11 +395,18 @@ impl XrefStreamP<'_> {
 
         let filters = self.stream.filters()?;
 
-        Ok(XrefStreamDictInfo { size, prev, index: Some(index), widths, filters })
+        Ok(XrefStreamDictInfo {
+            size,
+            prev,
+            index: Some(index),
+            widths,
+            filters,
+        })
     }
 
-    fn parse_usize_with_width(&self, buf: &mut dyn ParseBufferT, width: usize)
-                              -> ParseResult<usize> {
+    fn parse_usize_with_width(
+        &self, buf: &mut dyn ParseBufferT, width: usize,
+    ) -> ParseResult<usize> {
         let mut val: usize = 0;
         for _ in 0 .. width {
             let peek = buf.peek();
@@ -393,60 +421,64 @@ impl XrefStreamP<'_> {
         Ok(val)
     }
 
-    fn parse_stream(&self, buf: &mut dyn ParseBufferT, meta: &XrefStreamDictInfo)
-                    -> ParseResult<Vec<LocatedVal<XrefEntT>>> {
+    fn parse_stream(
+        &self, buf: &mut dyn ParseBufferT, meta: &XrefStreamDictInfo,
+    ) -> ParseResult<Vec<LocatedVal<XrefEntT>>> {
         let mut ents = Vec::new();
         let index = match meta.index {
             Some(ref i) => i.clone(),
-            None        => vec![(0, meta.size)]
+            None => vec![(0, meta.size)],
         };
         for (start_obj, count) in index.iter() {
             for c in 0 .. *count {
                 let start = buf.get_cursor();
                 // Field #1.
                 let width = meta.widths[0];
-                let typ =
-                    if width == 0 {
-                        1 // default: Type 1
-                    } else {
-                        let f = self.parse_usize_with_width(buf, width)?;
-                        if f > 2 {
-                            let cur = buf.get_cursor();
-                            let msg = format!("Invalid type {} in field #1 of entry in xref stream.",
-                                              f);
-                            let err = ErrorKind::GuardError(msg);
-                            return Err(locate_value(err, start, cur))
-                        }
-                        f
-                    };
+                let typ = if width == 0 {
+                    1 // default: Type 1
+                } else {
+                    let f = self.parse_usize_with_width(buf, width)?;
+                    if f > 2 {
+                        let cur = buf.get_cursor();
+                        let msg =
+                            format!("Invalid type {} in field #1 of entry in xref stream.", f);
+                        let err = ErrorKind::GuardError(msg);
+                        return Err(locate_value(err, start, cur))
+                    }
+                    f
+                };
                 // Field #2
                 let width = meta.widths[1];
                 let field2 = self.parse_usize_with_width(buf, width)?;
                 // Field #3
                 let width = meta.widths[1];
-                let field3 =
-                    if width > 0 {
-                        self.parse_usize_with_width(buf, width)?
-                    } else {
-                        if typ == 2 {
-                            // There is no default value for Type 2 entries.
-                            let cur = buf.get_cursor();
-                            let msg = format!("No Type 2 default for field #3 in xref stream.");
-                            let err = ErrorKind::GuardError(msg);
-                            return Err(locate_value(err, start, cur))
-                        }
-                        0
-                    };
+                let field3 = if width > 0 {
+                    self.parse_usize_with_width(buf, width)?
+                } else {
+                    if typ == 2 {
+                        // There is no default value for Type 2 entries.
+                        let cur = buf.get_cursor();
+                        let msg = format!("No Type 2 default for field #3 in xref stream.");
+                        let err = ErrorKind::GuardError(msg);
+                        return Err(locate_value(err, start, cur))
+                    }
+                    0
+                };
 
                 // Construct the entry
-                let (status, gen) =
-                    match typ {
-                        0 => (XrefEntStatus::Free { next: field2 }, field3),
-                        1 => (XrefEntStatus::InUse { file_ofs: field2 }, field3),
-                        2 => (XrefEntStatus::InStream { stream_obj: field2, obj_index: field3 }, 0),
-                        // we checked for valid entry typ above, so this should never happen
-                        _ => panic!("unhandled entry type in xref stream")
-                    };
+                let (status, gen) = match typ {
+                    0 => (XrefEntStatus::Free { next: field2 }, field3),
+                    1 => (XrefEntStatus::InUse { file_ofs: field2 }, field3),
+                    2 => (
+                        XrefEntStatus::InStream {
+                            stream_obj: field2,
+                            obj_index:  field3,
+                        },
+                        0,
+                    ),
+                    // we checked for valid entry typ above, so this should never happen
+                    _ => panic!("unhandled entry type in xref stream"),
+                };
                 let ent = XrefEntT::new(start_obj + c, gen, status);
                 let end = buf.get_cursor();
                 ents.push(LocatedVal::new(ent, start, end));
@@ -467,10 +499,11 @@ impl ParsleyParser for XrefStreamP<'_> {
         // by a loop iteration to use as input in the next iteration.
         // There might be a standard idiomatic way of doing this; for
         // now, this seems the simplest that avoids an unsafe block.
-        let mut views : Vec<ParseBuffer> = Vec::new();
+        let mut views: Vec<ParseBuffer> = Vec::new();
         // Selects the input for the iteration
-        fn get_input<'a>(views: &'a mut Vec<ParseBuffer>, buf: &'a mut dyn ParseBufferT)
-                     -> &'a mut dyn ParseBufferT {
+        fn get_input<'a>(
+            views: &'a mut Vec<ParseBuffer>, buf: &'a mut dyn ParseBufferT,
+        ) -> &'a mut dyn ParseBufferT {
             if views.is_empty() {
                 buf
             } else {
@@ -481,15 +514,14 @@ impl ParsleyParser for XrefStreamP<'_> {
         for filter in &meta.filters {
             let input = get_input(&mut views, buf);
             let f = filter.name().as_string();
-            let mut decoder =
-                match f.as_str() {
-                    "FlateDecode" => FlateDecode::new(filter.options()),
-                    _ => {
-                        let msg = format!("Cannot handle filter {} in xref stream", f);
-                        let err = ErrorKind::GuardError(msg);
-                        return Err(self.stream.dict().place(err))
-                    }
-                };
+            let mut decoder = match f.as_str() {
+                "FlateDecode" => FlateDecode::new(filter.options()),
+                _ => {
+                    let msg = format!("Cannot handle filter {} in xref stream", f);
+                    let err = ErrorKind::GuardError(msg);
+                    return Err(self.stream.dict().place(err))
+                },
+            };
             let output = decoder.transform(input)?;
             views.push(output);
         }
@@ -501,15 +533,15 @@ impl ParsleyParser for XrefStreamP<'_> {
     }
 }
 
-
 #[cfg(test)]
 mod test_object_stream {
-    use std::rc::Rc;
     use std::collections::BTreeMap;
+    use std::rc::Rc;
+
     use super::super::super::pcore::parsebuffer::{
-        ParsleyParser, ParseBuffer, LocatedVal, ErrorKind, locate_value
+        locate_value, ErrorKind, LocatedVal, ParseBuffer, ParsleyParser,
     };
-    use super::super::pdf_obj::{PDFObjContext, DictP, DictT, IndirectT, ArrayT, PDFObjT};
+    use super::super::pdf_obj::{ArrayT, DictP, DictT, IndirectT, PDFObjContext, PDFObjT};
     use super::{ObjStreamP, ObjStreamT};
 
     fn make_dict_buf(n: usize, first: usize) -> Vec<u8> {
@@ -549,19 +581,28 @@ mod test_object_stream {
         let mut buf = ParseBuffer::new(Vec::from("10 0 20 0 30".as_bytes()));
         let chk = osp.parse_metadata(&mut buf, 3).err().unwrap();
         let err = "offset 0 of object 20 is not greater than previous offset 0";
-        assert_eq!(chk, locate_value(ErrorKind::GuardError(String::from(err)), 0, 0));
+        assert_eq!(
+            chk,
+            locate_value(ErrorKind::GuardError(String::from(err)), 0, 0)
+        );
 
         // insufficient metadata
         let mut buf = ParseBuffer::new(Vec::from("10 0 20 1 30".as_bytes()));
         let chk = osp.parse_metadata(&mut buf, 3).err().unwrap();
         let err = "not at number";
-        assert_eq!(chk, locate_value(ErrorKind::GuardError(String::from(err)), 0, 0));
+        assert_eq!(
+            chk,
+            locate_value(ErrorKind::GuardError(String::from(err)), 0, 0)
+        );
 
         // invalid object id
         let mut buf = ParseBuffer::new(Vec::from("10 0 0 1 30".as_bytes()));
         let chk = osp.parse_metadata(&mut buf, 3).err().unwrap();
         let err = "invalid object id: 0";
-        assert_eq!(chk, locate_value(ErrorKind::GuardError(String::from(err)), 0, 0));
+        assert_eq!(
+            chk,
+            locate_value(ErrorKind::GuardError(String::from(err)), 0, 0)
+        );
     }
 
     #[test]

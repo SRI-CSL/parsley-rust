@@ -17,10 +17,10 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 /// Primitives for handling binary data.
-use super::parsebuffer::{ParsleyParser, ParseBufferT, ParseResult, LocatedVal};
+use super::parsebuffer::{LocatedVal, ParseBufferT, ParseResult, ParsleyParser};
 
 pub struct BinaryScanner {
-    tag: Vec<u8>
+    tag: Vec<u8>,
 }
 
 impl BinaryScanner {
@@ -43,7 +43,7 @@ impl ParsleyParser for BinaryScanner {
 }
 
 pub struct BinaryMatcher {
-    tag: Vec<u8>
+    tag: Vec<u8>,
 }
 
 impl BinaryMatcher {
@@ -96,13 +96,11 @@ impl<'a> ParsleyParser for BinaryBuffer<'a> {
 */
 
 pub struct BinaryBuffer {
-    len: usize
+    len: usize,
 }
 
 impl BinaryBuffer {
-    pub fn new(len: usize) -> BinaryBuffer {
-        BinaryBuffer { len }
-    }
+    pub fn new(len: usize) -> BinaryBuffer { BinaryBuffer { len } }
 }
 
 impl ParsleyParser for BinaryBuffer {
@@ -122,8 +120,10 @@ impl ParsleyParser for BinaryBuffer {
 
 #[cfg(test)]
 mod test_binary {
-    use super::{BinaryScanner, BinaryMatcher, BinaryBuffer};
-    use super::super::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyParser, LocatedVal, ErrorKind, locate_value};
+    use super::super::parsebuffer::{
+        locate_value, ErrorKind, LocatedVal, ParseBuffer, ParseBufferT, ParsleyParser,
+    };
+    use super::{BinaryBuffer, BinaryMatcher, BinaryScanner};
 
     #[test]
     fn scan() {

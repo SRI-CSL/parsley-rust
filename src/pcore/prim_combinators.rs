@@ -16,9 +16,11 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-/// Basic combinators (sequence, alternation, and Kleene/star closure).
+// Basic combinators (sequence, alternation, and Kleene/star closure).
 
-use super::parsebuffer::{ParseBufferT, ParsleyParser, LocatedVal, ParseResult, ErrorKind, locate_value};
+use super::parsebuffer::{
+    locate_value, ErrorKind, LocatedVal, ParseBufferT, ParseResult, ParsleyParser,
+};
 
 pub struct Sequence<'a, P1: ParsleyParser, P2: ParsleyParser> {
     p1: &'a mut P1,
@@ -26,17 +28,17 @@ pub struct Sequence<'a, P1: ParsleyParser, P2: ParsleyParser> {
 }
 
 impl<'a, P1, P2> Sequence<'a, P1, P2>
-    where P1: ParsleyParser,
-          P2: ParsleyParser
+where
+    P1: ParsleyParser,
+    P2: ParsleyParser,
 {
-    pub fn new(p1: &'a mut P1, p2: &'a mut P2) -> Sequence<'a, P1, P2> {
-        Sequence { p1, p2 }
-    }
+    pub fn new(p1: &'a mut P1, p2: &'a mut P2) -> Sequence<'a, P1, P2> { Sequence { p1, p2 } }
 }
 
 impl<'a, P1: ParsleyParser, P2: ParsleyParser> ParsleyParser for Sequence<'a, P1, P2>
-    where P1::T: PartialEq,
-          P2::T: PartialEq
+where
+    P1::T: PartialEq,
+    P2::T: PartialEq,
 {
     type T = LocatedVal<(P1::T, P2::T)>;
 
@@ -73,17 +75,17 @@ pub struct Alternate<'a, P1: ParsleyParser, P2: ParsleyParser> {
 }
 
 impl<'a, P1, P2> Alternate<'a, P1, P2>
-    where P1: ParsleyParser,
-          P2: ParsleyParser
+where
+    P1: ParsleyParser,
+    P2: ParsleyParser,
 {
-    pub fn new(p1: &'a mut P1, p2: &'a mut P2) -> Alternate<'a, P1, P2> {
-        Alternate { p1, p2 }
-    }
+    pub fn new(p1: &'a mut P1, p2: &'a mut P2) -> Alternate<'a, P1, P2> { Alternate { p1, p2 } }
 }
 
 impl<'a, P1: ParsleyParser, P2: ParsleyParser> ParsleyParser for Alternate<'a, P1, P2>
-    where P1::T: PartialEq,
-          P2::T: PartialEq
+where
+    P1::T: PartialEq,
+    P2::T: PartialEq,
 {
     type T = LocatedVal<Alt<P1::T, P2::T>>;
 
@@ -109,19 +111,19 @@ impl<'a, P1: ParsleyParser, P2: ParsleyParser> ParsleyParser for Alternate<'a, P
 }
 
 pub struct Star<'a, P: ParsleyParser> {
-    p: &'a mut P
+    p: &'a mut P,
 }
 
 impl<'a, P> Star<'a, P>
-    where P: ParsleyParser
+where
+    P: ParsleyParser,
 {
-    pub fn new(p: &'a mut P) -> Star<'a, P> {
-        Star { p }
-    }
+    pub fn new(p: &'a mut P) -> Star<'a, P> { Star { p } }
 }
 
 impl<'a, P: ParsleyParser> ParsleyParser for Star<'a, P>
-    where P::T: PartialEq
+where
+    P::T: PartialEq,
 {
     type T = LocatedVal<Vec<P::T>>;
 
@@ -144,19 +146,19 @@ impl<'a, P: ParsleyParser> ParsleyParser for Star<'a, P>
 }
 
 pub struct Not<'a, P: ParsleyParser> {
-    p: &'a mut P
+    p: &'a mut P,
 }
 
 impl<'a, P> Not<'a, P>
-    where P: ParsleyParser
+where
+    P: ParsleyParser,
 {
-    pub fn new(p: &'a mut P) -> Not<'a, P> {
-        Not { p }
-    }
+    pub fn new(p: &'a mut P) -> Not<'a, P> { Not { p } }
 }
 
 impl<'a, P: ParsleyParser> ParsleyParser for Not<'a, P>
-    where P::T: PartialEq
+where
+    P::T: PartialEq,
 {
     type T = LocatedVal<()>;
 
@@ -167,7 +169,11 @@ impl<'a, P: ParsleyParser> ParsleyParser for Not<'a, P>
         buf.set_cursor(start);
 
         if let Ok(_) = r {
-            Err(locate_value(ErrorKind::GuardError("not".to_string()), start, end))
+            Err(locate_value(
+                ErrorKind::GuardError("not".to_string()),
+                start,
+                end,
+            ))
         } else {
             Ok(LocatedVal::new((), start, start))
         }
@@ -178,8 +184,9 @@ impl<'a, P: ParsleyParser> ParsleyParser for Not<'a, P>
 
 #[cfg(test)]
 mod test_sequence {
-    use super::super::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyPrimitive, ParsleyParser,
-                                    ErrorKind, locate_value};
+    use super::super::parsebuffer::{
+        locate_value, ErrorKind, ParseBuffer, ParseBufferT, ParsleyParser, ParsleyPrimitive,
+    };
     use super::super::prim_ascii::{AsciiChar, AsciiCharPrimitive};
     use super::Sequence;
 
@@ -231,10 +238,12 @@ mod test_sequence {
 
 #[cfg(test)]
 mod test_alternate {
-    use super::super::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyPrimitive, ParsleyParser,
-                                    LocatedVal, ErrorKind, locate_value};
+    use super::super::parsebuffer::{
+        locate_value, ErrorKind, LocatedVal, ParseBuffer, ParseBufferT, ParsleyParser,
+        ParsleyPrimitive,
+    };
     use super::super::prim_ascii::{AsciiChar, AsciiCharPrimitive};
-    use super::{Alternate, Alt};
+    use super::{Alt, Alternate};
 
     #[test]
     pub fn test() {
@@ -279,7 +288,7 @@ mod test_alternate {
 
 #[cfg(test)]
 mod test_star {
-    use super::super::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyParser, LocatedVal};
+    use super::super::parsebuffer::{LocatedVal, ParseBuffer, ParseBufferT, ParsleyParser};
     use super::super::prim_ascii::AsciiChar;
     use super::Star;
 
@@ -301,9 +310,11 @@ mod test_star {
         v.extend_from_slice(b"AAA");
         let mut pb = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
-        let e = vec![LocatedVal::new('A', 0, 1),
-                     LocatedVal::new('A', 1, 2),
-                     LocatedVal::new('A', 2, 3)];
+        let e = vec![
+            LocatedVal::new('A', 0, 1),
+            LocatedVal::new('A', 1, 2),
+            LocatedVal::new('A', 2, 3),
+        ];
         assert_eq!(r, Ok(LocatedVal::new(e, 0, 3)));
         assert_eq!(pb.get_cursor(), 3);
 
@@ -312,9 +323,11 @@ mod test_star {
         v.extend_from_slice(b"AAAB");
         let mut pb = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
-        let e = vec![LocatedVal::new('A', 0, 1),
-                     LocatedVal::new('A', 1, 2),
-                     LocatedVal::new('A', 2, 3)];
+        let e = vec![
+            LocatedVal::new('A', 0, 1),
+            LocatedVal::new('A', 1, 2),
+            LocatedVal::new('A', 2, 3),
+        ];
         assert_eq!(r, Ok(LocatedVal::new(e, 0, 3)));
         assert_eq!(pb.get_cursor(), 3);
     }
@@ -328,10 +341,12 @@ mod test_star {
         v.extend_from_slice(b"AAAB");
         let mut pb = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
-        let e = vec![LocatedVal::new('A', 0, 1),
-                     LocatedVal::new('A', 1, 2),
-                     LocatedVal::new('A', 2, 3),
-                     LocatedVal::new('B', 3, 4)];
+        let e = vec![
+            LocatedVal::new('A', 0, 1),
+            LocatedVal::new('A', 1, 2),
+            LocatedVal::new('A', 2, 3),
+            LocatedVal::new('B', 3, 4),
+        ];
         assert_eq!(r, Ok(LocatedVal::new(e, 0, 4)));
         assert_eq!(pb.get_cursor(), 4);
     }
@@ -339,10 +354,12 @@ mod test_star {
 
 #[cfg(test)]
 mod test_combined {
-    use super::super::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyParser, ParsleyPrimitive,
-                                    LocatedVal, ErrorKind, locate_value};
+    use super::super::parsebuffer::{
+        locate_value, ErrorKind, LocatedVal, ParseBuffer, ParseBufferT, ParsleyParser,
+        ParsleyPrimitive,
+    };
     use super::super::prim_ascii::{AsciiChar, AsciiCharPrimitive};
-    use super::{Star, Sequence, Alternate, Alt, Not};
+    use super::{Alt, Alternate, Not, Sequence, Star};
 
     #[test] // a*b*
     pub fn astar_bstar() {
@@ -366,9 +383,15 @@ mod test_combined {
         v.extend_from_slice(b"AAA");
         let mut pb = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
-        let a = LocatedVal::new(vec![LocatedVal::new('A', 0, 1),
-                                     LocatedVal::new('A', 1, 2),
-                                     LocatedVal::new('A', 2, 3)], 0, 3);
+        let a = LocatedVal::new(
+            vec![
+                LocatedVal::new('A', 0, 1),
+                LocatedVal::new('A', 1, 2),
+                LocatedVal::new('A', 2, 3),
+            ],
+            0,
+            3,
+        );
         let b = LocatedVal::new(vec![], 3, 3);
         assert_eq!(r, Ok(LocatedVal::new((a, b), 0, 3)));
         assert_eq!(pb.get_cursor(), 3);
@@ -379,9 +402,15 @@ mod test_combined {
         let mut pb = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
         let a = LocatedVal::new(vec![], 0, 0);
-        let b = LocatedVal::new(vec![LocatedVal::new('B', 0, 1),
-                                     LocatedVal::new('B', 1, 2),
-                                     LocatedVal::new('B', 2, 3)], 0, 3);
+        let b = LocatedVal::new(
+            vec![
+                LocatedVal::new('B', 0, 1),
+                LocatedVal::new('B', 1, 2),
+                LocatedVal::new('B', 2, 3),
+            ],
+            0,
+            3,
+        );
         assert_eq!(r, Ok(LocatedVal::new((a, b), 0, 3)));
         assert_eq!(pb.get_cursor(), 3);
 
@@ -390,12 +419,24 @@ mod test_combined {
         v.extend_from_slice(b"AAABBB");
         let mut pb = ParseBuffer::new(v);
         let r = seq.parse(&mut pb);
-        let a = LocatedVal::new(vec![LocatedVal::new('A', 0, 1),
-                                     LocatedVal::new('A', 1, 2),
-                                     LocatedVal::new('A', 2, 3)], 0, 3);
-        let b = LocatedVal::new(vec![LocatedVal::new('B', 3, 4),
-                                     LocatedVal::new('B', 4, 5),
-                                     LocatedVal::new('B', 5, 6)], 3, 6);
+        let a = LocatedVal::new(
+            vec![
+                LocatedVal::new('A', 0, 1),
+                LocatedVal::new('A', 1, 2),
+                LocatedVal::new('A', 2, 3),
+            ],
+            0,
+            3,
+        );
+        let b = LocatedVal::new(
+            vec![
+                LocatedVal::new('B', 3, 4),
+                LocatedVal::new('B', 4, 5),
+                LocatedVal::new('B', 5, 6),
+            ],
+            3,
+            6,
+        );
         assert_eq!(r, Ok(LocatedVal::new((a, b), 0, 6)));
         assert_eq!(pb.get_cursor(), 6);
     }
@@ -419,10 +460,12 @@ mod test_combined {
         v.extend_from_slice(b"BAABC");
         let mut pb = ParseBuffer::new(v);
         let r = star.parse(&mut pb);
-        let v = vec![LocatedVal::new(Alt::Right(LocatedVal::new('B', 0, 1)), 0, 1),
-                     LocatedVal::new(Alt::Left(LocatedVal::new('A', 1, 2)), 1, 2),
-                     LocatedVal::new(Alt::Left(LocatedVal::new('A', 2, 3)), 2, 3),
-                     LocatedVal::new(Alt::Right(LocatedVal::new('B', 3, 4)), 3, 4)];
+        let v = vec![
+            LocatedVal::new(Alt::Right(LocatedVal::new('B', 0, 1)), 0, 1),
+            LocatedVal::new(Alt::Left(LocatedVal::new('A', 1, 2)), 1, 2),
+            LocatedVal::new(Alt::Left(LocatedVal::new('A', 2, 3)), 2, 3),
+            LocatedVal::new(Alt::Right(LocatedVal::new('B', 3, 4)), 3, 4),
+        ];
         assert_eq!(r, Ok(LocatedVal::new(v, 0, 4)));
         assert_eq!(pb.get_cursor(), 4);
     }
@@ -439,12 +482,18 @@ mod test_combined {
         v.extend_from_slice(b"ABABC");
         let mut pb = ParseBuffer::new(v);
         let r = star.parse(&mut pb);
-        let v = vec![LocatedVal::new((LocatedVal::new('A', 0, 1),
-                                      LocatedVal::new('B', 1, 2)),
-                                     0, 2),
-                     LocatedVal::new((LocatedVal::new('A', 2, 3),
-                                      LocatedVal::new('B', 3, 4)),
-                                     2, 4)];
+        let v = vec![
+            LocatedVal::new(
+                (LocatedVal::new('A', 0, 1), LocatedVal::new('B', 1, 2)),
+                0,
+                2,
+            ),
+            LocatedVal::new(
+                (LocatedVal::new('A', 2, 3), LocatedVal::new('B', 3, 4)),
+                2,
+                4,
+            ),
+        ];
         assert_eq!(r, Ok(LocatedVal::new(v, 0, 4)));
         assert_eq!(pb.get_cursor(), 4);
     }
@@ -462,8 +511,11 @@ mod test_combined {
         v.extend_from_slice(b"AABBC");
         let mut pb = ParseBuffer::new(v);
         let r = abs.parse(&mut pb);
-        let v = Alt::Left(LocatedVal::new(vec![LocatedVal::new('A', 0, 1),
-                                               LocatedVal::new('A', 1, 2)], 0, 2));
+        let v = Alt::Left(LocatedVal::new(
+            vec![LocatedVal::new('A', 0, 1), LocatedVal::new('A', 1, 2)],
+            0,
+            2,
+        ));
         assert_eq!(r, Ok(LocatedVal::new(v, 0, 2)));
         assert_eq!(pb.get_cursor(), 2);
 
@@ -492,13 +544,19 @@ mod test_combined {
         v.extend_from_slice(b"ABABC");
         let mut pb = ParseBuffer::new(v);
         let r = p.parse(&mut pb);
-        let v = Alt::Left(LocatedVal::new((LocatedVal::new('A', 0, 1),
-                                           LocatedVal::new('B', 1, 2)), 0, 2));
+        let v = Alt::Left(LocatedVal::new(
+            (LocatedVal::new('A', 0, 1), LocatedVal::new('B', 1, 2)),
+            0,
+            2,
+        ));
         assert_eq!(r, Ok(LocatedVal::new(v, 0, 2)));
         assert_eq!(pb.get_cursor(), 2);
         let r = p.parse(&mut pb);
-        let v = Alt::Left(LocatedVal::new((LocatedVal::new('A', 2, 3),
-                                           LocatedVal::new('B', 3, 4)), 2, 4));
+        let v = Alt::Left(LocatedVal::new(
+            (LocatedVal::new('A', 2, 3), LocatedVal::new('B', 3, 4)),
+            2,
+            4,
+        ));
         assert_eq!(r, Ok(LocatedVal::new(v, 2, 4)));
         assert_eq!(pb.get_cursor(), 4);
 
@@ -507,13 +565,19 @@ mod test_combined {
         v.extend_from_slice(b"BABAC");
         let mut pb = ParseBuffer::new(v);
         let r = p.parse(&mut pb);
-        let v = Alt::Right(LocatedVal::new((LocatedVal::new('B', 0, 1),
-                                            LocatedVal::new('A', 1, 2)), 0, 2));
+        let v = Alt::Right(LocatedVal::new(
+            (LocatedVal::new('B', 0, 1), LocatedVal::new('A', 1, 2)),
+            0,
+            2,
+        ));
         assert_eq!(r, Ok(LocatedVal::new(v, 0, 2)));
         assert_eq!(pb.get_cursor(), 2);
         let r = p.parse(&mut pb);
-        let v = Alt::Right(LocatedVal::new((LocatedVal::new('B', 2, 3),
-                                            LocatedVal::new('A', 3, 4)), 2, 4));
+        let v = Alt::Right(LocatedVal::new(
+            (LocatedVal::new('B', 2, 3), LocatedVal::new('A', 3, 4)),
+            2,
+            4,
+        ));
         assert_eq!(r, Ok(LocatedVal::new(v, 2, 4)));
         assert_eq!(pb.get_cursor(), 4);
     }
@@ -533,13 +597,17 @@ mod test_combined {
         v.extend_from_slice(b"ABABC");
         let mut pb = ParseBuffer::new(v);
         let r = p.parse(&mut pb);
-        let v = (LocatedVal::new(Alt::Left(LocatedVal::new('A', 0, 1)), 0, 1),
-                 LocatedVal::new(Alt::Left(LocatedVal::new('B', 1, 2)), 1, 2));
+        let v = (
+            LocatedVal::new(Alt::Left(LocatedVal::new('A', 0, 1)), 0, 1),
+            LocatedVal::new(Alt::Left(LocatedVal::new('B', 1, 2)), 1, 2),
+        );
         assert_eq!(r, Ok(LocatedVal::new(v, 0, 2)));
         assert_eq!(pb.get_cursor(), 2);
         let r = p.parse(&mut pb);
-        let v = (LocatedVal::new(Alt::Left(LocatedVal::new('A', 2, 3)), 2, 3),
-                 LocatedVal::new(Alt::Left(LocatedVal::new('B', 3, 4)), 3, 4));
+        let v = (
+            LocatedVal::new(Alt::Left(LocatedVal::new('A', 2, 3)), 2, 3),
+            LocatedVal::new(Alt::Left(LocatedVal::new('B', 3, 4)), 3, 4),
+        );
         assert_eq!(r, Ok(LocatedVal::new(v, 2, 4)));
         assert_eq!(pb.get_cursor(), 4);
         let r = p.parse(&mut pb);
@@ -554,13 +622,17 @@ mod test_combined {
 
         let mut pb = ParseBuffer::new(v);
         let r = p.parse(&mut pb);
-        let v = (LocatedVal::new(Alt::Right(LocatedVal::new('B', 0, 1)), 0, 1),
-                 LocatedVal::new(Alt::Right(LocatedVal::new('A', 1, 2)), 1, 2));
+        let v = (
+            LocatedVal::new(Alt::Right(LocatedVal::new('B', 0, 1)), 0, 1),
+            LocatedVal::new(Alt::Right(LocatedVal::new('A', 1, 2)), 1, 2),
+        );
         assert_eq!(r, Ok(LocatedVal::new(v, 0, 2)));
         assert_eq!(pb.get_cursor(), 2);
         let r = p.parse(&mut pb);
-        let v = (LocatedVal::new(Alt::Left(LocatedVal::new('A', 2, 3)), 2, 3),
-                 LocatedVal::new(Alt::Left(LocatedVal::new('B', 3, 4)), 3, 4));
+        let v = (
+            LocatedVal::new(Alt::Left(LocatedVal::new('A', 2, 3)), 2, 3),
+            LocatedVal::new(Alt::Left(LocatedVal::new('B', 3, 4)), 3, 4),
+        );
         assert_eq!(r, Ok(LocatedVal::new(v, 2, 4)));
         assert_eq!(pb.get_cursor(), 4);
         let r = p.parse(&mut pb);

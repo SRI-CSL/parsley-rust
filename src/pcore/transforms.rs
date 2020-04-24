@@ -16,11 +16,10 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-/// Transformations of parse buffers.
+// Transformations of parse buffers.
 
 use super::parsebuffer::{
-    ParseResult, ParseBufferT, ParseBuffer, ErrorKind,
-    Location, locate_value
+    locate_value, ErrorKind, Location, ParseBuffer, ParseBufferT, ParseResult,
 };
 
 pub type TransformResult = ParseResult<ParseBuffer>;
@@ -34,13 +33,11 @@ pub trait BufferTransformT {
 
 pub struct RestrictView {
     start: usize,
-    size: usize,
+    size:  usize,
 }
 
 impl RestrictView {
-    pub fn new(start: usize, size: usize) -> Self {
-        Self { start, size }
-    }
+    pub fn new(start: usize, size: usize) -> Self { Self { start, size } }
 }
 
 impl BufferTransformT for RestrictView {
@@ -56,19 +53,21 @@ impl BufferTransformT for RestrictView {
 }
 
 pub struct RestrictViewFrom {
-    start: usize
+    start: usize,
 }
 
 impl RestrictViewFrom {
-    pub fn new(start: usize) -> Self {
-        Self { start }
-    }
+    pub fn new(start: usize) -> Self { Self { start } }
 }
 
 impl BufferTransformT for RestrictViewFrom {
     fn transform(&mut self, buf: &dyn ParseBufferT) -> TransformResult {
         if self.start < buf.size() {
-            Ok(ParseBuffer::new_view(buf, self.start, buf.size() - self.start))
+            Ok(ParseBuffer::new_view(
+                buf,
+                self.start,
+                buf.size() - self.start,
+            ))
         } else {
             let err = ErrorKind::BoundsError;
             let loc = buf.get_location();

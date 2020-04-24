@@ -17,7 +17,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 pub mod parsebuffer;
-pub mod transforms;
+pub mod prim_ascii;
 pub mod prim_binary;
 pub mod prim_combinators;
-pub mod prim_ascii;
+pub mod transforms;

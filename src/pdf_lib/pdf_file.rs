@@ -16,23 +16,23 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-/// File structure of PDF
+// File structure of PDF
 
-use std::fmt;
-use std::io::Read;
-// for read_to_string()
 use std::convert::TryFrom;
+use std::fmt;
+use std::io::Read; // for read_to_string()
+
 use super::super::pcore::parsebuffer::{
-    ParseBufferT, ParsleyParser, ParseResult, LocatedVal,
-    ErrorKind, locate_value};
-use super::pdf_prim::{IntegerP, WhitespaceEOL, WhitespaceNoEOL, Comment};
-use super::pdf_obj::{PDFObjContext, IndirectT, IndirectP, DictT, DictP};
+    locate_value, ErrorKind, LocatedVal, ParseBufferT, ParseResult, ParsleyParser,
+};
+use super::pdf_obj::{DictP, DictT, IndirectP, IndirectT, PDFObjContext};
+use super::pdf_prim::{Comment, IntegerP, WhitespaceEOL, WhitespaceNoEOL};
 use super::pdf_streams::{XrefEntStatus, XrefEntT};
 
 #[derive(Debug, PartialEq)]
 pub struct HeaderT {
     version: LocatedVal<Vec<u8>>,
-    binary: Option<LocatedVal<Vec<u8>>>,
+    binary:  Option<LocatedVal<Vec<u8>>>,
 }
 
 impl HeaderT {
@@ -50,21 +50,22 @@ impl ParsleyParser for HeaderP {
 
         let start = buf.get_cursor();
         let version = c.parse(buf)?;
-        let binary = if let Ok(s) = c.parse(buf) { Some(s) } else { None };
+        let binary = if let Ok(s) = c.parse(buf) {
+            Some(s)
+        } else {
+            None
+        };
         let end = buf.get_cursor();
         Ok(LocatedVal::new(HeaderT { version, binary }, start, end))
     }
 }
 
-
 struct XrefEntP {
-    ent_idx: usize
+    ent_idx: usize,
 }
 
 impl XrefEntP {
-    pub fn new(ent_idx: usize) -> XrefEntP {
-        XrefEntP { ent_idx }
-    }
+    pub fn new(ent_idx: usize) -> XrefEntP { XrefEntP { ent_idx } }
 }
 
 impl ParsleyParser for XrefEntP {
@@ -86,7 +87,7 @@ impl ParsleyParser for XrefEntP {
             return Err(locate_value(err, start, end))
         }
         // check if all bytes read are digits
-        if infs.matches(&mut |c: char| { c.is_ascii_digit() }).count() != 10 {
+        if infs.matches(&mut |c: char| c.is_ascii_digit()).count() != 10 {
             let err = ErrorKind::GuardError("bad format for xref ofs".to_string());
             let end = buf.get_cursor();
             return Err(locate_value(err, start, end))
@@ -111,7 +112,7 @@ impl ParsleyParser for XrefEntP {
             return Err(locate_value(err, start, end))
         }
         // check if all bytes read are digits
-        if gens.matches(&mut |c: char| { c.is_ascii_digit() }).count() != 5 {
+        if gens.matches(&mut |c: char| c.is_ascii_digit()).count() != 5 {
             let err = ErrorKind::GuardError("bad format for xref gen".to_string());
             let end = buf.get_cursor();
             return Err(locate_value(err, start, end))
@@ -137,13 +138,13 @@ impl ParsleyParser for XrefEntP {
         let flg = buf.extract(1)?;
 
         let in_use = match flg[0] {
-            102 => false,  // 'f'
-            110 => true,   // 'n'
+            102 => false, // 'f'
+            110 => true,  // 'n'
             _ => {
                 let err = ErrorKind::GuardError("bad xref code".to_string());
                 let end = buf.get_cursor();
                 return Err(locate_value(err, start, end))
-            }
+            },
         };
 
         // Xrefent-specific EOL.
@@ -154,9 +155,11 @@ impl ParsleyParser for XrefEntP {
             return Err(locate_value(err, start, end))
         }
 
-        let status =
-            if in_use { XrefEntStatus::InUse { file_ofs: info }}
-            else      { XrefEntStatus::Free  { next: info } };
+        let status = if in_use {
+            XrefEntStatus::InUse { file_ofs: info }
+        } else {
+            XrefEntStatus::Free { next: info }
+        };
 
         let ent = XrefEntT::new(self.ent_idx, gen, status);
         let end = buf.get_cursor();
@@ -168,13 +171,13 @@ impl ParsleyParser for XrefEntP {
 pub struct XrefSubSectT {
     start: usize,
     count: usize,
-    ents: Vec<LocatedVal<XrefEntT>>,
+    ents:  Vec<LocatedVal<XrefEntT>>,
 }
 
 impl XrefSubSectT {
     pub fn start(&self) -> usize { self.start }
     pub fn count(&self) -> usize { self.count }
-    pub fn ents(&self)  -> &[LocatedVal<XrefEntT>] { self.ents.as_slice() }
+    pub fn ents(&self) -> &[LocatedVal<XrefEntT>] { self.ents.as_slice() }
 }
 
 struct XrefSubSectP;
@@ -216,7 +219,7 @@ impl ParsleyParser for XrefSubSectP {
 
         // Now get the specified number of entries.
         let mut ents = Vec::new();
-        for idx in 0..xcount {
+        for idx in 0 .. xcount {
             let mut p = XrefEntP::new(xstart + idx);
             let ent = p.parse(buf)?;
             // Object 0 should always be free; we don't check it here,
@@ -226,46 +229,59 @@ impl ParsleyParser for XrefSubSectP {
         }
 
         let end = buf.get_cursor();
-        Ok(LocatedVal::new(XrefSubSectT { start: xstart, count: xcount, ents }, start, end))
+        Ok(LocatedVal::new(
+            XrefSubSectT {
+                start: xstart,
+                count: xcount,
+                ents,
+            },
+            start,
+            end,
+        ))
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct XrefSectT {
-    sects: Vec<LocatedVal<XrefSubSectT>>
+    sects: Vec<LocatedVal<XrefSubSectT>>,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum InvalidXrefSect {
-    ObjectNotFree(usize),                // in-use object that is on free linked list
-    BadDeadObject(usize),                // invalid link or generation
-    NonCircularFreeList                  // invalid tail pointer
+    ObjectNotFree(usize), // in-use object that is on free linked list
+    BadDeadObject(usize), // invalid link or generation
+    NonCircularFreeList,  // invalid tail pointer
 }
 
 impl fmt::Display for InvalidXrefSect {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::ObjectNotFree(n) =>
-                write!(f, "in-use object {} is on xref free list", n),
-            Self::BadDeadObject(n) =>
-                write!(f, "free object {} not on free list is not a valid dead object", n),
-            Self::NonCircularFreeList =>
-                write!(f, "xref free entry list is not circular")
+            Self::ObjectNotFree(n) => write!(f, "in-use object {} is on xref free list", n),
+            Self::BadDeadObject(n) => write!(
+                f,
+                "free object {} not on free list is not a valid dead object",
+                n
+            ),
+            Self::NonCircularFreeList => write!(f, "xref free entry list is not circular"),
         }
     }
 }
 
 pub struct XrefSectEntIterator<'a> {
     subsect: usize,
-    idx: usize,
-    xref: &'a XrefSectT
+    idx:     usize,
+    xref:    &'a XrefSectT,
 }
 
 impl XrefSectT {
     pub fn sects(&self) -> &[LocatedVal<XrefSubSectT>] { self.sects.as_slice() }
 
     pub fn ent_iter(&self) -> XrefSectEntIterator {
-        XrefSectEntIterator { subsect: 0, idx: 0, xref: self }
+        XrefSectEntIterator {
+            subsect: 0,
+            idx:     0,
+            xref:    self,
+        }
     }
 
     pub fn is_valid(&self) -> Option<InvalidXrefSect> {
@@ -285,26 +301,22 @@ impl XrefSectT {
             assert!(ent.obj() == o);
             if o == next_free {
                 match ent.status() {
-                    XrefEntStatus::InUse {..} => {
-                        return Some(InvalidXrefSect::ObjectNotFree(o))
-                    },
+                    XrefEntStatus::InUse { .. } => return Some(InvalidXrefSect::ObjectNotFree(o)),
                     XrefEntStatus::Free { next } => {
                         next_free = *next;
                         continue
                     },
-                    XrefEntStatus::InStream {..} => {
+                    XrefEntStatus::InStream { .. } => {
                         // This should never happen in xref tables.
                         assert!(false)
-                    }
+                    },
                 }
             }
             if !ent.in_use() {
                 // This should be a dead object.
                 match (ent.gen(), ent.status()) {
-                    (65535, XrefEntStatus::Free { next: 0 }) =>
-                        (),
-                    _ =>
-                        return Some(InvalidXrefSect::BadDeadObject(o))
+                    (65535, XrefEntStatus::Free { next: 0 }) => (),
+                    _ => return Some(InvalidXrefSect::BadDeadObject(o)),
                 }
             }
         }
@@ -316,7 +328,7 @@ impl XrefSectT {
 }
 
 impl<'a> Iterator for XrefSectEntIterator<'a> {
-    type Item = (usize, XrefEntT);  // object number and its entry
+    type Item = (usize, XrefEntT); // object number and its entry
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -368,7 +380,9 @@ impl ParsleyParser for XrefSectP {
         loop {
             let mut p = XrefSubSectP;
             let sect = p.parse(buf);
-            if let Err(_) = sect { break }
+            if let Err(_) = sect {
+                break
+            }
             sects.push(sect.unwrap());
         }
         let end = buf.get_cursor();
@@ -378,7 +392,7 @@ impl ParsleyParser for XrefSectP {
 
 #[derive(Debug, PartialEq)]
 pub struct BodyT {
-    objs: Vec<LocatedVal<IndirectT>>
+    objs: Vec<LocatedVal<IndirectT>>,
 }
 
 impl BodyT {
@@ -386,13 +400,11 @@ impl BodyT {
 }
 
 pub struct BodyP<'a> {
-    ctxt: &'a mut PDFObjContext
+    ctxt: &'a mut PDFObjContext,
 }
 
 impl BodyP<'_> {
-    pub fn new<'a>(ctxt: &'a mut PDFObjContext) -> BodyP<'a> {
-        BodyP { ctxt }
-    }
+    pub fn new<'a>(ctxt: &'a mut PDFObjContext) -> BodyP<'a> { BodyP { ctxt } }
 }
 
 impl ParsleyParser for BodyP<'_> {
@@ -411,7 +423,9 @@ impl ParsleyParser for BodyP<'_> {
         // any more objects.
         loop {
             let o = op.parse(buf);
-            if let Err(_) = o { break }
+            if let Err(_) = o {
+                break
+            }
             let o = o.unwrap();
             objs.push(o);
         }
@@ -422,7 +436,7 @@ impl ParsleyParser for BodyP<'_> {
 
 #[derive(Debug, PartialEq)]
 pub struct TrailerT {
-    dict: DictT
+    dict: DictT,
 }
 
 impl TrailerT {
@@ -430,13 +444,11 @@ impl TrailerT {
 }
 
 pub struct TrailerP<'a> {
-    ctxt: &'a mut PDFObjContext
+    ctxt: &'a mut PDFObjContext,
 }
 
 impl TrailerP<'_> {
-    pub fn new<'a>(ctxt: &'a mut PDFObjContext) -> TrailerP<'a> {
-        TrailerP { ctxt }
-    }
+    pub fn new<'a>(ctxt: &'a mut PDFObjContext) -> TrailerP<'a> { TrailerP { ctxt } }
 }
 
 impl ParsleyParser for TrailerP<'_> {
@@ -469,7 +481,7 @@ impl ParsleyParser for TrailerP<'_> {
 
 #[derive(Debug, PartialEq)]
 pub struct StartXrefT {
-    offset: usize
+    offset: usize,
 }
 
 impl StartXrefT {
@@ -509,16 +521,18 @@ impl ParsleyParser for StartXrefP {
 
 #[cfg(test)]
 mod test_pdf_file {
-    use std::rc::Rc;
     use std::collections::BTreeMap;
-    use super::super::super::pcore::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyParser, LocatedVal,
-                                                  ErrorKind, locate_value};
-    use super::super::super::pdf_lib::pdf_obj::{PDFObjContext, PDFObjT, ReferenceT, DictT};
+    use std::rc::Rc;
+
+    use super::super::super::pcore::parsebuffer::{
+        locate_value, ErrorKind, LocatedVal, ParseBuffer, ParseBufferT, ParsleyParser,
+    };
+    use super::super::super::pdf_lib::pdf_obj::{DictT, PDFObjContext, PDFObjT, ReferenceT};
     use super::super::super::pdf_lib::pdf_prim::{IntegerT, NameT};
-    use super::{HeaderT, HeaderP, BodyT, BodyP, StartXrefT, StartXrefP, TrailerT, TrailerP};
-    use super::{XrefEntT, XrefEntP, XrefSubSectT, XrefSubSectP, XrefSectT, XrefSectP};
-    use super::super::pdf_streams::{XrefEntStatus};
-    use super::{InvalidXrefSect};
+    use super::super::pdf_streams::XrefEntStatus;
+    use super::InvalidXrefSect;
+    use super::{BodyP, BodyT, HeaderP, HeaderT, StartXrefP, StartXrefT, TrailerP, TrailerT};
+    use super::{XrefEntP, XrefEntT, XrefSectP, XrefSectT, XrefSubSectP, XrefSubSectT};
 
     #[test]
     fn test_header() {
@@ -530,7 +544,7 @@ mod test_pdf_file {
         let val = p.parse(&mut pb);
         let hdr = HeaderT {
             version: LocatedVal::new(Vec::from("PDF-1.0 \r".as_bytes()), 0, 11),
-            binary: None,
+            binary:  None,
         };
         assert_eq!(val, Ok(LocatedVal::new(hdr, 0, 11)));
         assert_eq!(pb.get_cursor(), 11);
@@ -540,7 +554,11 @@ mod test_pdf_file {
         let val = p.parse(&mut pb);
         let hdr = HeaderT {
             version: LocatedVal::new(Vec::from("PDF-1.0 \r".as_bytes()), 0, 11),
-            binary: Some(LocatedVal::new(Vec::from("binary_bytes".as_bytes()), 11, 25)),
+            binary:  Some(LocatedVal::new(
+                Vec::from("binary_bytes".as_bytes()),
+                11,
+                25,
+            )),
         };
         assert_eq!(val, Ok(LocatedVal::new(hdr, 0, 25)));
         assert_eq!(pb.get_cursor(), 25);
@@ -560,7 +578,9 @@ mod test_pdf_file {
         let v = Vec::from("1234567890 12345 n \n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let ent = p.parse(&mut pb);
-        let status = XrefEntStatus::InUse { file_ofs: 1234567890 };
+        let status = XrefEntStatus::InUse {
+            file_ofs: 1234567890,
+        };
         let xref = XrefEntT::new(0, 12345, status);
         assert_eq!(ent, Ok(LocatedVal::new(xref, 0, 20)));
         //                 01234567890123456789012345678
@@ -583,8 +603,14 @@ mod test_pdf_file {
         let v = Vec::from("1234567890 65536 f \r".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let ent = p.parse(&mut pb);
-        assert_eq!(ent, Err(LocatedVal::new(ErrorKind::GuardError("invalid xref gen".to_string()),
-                                            0, 16)));
+        assert_eq!(
+            ent,
+            Err(LocatedVal::new(
+                ErrorKind::GuardError("invalid xref gen".to_string()),
+                0,
+                16
+            ))
+        );
     }
 
     #[test]
@@ -596,7 +622,11 @@ mod test_pdf_file {
         let val = p.parse(&mut pb);
         let status = XrefEntStatus::Free { next: 1234567890 };
         let xref = LocatedVal::new(XrefEntT::new(0, 12345, status), 4, 24);
-        let s = XrefSubSectT { start: 0, count: 1, ents: vec![xref] };
+        let s = XrefSubSectT {
+            start: 0,
+            count: 1,
+            ents:  vec![xref],
+        };
         assert_eq!(val, Ok(LocatedVal::new(s, 0, 24)));
 
         // leading and trailing space on leading line
@@ -606,7 +636,11 @@ mod test_pdf_file {
         let val = p.parse(&mut pb);
         let status = XrefEntStatus::Free { next: 1234567890 };
         let xref = LocatedVal::new(XrefEntT::new(0, 12345, status), 7, 27);
-        let s = XrefSubSectT { start: 0, count: 1, ents: vec![xref] };
+        let s = XrefSubSectT {
+            start: 0,
+            count: 1,
+            ents:  vec![xref],
+        };
         assert_eq!(val, Ok(LocatedVal::new(s, 0, 27)));
     }
 
@@ -620,10 +654,21 @@ mod test_pdf_file {
         let val = p.parse(&mut pb);
         let status = XrefEntStatus::Free { next: 1234567890 };
         let xref = LocatedVal::new(XrefEntT::new(0, 12345, status), 9, 29);
-        let ssect = LocatedVal::new(XrefSubSectT { start: 0, count: 1, ents: vec![xref] }, 5, 29);
+        let ssect = LocatedVal::new(
+            XrefSubSectT {
+                start: 0,
+                count: 1,
+                ents:  vec![xref],
+            },
+            5,
+            29,
+        );
         let s = XrefSectT { sects: vec![ssect] };
         assert_eq!(val, Ok(LocatedVal::new(s, 0, 29)));
-        assert_eq!(val.unwrap().val().is_valid(), Some(InvalidXrefSect::NonCircularFreeList));
+        assert_eq!(
+            val.unwrap().val().is_valid(),
+            Some(InvalidXrefSect::NonCircularFreeList)
+        );
 
         // different leading eol, and terminate with trailer
         //                           1         2         3         4
@@ -633,21 +678,23 @@ mod test_pdf_file {
         let val = p.parse(&mut pb);
         let status = XrefEntStatus::Free { next: 1234567890 };
         let xref = LocatedVal::new(XrefEntT::new(0, 12345, status), 10, 30);
-        let ssect = LocatedVal::new(XrefSubSectT { start: 0, count: 1, ents: vec![xref] }, 6, 30);
+        let ssect = LocatedVal::new(
+            XrefSubSectT {
+                start: 0,
+                count: 1,
+                ents:  vec![xref],
+            },
+            6,
+            30,
+        );
         let s = XrefSectT { sects: vec![ssect] };
         assert_eq!(val, Ok(LocatedVal::new(s, 0, 30)));
-        assert_eq!(val.unwrap().val().is_valid(), Some(InvalidXrefSect::NonCircularFreeList));
+        assert_eq!(
+            val.unwrap().val().is_valid(),
+            Some(InvalidXrefSect::NonCircularFreeList)
+        );
 
         // snippet from hello-world pdf.
-//01234
-//5678
-//9
-//29
-//49
-//69
-//89
-//109
-//129
         let v = Vec::from(
             "xref
 0 6
@@ -657,7 +704,9 @@ mod test_pdf_file {
 0000000173 00000 n 
 0000000301 00000 n 
 0000000380 00000 n 
-".as_bytes());
+"
+            .as_bytes(),
+        );
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
 
@@ -674,7 +723,15 @@ mod test_pdf_file {
         ents.push(LocatedVal::new(XrefEntT::new(4, 0, status), 89, 109));
         let status = XrefEntStatus::InUse { file_ofs: 380 };
         ents.push(LocatedVal::new(XrefEntT::new(5, 0, status), 109, 129));
-        let ssect = LocatedVal::new(XrefSubSectT { start: 0, count: 6, ents }, 5, 129);
+        let ssect = LocatedVal::new(
+            XrefSubSectT {
+                start: 0,
+                count: 6,
+                ents,
+            },
+            5,
+            129,
+        );
         let s = LocatedVal::new(XrefSectT { sects: vec![ssect] }, 0, 129);
         assert_eq!(val, Ok(s));
         assert!(val.unwrap().val().is_valid().is_none());
@@ -735,7 +792,9 @@ BT
 ET
 endstream
 endobj
-".as_bytes());
+"
+            .as_bytes(),
+        );
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb).unwrap();
 
@@ -801,7 +860,9 @@ BT
 (Hello, world!) Tj
 ET
 endstream
-endobj".as_bytes());
+endobj"
+                .as_bytes(),
+        );
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb).unwrap();
 
@@ -817,28 +878,38 @@ endobj".as_bytes());
     fn test_trailer() {
         let mut ctxt = PDFObjContext::new();
         let mut p = TrailerP::new(&mut ctxt);
-//01234567
-//890
-//123456789
-//0123456789012
-//345
+        //01234567
+        //890
+        //123456789
+        //0123456789012
+        //345
         let v = Vec::from(
             "trailer
 <<
  /Size 8
  /Root 1 0 R
 >>
-".as_bytes());
+"
+            .as_bytes(),
+        );
         let mut pb = ParseBuffer::new(v);
         let val = p.parse(&mut pb);
 
         let mut map = BTreeMap::new();
         let key = NameT::new(Vec::from("Size".as_bytes()));
-        map.insert(LocatedVal::new(key, 12, 17).val().normalize(),
-                   Rc::new(LocatedVal::new(PDFObjT::Integer(IntegerT::new(8)), 18, 19)));
+        map.insert(
+            LocatedVal::new(key, 12, 17).val().normalize(),
+            Rc::new(LocatedVal::new(PDFObjT::Integer(IntegerT::new(8)), 18, 19)),
+        );
         let key = NameT::new(Vec::from("Root".as_bytes()));
-        map.insert(LocatedVal::new(key, 21, 26).val().normalize(),
-                   Rc::new(LocatedVal::new(PDFObjT::Reference(ReferenceT::new(1, 0)), 27, 32)));
+        map.insert(
+            LocatedVal::new(key, 21, 26).val().normalize(),
+            Rc::new(LocatedVal::new(
+                PDFObjT::Reference(ReferenceT::new(1, 0)),
+                27,
+                32,
+            )),
+        );
         let dict = DictT::new(map);
         assert_eq!(val, Ok(LocatedVal::new(TrailerT { dict }, 0, 35)));
     }
