@@ -18,9 +18,6 @@
 
 .PHONY: all release clean test fmt
 
-fmt:
-	cargo +nightly fmt
-
 all:
 	cargo build
 
@@ -29,6 +26,9 @@ release:
 
 test:
 	cargo test
+
+fmt:
+	cargo +nightly fmt
 
 clean:
 	cargo clean
