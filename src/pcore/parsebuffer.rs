@@ -57,6 +57,21 @@ where
     pub fn end(&self) -> usize { self.end }
 }
 
+impl<T> Clone for LocatedVal<T>
+where
+    T: Clone,
+{
+    fn clone(&self) -> Self {
+        LocatedVal {
+            val:   self.val.clone(),
+            start: self.start,
+            end:   self.end,
+        }
+    }
+}
+
+impl<T> Copy for LocatedVal<T> where T: Copy {}
+
 // Equality for LocatedVal<T> should not take into account the
 // location.  Similarly, when a LocatedVal<T> is placed into a map
 // (i.e. HashMap) as the key-type, the matching should be performed

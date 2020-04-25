@@ -276,6 +276,14 @@ pub struct XrefSectEntIterator<'a> {
 impl XrefSectT {
     pub fn sects(&self) -> &[LocatedVal<XrefSubSectT>] { self.sects.as_slice() }
 
+    pub fn ents(&self) -> Vec<LocatedVal<XrefEntT>> {
+        let mut ents = Vec::new();
+        for (_, ent) in self.ent_iter() {
+            ents.push(ent)
+        }
+        ents
+    }
+
     pub fn ent_iter(&self) -> XrefSectEntIterator {
         XrefSectEntIterator {
             subsect: 0,
@@ -298,9 +306,9 @@ impl XrefSectT {
         // the most common case. Generalize this later.
         let mut next_free = 0;
         for (o, ent) in self.ent_iter() {
-            assert!(ent.obj() == o);
+            assert!(ent.val().obj() == o);
             if o == next_free {
-                match ent.status() {
+                match ent.val().status() {
                     XrefEntStatus::InUse { .. } => return Some(InvalidXrefSect::ObjectNotFree(o)),
                     XrefEntStatus::Free { next } => {
                         next_free = *next;
@@ -312,9 +320,9 @@ impl XrefSectT {
                     },
                 }
             }
-            if !ent.in_use() {
+            if !ent.val().in_use() {
                 // This should be a dead object.
-                match (ent.gen(), ent.status()) {
+                match (ent.val().gen(), ent.val().status()) {
                     (65535, XrefEntStatus::Free { next: 0 }) => (),
                     _ => return Some(InvalidXrefSect::BadDeadObject(o)),
                 }
@@ -328,7 +336,7 @@ impl XrefSectT {
 }
 
 impl<'a> Iterator for XrefSectEntIterator<'a> {
-    type Item = (usize, XrefEntT); // object number and its entry
+    type Item = (usize, LocatedVal<XrefEntT>); // object number and its entry
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -341,10 +349,10 @@ impl<'a> Iterator for XrefSectEntIterator<'a> {
                 self.idx = 0;
                 continue
             }
-            let ent = ss.ents()[self.idx].val();
+            let ent = ss.ents()[self.idx];
             let obj = ss.start() + self.idx;
             self.idx += 1;
-            return Some((obj, *ent))
+            return Some((obj, ent))
         }
         None
     }
