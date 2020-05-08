@@ -4,10 +4,34 @@ Dockerizing our Rust application
 
 * Docker
 
-# Building the image
+# Building and deploying the image
 
     $ cd ../..
-    $ docker build -t 'pdf_printer' -f etc/docker/Dockerfile .
+    $ docker build -t 'pdf_printer' -f etc/docker/Dockerfile [--no-cache] .
+    
+In order to set up access to Artifactory, log in to https://artifactory.sri.com 
+Click on your username near the upper right corner. 
+Unlock with your password (if prompted). 
+Generate and copy your "encrypted API key".
+
+Then, log into the registry.  This is only needed once. The credentials will then be stored in
+`~/.docker/config.json` or the Mac OS X keychain.
+Using your e-number (with lowercase 'e') and API key from the step before, when prompted about
+your password then copy the API key from the clipboard:
+
+    $ docker login -u eNNNNN safedocs-ta2-docker.cse.sri.com
+    Password: <copy from clipboard>
+    Login Succeeded
+
+From now on, you will be able to push tagged images like so:
+
+TODO: managing the version number?
+
+    $ make deploy    
+or
+
+    $ docker tag pdf_printer safedocs-ta2-docker.cse.sri.com/pdf_printer:latest
+    $ docker push safedocs-ta2-docker.cse.sri.com/pdf_printer:latest
 
 # Running container and checking things...
 
@@ -15,14 +39,14 @@ Dockerizing our Rust application
 
 Interactive shell:
 
-    $ docker run -it pdf_printer /bin/sh
+    $ docker run -it safedocs-ta2-docker.cse.sri.com/pdf_printer /bin/sh
     / # ls -la /pdf_printer
     -rwxr-xr-x    1 root     root       3080320 Nov 14 15:03 /pdf_printer
     / # exit
 
 With bind mounting a directory containing PDF example files to test:
 
-    $ docker run -v <PATH_TO>/examples:/examples -it pdf_printer /bin/sh
+    $ docker run -v <PATH_TO>/examples:/examples -it safedocs-ta2-docker.cse.sri.com/pdf_printer /bin/sh
     # ls -la /examples
     total 16
     drwxr-xr-x 5 root root  160 Jul  8 20:52 .
@@ -38,6 +62,18 @@ With bind mounting a directory containing PDF example files to test:
     INFO     - minimal.pdf at        570 - Found 5 objects starting at 0:
     [...]
 
+Or, for example, the latest Eval One data set (downloaded and extracted locally to `~/tmp/2020-03-eval`):
+
+    $ docker run -v ~/tmp/2020-03-eval:/2020-03-eval -it safedocs-ta2-docker.cse.sri.com/pdf_printer /bin/sh
+    # /pdf_printer /2020-03-eval/0011_0000d9d2b298630800d403f88ad148fac1308ef8b0bb4de228947e0426dc28e2.pdf
+    ...
+
+# Obtaining the Image from Artifactory
+
+You must be logged into [Artifactory](https://artifactory.sri.com) per instructions above.  Then:
+
+    $ docker pull safedocs-ta2-docker.cse.sri.com/pdf_printer
+    
 # Housekeeping
 
 To see docker images and all (even stopped) containers:

@@ -35,3 +35,7 @@ clean:
 
 docker: release etc/docker/Dockerfile
 	docker build -t 'pdf_printer' -f etc/docker/Dockerfile .
+	docker tag pdf_printer safedocs-ta2-docker.cse.sri.com/pdf_printer:latest
+
+deploy: docker
+	docker push safedocs-ta2-docker.cse.sri.com/pdf_printer:latest
