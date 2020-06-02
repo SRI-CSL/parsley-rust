@@ -26,7 +26,7 @@ use super::super::pcore::parsebuffer::{
 };
 use super::pdf_prim::{
     Boolean, Comment, HexString, IntegerP, IntegerT, NameP, NameT, Null, RawLiteralString, RealP,
-    RealT, StreamContent, WhitespaceEOL,
+    RealT, StreamContentP, StreamContentT, WhitespaceEOL,
 };
 
 // Object locations in the PDF file.  This will need to become
@@ -214,7 +214,7 @@ impl DictP<'_> {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct StreamT {
     dict:   Rc<LocatedVal<DictT>>,
-    stream: LocatedVal<Vec<u8>>,
+    stream: LocatedVal<StreamContentT>,
 }
 
 pub struct Filter<'a> {
@@ -229,11 +229,11 @@ impl Filter<'_> {
 }
 
 impl StreamT {
-    pub fn new(dict: Rc<LocatedVal<DictT>>, stream: LocatedVal<Vec<u8>>) -> StreamT {
+    pub fn new(dict: Rc<LocatedVal<DictT>>, stream: LocatedVal<StreamContentT>) -> StreamT {
         StreamT { dict, stream }
     }
     pub fn dict(&self) -> &Rc<LocatedVal<DictT>> { &self.dict }
-    pub fn stream(&self) -> &LocatedVal<Vec<u8>> { &self.stream }
+    pub fn stream(&self) -> &LocatedVal<StreamContentT> { &self.stream }
 
     pub fn filters(&self) -> ParseResult<Vec<Filter>> {
         let mut filters = Vec::new();
@@ -622,7 +622,7 @@ impl IndirectP<'_> {
                     let dict_end = o.loc_end();
                     if let PDFObjT::Dict(dict) = o.unwrap() {
                         let dict = LocatedVal::new(dict, dict_start, dict_end);
-                        let mut s = StreamContent;
+                        let mut s = StreamContentP;
                         let stream = s.parse(buf)?;
                         let start = dict_start;
                         let end = stream.loc_end();
@@ -693,7 +693,7 @@ mod test_pdf_obj {
     use super::super::super::pcore::parsebuffer::{
         locate_value, ErrorKind, LocatedVal, ParseBuffer, ParseBufferT, ParsleyParser,
     };
-    use super::super::pdf_prim::{IntegerT, NameT, RealT};
+    use super::super::pdf_prim::{IntegerT, NameT, RealT, StreamContentT};
     use super::{
         ArrayT, DictT, IndirectP, IndirectT, PDFObjContext, PDFObjP, PDFObjT, ReferenceT, StreamT,
     };
@@ -961,7 +961,7 @@ mod test_pdf_obj {
         let mut ctxt = PDFObjContext::new();
         let mut p = IndirectP::new(&mut ctxt);
         //             1         2         3         4         5         6
-        //   0123456789012345678901234567890123456789012345678901234567890123
+        //   0123456789012345678901234567890123456 7890123 4567890123 4567890123
         let v = Vec::from(
             "1 0 obj << /Entry [ 1 0 R ] >> stream\n junk \nendstream\nendobj".as_bytes(),
         );
@@ -981,7 +981,7 @@ mod test_pdf_obj {
             Rc::new(entval),
         );
         let dict = Rc::new(LocatedVal::new(DictT::new(map), 8, 30));
-        let content = LocatedVal::new(Vec::from(" junk ".as_bytes()), 31, 54);
+        let content = LocatedVal::new(StreamContentT::new(38, 6, Vec::from(" junk ".as_bytes())), 31, 54);
         let stream = Rc::new(LocatedVal::new(
             PDFObjT::Stream(StreamT::new(dict, content)),
             8,
