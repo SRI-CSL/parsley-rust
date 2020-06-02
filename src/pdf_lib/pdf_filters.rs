@@ -16,7 +16,7 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use flate2::write::DeflateDecoder;
+use flate2::write::ZlibDecoder;
 use std::io::Write;
 
 use super::super::pcore::parsebuffer::{
@@ -42,18 +42,25 @@ impl BufferTransformT for FlateDecode<'_> {
             let loc = buf.get_location();
             return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
         }
-        let mut decoder = DeflateDecoder::new(Vec::new());
-        match decoder.write_all(buf.buf()) {
+        let mut decoder = ZlibDecoder::new(Vec::new());
+        // PDF streams can have bytes trailing the filter content, so
+        // write_all() could cause spurious errors due to the trailing
+        // bytes not being consumed by the decoder.  Since write() has
+        // an internal consuming loop, we could rely on it to consume
+        // all relevant bytes in a single call.
+        match decoder.write(buf.buf()) {
             Err(e) => {
-                let err = ErrorKind::TransformError(format!("flatedecode error: {}", e));
+                let err = ErrorKind::TransformError(format!("flatedecode write error: {}", e));
                 let loc = buf.get_location();
                 return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
             },
-            Ok(()) => {},
+            Ok(_n) => {
+                // 'n' bytes consumed
+            },
         }
         match decoder.finish() {
             Err(e) => {
-                let err = ErrorKind::TransformError(format!("flatedecode error: {}", e));
+                let err = ErrorKind::TransformError(format!("flatedecode finish error: {}", e));
                 let loc = buf.get_location();
                 return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
             },
