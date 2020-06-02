@@ -541,7 +541,9 @@ mod test_object_stream {
     use super::super::super::pcore::parsebuffer::{
         locate_value, ErrorKind, LocatedVal, ParseBuffer, ParsleyParser,
     };
-    use super::super::pdf_obj::{ArrayT, DictP, DictT, IndirectT, IndirectP, PDFObjContext, PDFObjT};
+    use super::super::pdf_obj::{
+        ArrayT, DictP, DictT, IndirectP, IndirectT, PDFObjContext, PDFObjT,
+    };
     use super::{ObjStreamP, ObjStreamT};
 
     fn make_dict_buf(n: usize, first: usize) -> Vec<u8> {
@@ -669,7 +671,8 @@ mod test_object_stream {
     #[test]
     fn test_obj_stream() {
         // Extracted from qpdf/examples/qtest/bookmarks/issue-179.pdf
-        // using: qpdf --compress-streams=n --decode-level=generalized issue-179.pdf > out.pdf
+        // using:
+        //  qpdf --compress-streams=n --decode-level=generalized issue-179.pdf > out.pdf
         let v = Vec::from("
 2 0 obj
 << /Type /ObjStm /Length 6130 /N 73 /First 558 >>

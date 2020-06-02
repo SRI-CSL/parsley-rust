@@ -604,17 +604,21 @@ impl ParsleyParser for NameP {
 // Stream object content.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct StreamContentT {
-    start: usize,     // locations that exclude the 'stream'/'endstream' tokens.
-    size:  usize,
-    content: Vec<u8>  // this should be processed using a view; deprecated.
+    start:   usize, // locations that exclude the 'stream'/'endstream' tokens.
+    size:    usize,
+    content: Vec<u8>, // this should be processed using a view; deprecated.
 }
 
 impl StreamContentT {
     pub fn new(start: usize, size: usize, content: Vec<u8>) -> StreamContentT {
-        Self { start, size, content }
+        Self {
+            start,
+            size,
+            content,
+        }
     }
     pub fn start(&self) -> usize { self.start }
-    pub fn size(&self)  -> usize { self.size }
+    pub fn size(&self) -> usize { self.size }
 }
 
 pub struct StreamContentP;
@@ -668,9 +672,9 @@ impl ParsleyParser for StreamContentP {
         // the spec whether the '\r' is part of the data and EOL is
         // '\n'.  For now, just remove a trailing '\n'.
         match v.pop() {
-            None     => (),
+            None => (),
             Some(10) => stream_len -= 1,
-            Some(c)  => v.push(c),
+            Some(c) => v.push(c),
         }
 
         // Go back to the end of the content
@@ -693,7 +697,7 @@ mod test_pdf_prim {
         locate_value, ErrorKind, LocatedVal, ParseBuffer, ParseBufferT, ParsleyParser,
     };
     use super::{Boolean, Comment, Null, WhitespaceEOL, WhitespaceNoEOL};
-    use super::{HexString, RawLiteralString, StreamContentT, StreamContentP};
+    use super::{HexString, RawLiteralString, StreamContentP, StreamContentT};
     use super::{IntegerP, IntegerT, NameP, NameT, RealP, RealT};
 
     #[test]
@@ -1373,7 +1377,11 @@ mod test_pdf_prim {
         let mut pb = ParseBuffer::new(v);
         assert_eq!(
             sc.parse(&mut pb),
-            Ok(LocatedVal::new(StreamContentT::new(7, 2, Vec::from("  ")), 0, 18))
+            Ok(LocatedVal::new(
+                StreamContentT::new(7, 2, Vec::from("  ")),
+                0,
+                18
+            ))
         );
         assert_eq!(pb.get_cursor(), 18);
 
@@ -1382,7 +1390,11 @@ mod test_pdf_prim {
         let mut pb = ParseBuffer::new(v);
         assert_eq!(
             sc.parse(&mut pb),
-            Ok(LocatedVal::new(StreamContentT::new(8, 2, Vec::from("  ")), 0, 19))
+            Ok(LocatedVal::new(
+                StreamContentT::new(8, 2, Vec::from("  ")),
+                0,
+                19
+            ))
         );
         assert_eq!(pb.get_cursor(), 19);
 
@@ -1391,7 +1403,11 @@ mod test_pdf_prim {
         let mut pb = ParseBuffer::new(v);
         assert_eq!(
             sc.parse(&mut pb),
-            Ok(LocatedVal::new(StreamContentT::new(8, 2, Vec::from("  ")), 0, 20))
+            Ok(LocatedVal::new(
+                StreamContentT::new(8, 2, Vec::from("  ")),
+                0,
+                20
+            ))
         );
         assert_eq!(pb.get_cursor(), 20);
 
@@ -1400,7 +1416,11 @@ mod test_pdf_prim {
         let mut pb = ParseBuffer::new(v);
         assert_eq!(
             sc.parse(&mut pb),
-            Ok(LocatedVal::new(StreamContentT::new(8, 3, Vec::from("  \r")), 0, 21))
+            Ok(LocatedVal::new(
+                StreamContentT::new(8, 3, Vec::from("  \r")),
+                0,
+                21
+            ))
         ); // spec FIXME
         assert_eq!(pb.get_cursor(), 21);
 
@@ -1421,7 +1441,11 @@ mod test_pdf_prim {
         let mut pb = ParseBuffer::new(v);
         assert_eq!(
             sc.parse(&mut pb),
-            Ok(LocatedVal::new(StreamContentT::new(8, 3, Vec::from("  \r")), 0, 20))
+            Ok(LocatedVal::new(
+                StreamContentT::new(8, 3, Vec::from("  \r")),
+                0,
+                20
+            ))
         );
         assert_eq!(pb.get_cursor(), 20);
     }
