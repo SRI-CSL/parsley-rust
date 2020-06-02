@@ -40,9 +40,11 @@ use parsley_rust::pcore::parsebuffer::{
     LocatedVal, Location, ParseBuffer, ParseBufferT, ParsleyParser,
 };
 use parsley_rust::pcore::transforms::{BufferTransformT, RestrictView};
-use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, TrailerP, XrefSectP, XrefSectT};
+use parsley_rust::pdf_lib::pdf_file::{
+    HeaderP, StartXrefP, TrailerP, TrailerT, XrefSectP, XrefSectT,
+};
 use parsley_rust::pdf_lib::pdf_obj::{IndirectP, PDFObjContext, PDFObjT};
-use parsley_rust::pdf_lib::pdf_streams::{XrefEntStatus, XrefStreamP};
+use parsley_rust::pdf_lib::pdf_streams::{XrefEntStatus, XrefEntT, XrefStreamP, XrefStreamT};
 
 /* from: https://osr.jpl.nasa.gov/wiki/pages/viewpage.action?spaceKey=SD&title=TA2+PDF+Safe+Parser+Evaluation
 
@@ -88,87 +90,185 @@ struct ObjInfo {
     ofs: usize,
 }
 
-fn info_from_xref_table(
-    fi: &FileInfo, ctxt: &mut PDFObjContext, xref: &LocatedVal<XrefSectT>,
-    pb: &mut dyn ParseBufferT,
-) -> (Vec<ObjInfo>, Rc<LocatedVal<PDFObjT>>) {
-    let (xref_loc_start, xref_loc_end) = (xref.start(), xref.end());
-    let xref = xref.val();
-    if let Some(err) = xref.is_valid() {
-        panic!("Invalid xref table found: {}", err)
-    }
-    let mut id_offsets: Vec<ObjInfo> = Vec::new();
-    for ls in xref.sects().iter() {
-        let s = ls.val();
+// This assumes that the parse cursor is set at the startxref location.
+fn parse_xref_with_trailer(
+    fi: &FileInfo, ctxt: &mut PDFObjContext, pb: &mut dyn ParseBufferT,
+) -> Option<(LocatedVal<XrefSectT>, TrailerT)> {
+    let mut p = XrefSectP;
+    let xref = p.parse(pb);
+    if let Err(ref e) = xref {
         ta3_log!(
             Level::Info,
-            fi.file_offset(xref_loc_start),
-            "Found {} objects in xref section starting at object {}:",
-            s.count(),
-            s.start()
+            fi.file_offset(pb.get_cursor()),
+            "Could not parse xref table in {} at file-offset {} (pdf-offset {}): {}",
+            fi.display(),
+            fi.file_offset(e.start()),
+            e.start(),
+            e.val()
         );
-        for (idx, o) in s.ents().iter().enumerate() {
-            let ent = o.val();
-            match ent.status() {
-                XrefEntStatus::Free { next } => ta3_log!(
-                    Level::Info,
-                    fi.file_offset(o.loc_start()),
-                    "   free object (next is {}).",
-                    *next
-                ),
-                XrefEntStatus::InUse { file_ofs } => {
-                    ta3_log!(
-                        Level::Info,
-                        fi.file_offset(o.loc_start()),
-                        "   inuse object at {}.",
-                        *file_ofs
-                    );
-                    id_offsets.push(ObjInfo {
-                        id:  s.start() + idx,
-                        gen: ent.gen(),
-                        ofs: (*file_ofs).try_into().unwrap(),
-                    })
-                },
-                XrefEntStatus::InStream { .. } => {
-                    // TODO:
-                    assert!(false)
-                },
-            }
-        }
+        return None
     }
-
-    // Get trailer following the xref table, which should give us the
-    // id of the Root object.
+    let xref = xref.unwrap();
+    // Get trailer following the xref table.
     match pb.scan(b"trailer") {
-        Ok(nbytes) => ta3_log!(
+        Ok(_) => ta3_log!(
             Level::Info,
-            fi.file_offset(xref_loc_end + nbytes),
-            "Found trailer {} bytes from end of xref table.",
-            nbytes
+            fi.file_offset(pb.get_cursor()),
+            "Found trailer."
         ),
-        Err(e) => panic!("Cannot find trailer: {}", e.val()),
+        Err(e) => {
+            ta3_log!(
+                Level::Info,
+                fi.file_offset(e.start()),
+                "Cannot find trailer: {}",
+                e.val()
+            );
+            return None
+        },
     }
     let mut p = TrailerP::new(ctxt);
     let trlr = p.parse(pb);
     if let Err(e) = trlr {
         panic!("Cannot parse trailer: {}", e.val());
     }
-    let trlr = trlr.unwrap().unwrap();
-    // TODO: this constraint should be enforced in the library.
-    let root_ref = match trlr.dict().get(b"Root") {
-        Some(rt) => rt,
-        None => {
-            panic!("No root reference found!");
-        },
-    };
-
-    (id_offsets, Rc::clone(root_ref))
+    return Some((xref, trlr.unwrap().unwrap()))
 }
 
+// This assumes that the parse cursor is set at the startxref location.
+fn parse_xref_stream(
+    fi: &FileInfo, ctxt: &mut PDFObjContext, pb: &mut dyn ParseBufferT,
+) -> Option<LocatedVal<XrefStreamT>> {
+    // Check if we have an xref stream.
+    let mut sp = IndirectP::new(ctxt);
+    let xref_obj = sp.parse(pb);
+    if let Err(e) = xref_obj {
+        ta3_log!(
+            Level::Info,
+            fi.file_offset(pb.get_cursor()),
+            "Could not parse object for xref stream in {} at file-offset {} (pdf-offset {}): {}",
+            fi.display(),
+            fi.file_offset(e.start()),
+            e.start(),
+            e.val()
+        );
+        return None
+    };
+    let xref_obj = xref_obj.unwrap();
+    if let PDFObjT::Stream(ref s) = xref_obj.val().obj().val() {
+        let mut xp = XrefStreamP::new(s);
+        let xref_stm = xp.parse(pb);
+        if let Err(e) = xref_stm {
+            ta3_log!(
+                Level::Info,
+                fi.file_offset(pb.get_cursor()),
+                "Object is not a xref stream in {} at file-offset {} (pdf-offset {}): {}",
+                fi.display(),
+                fi.file_offset(e.start()),
+                e.start(),
+                e.val()
+            );
+            return None
+        } else {
+            ta3_log!(
+                Level::Info,
+                fi.file_offset(pb.get_cursor()),
+                "Found xref stream.",
+            );
+            return Some(xref_stm.unwrap())
+        }
+    }
+    ta3_log!(
+        Level::Info,
+        fi.file_offset(pb.get_cursor()),
+        "Could not find xref stream in {} at file-offset {} (pdf-offset {})",
+        fi.display(),
+        fi.file_offset(pb.get_cursor()),
+        pb.get_cursor()
+    );
+    return None
+}
+
+// This assumes that the parse cursor is set at the startxref
+// location.  This tries getting it from the xref table and trailer,
+// failing which it tries getting it from a xref stream.
+fn get_xref_info(
+    fi: &FileInfo, ctxt: &mut PDFObjContext, pb: &mut dyn ParseBufferT,
+) -> (Vec<LocatedVal<XrefEntT>>, Rc<LocatedVal<PDFObjT>>) {
+    let cursor = pb.get_cursor();
+    let info = parse_xref_with_trailer(fi, ctxt, pb);
+    if info.is_some() {
+        let (xrsect, trailer) = info.unwrap();
+        let xrents = xrsect.val().ents();
+        let root_ref = match trailer.dict().get(b"Root") {
+            Some(rt) => Rc::clone(rt),
+            None => {
+                // FIXME: Make this a constraint on the Trailer parser.
+                panic!("No root reference found in trailer!");
+            },
+        };
+        return (xrents, root_ref)
+    }
+    pb.set_cursor(cursor);
+    let info = parse_xref_stream(fi, ctxt, pb);
+    if info.is_some() {
+        let xrstrm = info.unwrap();
+        let root_ref = match xrstrm.val().dict().val().get(b"Root") {
+            Some(rt) => Rc::clone(rt),
+            None => {
+                panic!("No root reference found in xref stream dictionary!");
+            },
+        };
+        let mut xrents = Vec::new();
+        for e in xrstrm.val().ents() {
+            xrents.push(*e)
+        }
+        return (xrents, root_ref)
+    }
+    panic!("No xref information found at startxref.")
+}
+
+// Get the in-use object locations from the xref entries.
+fn info_from_xref_entries(fi: &FileInfo, xref_ents: &[LocatedVal<XrefEntT>]) -> Vec<ObjInfo> {
+    let mut id_offsets: Vec<ObjInfo> = Vec::new();
+    for o in xref_ents {
+        let ent = o.val();
+        match ent.status() {
+            XrefEntStatus::Free { next } => ta3_log!(
+                Level::Info,
+                fi.file_offset(o.loc_start()),
+                "   free object (next is {}).",
+                *next
+            ),
+            XrefEntStatus::InUse { file_ofs } => {
+                ta3_log!(
+                    Level::Info,
+                    fi.file_offset(o.loc_start()),
+                    "   inuse object at {}.",
+                    *file_ofs
+                );
+                id_offsets.push(ObjInfo {
+                    id:  ent.obj(),
+                    gen: ent.gen(),
+                    ofs: (*file_ofs).try_into().unwrap(),
+                })
+            },
+            XrefEntStatus::InStream { .. } => {
+                // TODO:
+                assert!(false)
+            },
+        }
+    }
+    id_offsets
+}
+
+// Parse the objects at their specified locations, which updates the
+// context with their identities.  Also validate that the identity of
+// the parsed object matches the identity expected from the xref
+// information.
 fn parse_objects(
     fi: &FileInfo, ctxt: &mut PDFObjContext, obj_infos: &[ObjInfo], pb: &mut dyn ParseBufferT,
 ) {
-    // Now get the outermost objects at each offset in the xref table.
+    // Get the outermost objects at each offset in the xref table.
     // These have to be indirect/labelled objects.
     let mut objs = Vec::new();
     for ObjInfo { id, gen, ofs } in obj_infos.iter() {
@@ -430,50 +530,16 @@ fn parse_file(test_file: &str) {
 
     // Parse xref table at that offset.
     pb.set_cursor(sxref.offset().try_into().unwrap());
-    let mut p = XrefSectP;
-    let xref = p.parse(&mut pb);
-    if let Err(ref e) = xref {
-        ta3_log!(
-            Level::Info,
-            fi.file_offset(sxref_offset),
-            "Could not parse xref in {} at file-offset {} (pdf-offset {}): {}",
-            fi.display(),
-            fi.file_offset(e.start()),
-            e.start(),
-            e.val()
-        );
-        // Check if we have an xref stream
-        let mut sp = IndirectP::new(&mut ctxt);
-        let xref_obj = sp.parse(&mut pb);
-        if let Err(e) = xref_obj {
-            panic!("Could not parse object for xref stream in {} at file-offset {} (pdf-offset {}): {}",
-                   fi.display(), fi.file_offset(e.start()), e.start(), e.val());
-        };
-        let xref_obj = xref_obj.unwrap();
-        if let PDFObjT::Stream(ref s) = xref_obj.val().obj().val() {
-            let mut xp = XrefStreamP::new(s);
-            let xref_stm = xp.parse(&mut pb);
-            if let Err(e) = xref_stm {
-                panic!(
-                    "Could not parse xref stream in {} at file-offset {} (pdf-offset {}): {}",
-                    fi.display(),
-                    fi.file_offset(e.start()),
-                    e.start(),
-                    e.val()
-                );
-            }
-        } else {
-            panic!(
-                "Could not find valid xref information in {} at file-offset {} (pdf-offset {})",
-                fi.display(),
-                fi.file_offset(sxref_offset),
-                sxref_offset
-            );
-        }
-    }
 
-    let xref = xref.unwrap();
-    let (id_offsets, root_ref) = info_from_xref_table(&fi, &mut ctxt, &xref, &mut pb);
+    let (xref_ents, root_ref) = get_xref_info(&fi, &mut ctxt, &mut pb);
+    ta3_log!(
+        Level::Info,
+        fi.file_offset(pb.get_cursor()),
+        "Found {} objects in xref table.",
+        xref_ents.len()
+    );
+
+    let id_offsets = info_from_xref_entries(&fi, &xref_ents);
 
     // Parse the objects using their xref entries, and put them into the context.
     parse_objects(&fi, &mut ctxt, &id_offsets, &mut pb);
@@ -483,7 +549,7 @@ fn parse_file(test_file: &str) {
         match ctxt.lookup_obj(r.id()) {
             Some(obj) => obj,
             None => {
-                panic!("Root object not found from reference!");
+                panic!("Root object {:?} not found from reference!", r.id());
             },
         }
     } else {

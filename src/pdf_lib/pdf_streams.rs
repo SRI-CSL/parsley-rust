@@ -282,11 +282,11 @@ pub struct XrefStreamP<'a> {
 }
 
 pub struct XrefStreamDictInfo<'a> {
-    size:     usize,
-    prev:     Option<usize>,
-    index:    Option<Vec<(usize, usize)>>, // like pdf_file::XrefSubSectT but without entries
-    widths:   [usize; 3],
-    filters:  Vec<Filter<'a>>,
+    size:    usize,
+    prev:    Option<usize>,
+    index:   Option<Vec<(usize, usize)>>, // like pdf_file::XrefSubSectT but without entries
+    widths:  [usize; 3],
+    filters: Vec<Filter<'a>>,
 }
 
 impl XrefStreamDictInfo<'_> {
