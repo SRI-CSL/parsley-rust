@@ -541,7 +541,7 @@ mod test_object_stream {
     use super::super::super::pcore::parsebuffer::{
         locate_value, ErrorKind, LocatedVal, ParseBuffer, ParsleyParser,
     };
-    use super::super::pdf_obj::{ArrayT, DictP, DictT, IndirectT, PDFObjContext, PDFObjT};
+    use super::super::pdf_obj::{ArrayT, DictP, DictT, IndirectT, IndirectP, PDFObjContext, PDFObjT};
     use super::{ObjStreamP, ObjStreamT};
 
     fn make_dict_buf(n: usize, first: usize) -> Vec<u8> {
@@ -664,5 +664,106 @@ mod test_object_stream {
         let os = ObjStreamT::new(Rc::clone(&d), exp);
         let os = LocatedVal::new(os, 0, 24);
         assert_eq!(val, os);
+    }
+
+    #[test]
+    fn test_obj_stream() {
+        // Extracted from qpdf/examples/qtest/bookmarks/issue-179.pdf
+        // using: qpdf --compress-streams=n --decode-level=generalized issue-179.pdf > out.pdf
+        let v = Vec::from("
+2 0 obj
+<< /Type /ObjStm /Length 6130 /N 73 /First 558 >>
+stream
+3 0 4 45 5 113 6 169 7 214 8 269 9 325 10 393 11 479 12 535 13 591 14 647 15 703 16 771 17 871 18 953 19 1025 20 1107 21 1168 22 1224 23 1292 24 1392 25 1474 26 1546 27 1628 28 1702 29 1761 30 1820 31 1901 32 1983 33 2065 34 2139 35 2239 36 2327 37 2383 38 2439 39 2495 40 2551 41 2610 42 2691 43 2773 44 2855 45 2929 46 3029 47 3101 48 3183 49 3265 50 3347 51 3435 52 3494 53 3575 54 3657 55 3739 56 3813 57 3913 58 3985 59 4067 60 4149 61 4231 62 4319 63 4375 64 4434 65 4508 66 4604 67 4701 68 4798 69 4887 70 5002 71 5089 72 5186 73 5283 74 5380 75 5469
+<< /Count 1 /Kids [ 76 0 R ] /Type /Pages >>
+<< /CreationDate (D:20180202210211) /Creator (Master PDF Editor) >>
+<< /D [ 76 0 R /XYZ 0 841 1 ] /S /GoTo /Type /Action >>
+<< /A 5 0 R /C [ 0 0 0 ] /F 0 /Title <9e> >>
+<< /A 5 0 R /C [ 0 0 0 ] /F 0 /Title <feff017e010d> >>
+<< /D [ 76 0 R /XYZ 0 841 1 ] /S /GoTo /Type /Action >>
+<< /A 5 0 R /C [ 0 0 0 ] /F 0 /Next 10 0 R /Title <feff017e010d> >>
+<< /A 8 0 R /C [ 0 0 0 ] /F 0 /Prev 9 0 R /Title (\\236 ajklyghvbnmxcseqwuioprtzdf) >>
+<< /D [ 76 0 R /XYZ 0 841 1 ] /S /GoTo /Type /Action >>
+<< /D [ 76 0 R /XYZ 0 841 1 ] /S /GoTo /Type /Action >>
+<< /D [ 76 0 R /XYZ 0 841 1 ] /S /GoTo /Type /Action >>
+<< /D [ 76 0 R /XYZ 0 841 1 ] /S /GoTo /Type /Action >>
+<< /A 5 0 R /C [ 0 0 0 ] /F 0 /Next 16 0 R /Title <feff017e010d> >>
+<< /A 8 0 R /C [ 0 0 0 ] /F 0 /Next 17 0 R /Prev 15 0 R /Title (\\236 ajklyghvbnmxcseqwuioprtzdf) >>
+<< /A 11 0 R /C [ 0 0 0 ] /F 0 /Next 18 0 R /Prev 16 0 R /Title <feff017e0107> >>
+<< /A 12 0 R /C [ 0 0 0 ] /F 0 /Next 19 0 R /Prev 17 0 R /Title <9e> >>
+<< /A 13 0 R /C [ 0 0 0 ] /F 0 /Next 20 0 R /Prev 18 0 R /Title <feff017e0111> >>
+<< /A 14 0 R /C [ 0 0 0 ] /F 0 /Prev 19 0 R /Title <9e9d> >>
+<< /D [ 76 0 R /XYZ 0 841 1 ] /S /GoTo /Type /Action >>
+<< /A 5 0 R /C [ 0 0 0 ] /F 0 /Next 23 0 R /Title <feff017e010d> >>
+<< /A 8 0 R /C [ 0 0 0 ] /F 0 /Next 24 0 R /Prev 22 0 R /Title (\\236 ajklyghvbnmxcseqwuioprtzdf) >>
+<< /A 11 0 R /C [ 0 0 0 ] /F 0 /Next 25 0 R /Prev 23 0 R /Title <feff017e0107> >>
+<< /A 12 0 R /C [ 0 0 0 ] /F 0 /Next 26 0 R /Prev 24 0 R /Title <9e> >>
+<< /A 13 0 R /C [ 0 0 0 ] /F 0 /Next 27 0 R /Prev 25 0 R /Title <feff017e0111> >>
+<< /A 14 0 R /C [ 0 0 0 ] /F 0 /Next 28 0 R /Prev 26 0 R /Title <9e9d> >>
+<< /A 21 0 R /C [ 0 0 0 ] /F 0 /Prev 27 0 R /Title <9d> >>
+<< /A 12 0 R /C [ 0 0 0 ] /F 0 /Next 30 0 R /Title <9e> >>
+<< /A 5 0 R /C [ 0 0 0 ] /F 0 /Next 31 0 R /Prev 29 0 R /Title <feff017e010d> >>
+<< /A 13 0 R /C [ 0 0 0 ] /F 0 /Next 32 0 R /Prev 30 0 R /Title <feff017e0111> >>
+<< /A 11 0 R /C [ 0 0 0 ] /F 0 /Next 33 0 R /Prev 31 0 R /Title <feff017e0107> >>
+<< /A 14 0 R /C [ 0 0 0 ] /F 0 /Next 34 0 R /Prev 32 0 R /Title <9e9d> >>
+<< /A 8 0 R /C [ 0 0 0 ] /F 0 /Next 35 0 R /Prev 33 0 R /Title (\\236 ajklyghvbnmxcseqwuioprtzdf) >>
+<< /A 21 0 R /C [ 0 0 0 ] /F 0 /Prev 34 0 R /Title (\\235 ajklyghvbnmxcseqwuioprtzdf) >>
+<< /D [ 76 0 R /XYZ 0 841 1 ] /S /GoTo /Type /Action >>
+<< /D [ 76 0 R /XYZ 0 841 1 ] /S /GoTo /Type /Action >>
+<< /D [ 76 0 R /XYZ 0 841 1 ] /S /GoTo /Type /Action >>
+<< /D [ 76 0 R /XYZ 0 841 1 ] /S /GoTo /Type /Action >>
+<< /A 12 0 R /C [ 0 0 0 ] /F 0 /Next 41 0 R /Title <9e> >>
+<< /A 5 0 R /C [ 0 0 0 ] /F 0 /Next 42 0 R /Prev 40 0 R /Title <feff017e010d> >>
+<< /A 13 0 R /C [ 0 0 0 ] /F 0 /Next 43 0 R /Prev 41 0 R /Title <feff017e0111> >>
+<< /A 11 0 R /C [ 0 0 0 ] /F 0 /Next 44 0 R /Prev 42 0 R /Title <feff017e0107> >>
+<< /A 14 0 R /C [ 0 0 0 ] /F 0 /Next 45 0 R /Prev 43 0 R /Title <9e9d> >>
+<< /A 8 0 R /C [ 0 0 0 ] /F 0 /Next 46 0 R /Prev 44 0 R /Title (\\236 ajklyghvbnmxcseqwuioprtzdf) >>
+<< /A 36 0 R /C [ 0 0 0 ] /F 0 /Next 47 0 R /Prev 45 0 R /Title <9d> >>
+<< /A 37 0 R /C [ 0 0 0 ] /F 0 /Next 48 0 R /Prev 46 0 R /Title <feff0161010d> >>
+<< /A 39 0 R /C [ 0 0 0 ] /F 0 /Next 49 0 R /Prev 47 0 R /Title <feff01610107> >>
+<< /A 38 0 R /C [ 0 0 0 ] /F 0 /Next 50 0 R /Prev 48 0 R /Title <feff01610111> >>
+<< /A 21 0 R /C [ 0 0 0 ] /F 0 /Prev 49 0 R /Title (\\235 ajklyghvbnmxcseqwuioprtzdf) >>
+<< /A 12 0 R /C [ 0 0 0 ] /F 0 /Next 52 0 R /Title <9e> >>
+<< /A 5 0 R /C [ 0 0 0 ] /F 0 /Next 53 0 R /Prev 51 0 R /Title <feff017e010d> >>
+<< /A 13 0 R /C [ 0 0 0 ] /F 0 /Next 54 0 R /Prev 52 0 R /Title <feff017e0111> >>
+<< /A 11 0 R /C [ 0 0 0 ] /F 0 /Next 55 0 R /Prev 53 0 R /Title <feff017e0107> >>
+<< /A 14 0 R /C [ 0 0 0 ] /F 0 /Next 56 0 R /Prev 54 0 R /Title <9e9d> >>
+<< /A 8 0 R /C [ 0 0 0 ] /F 0 /Next 57 0 R /Prev 55 0 R /Title (\\236 ajklyghvbnmxcseqwuioprtzdf) >>
+<< /A 36 0 R /C [ 0 0 0 ] /F 0 /Next 58 0 R /Prev 56 0 R /Title <9d> >>
+<< /A 37 0 R /C [ 0 0 0 ] /F 0 /Next 59 0 R /Prev 57 0 R /Title <feff0161010d> >>
+<< /A 38 0 R /C [ 0 0 0 ] /F 0 /Next 60 0 R /Prev 58 0 R /Title <feff01610111> >>
+<< /A 39 0 R /C [ 0 0 0 ] /F 0 /Next 61 0 R /Prev 59 0 R /Title <feff01610107> >>
+<< /A 21 0 R /C [ 0 0 0 ] /F 0 /Prev 60 0 R /Title (\\235 ajklyghvbnmxcseqwuioprtzdf) >>
+<< /D [ 76 0 R /XYZ 0 841 1 ] /S /GoTo /Type /Action >>
+<< /Count 12 /First 64 0 R /Last 75 0 R /Type /Outlines >>
+<< /A 12 0 R /C [ 0 0 0 ] /F 0 /Next 65 0 R /Parent 63 0 R /Title <9e> >>
+<< /A 5 0 R /C [ 0 0 0 ] /F 0 /Next 66 0 R /Parent 63 0 R /Prev 64 0 R /Title <feff017e010d> >>
+<< /A 13 0 R /C [ 0 0 0 ] /F 0 /Next 67 0 R /Parent 63 0 R /Prev 65 0 R /Title <feff017e0111> >>
+<< /A 11 0 R /C [ 0 0 0 ] /F 0 /Next 68 0 R /Parent 63 0 R /Prev 66 0 R /Title <feff017e0107> >>
+<< /A 14 0 R /C [ 0 0 0 ] /F 0 /Next 69 0 R /Parent 63 0 R /Prev 67 0 R /Title <9e9d> >>
+<< /A 8 0 R /C [ 0 0 0 ] /F 0 /Next 70 0 R /Parent 63 0 R /Prev 68 0 R /Title (\\236 ajklyghvbnmxcseqwuioprtzdf) >>
+<< /A 36 0 R /C [ 0 0 0 ] /F 0 /Next 71 0 R /Parent 63 0 R /Prev 69 0 R /Title <9d> >>
+<< /A 37 0 R /C [ 0 0 0 ] /F 0 /Next 72 0 R /Parent 63 0 R /Prev 70 0 R /Title <feff0161010d> >>
+<< /A 38 0 R /C [ 0 0 0 ] /F 0 /Next 73 0 R /Parent 63 0 R /Prev 71 0 R /Title <feff01610111> >>
+<< /A 39 0 R /C [ 0 0 0 ] /F 0 /Next 74 0 R /Parent 63 0 R /Prev 72 0 R /Title <feff01610107> >>
+<< /A 62 0 R /C [ 0 0 0 ] /F 0 /Next 75 0 R /Parent 63 0 R /Prev 73 0 R /Title <9d9e> >>
+<< /A 21 0 R /C [ 0 0 0 ] /F 0 /Parent 63 0 R /Prev 74 0 R /Title (\\235 ajklyghvbnmxcseqwuioprtzdf) >>
+endstream
+endobj");
+        let mut pb = ParseBuffer::new(v);
+        let mut ctxt = PDFObjContext::new();
+        let mut p = IndirectP::new(&mut ctxt);
+        let io = p.parse(&mut pb).expect("unable to parse stream");
+        let io = io.val();
+        if let PDFObjT::Stream(ref s) = io.obj().val() {
+            let content = s.stream().val();
+            let mut stream_buf = ParseBuffer::new_view(&pb, content.start(), content.size());
+            let mut osp = ObjStreamP::new(&mut ctxt, Rc::clone(s.dict()));
+            let ost = osp.parse(&mut stream_buf);
+            let ost = ost.unwrap();
+            assert_eq!(ost.val().objs().len(), 73)
+        } else {
+            assert!(false);
+        }
     }
 }
