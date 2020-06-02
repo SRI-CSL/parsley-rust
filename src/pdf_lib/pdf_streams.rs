@@ -273,18 +273,25 @@ impl XrefStreamT {
     pub fn new(dict: Rc<LocatedVal<DictT>>, ents: Vec<LocatedVal<XrefEntT>>) -> XrefStreamT {
         XrefStreamT { dict, ents }
     }
+    pub fn dict(&self) -> &LocatedVal<DictT> { self.dict.as_ref() }
+    pub fn ents(&self) -> &[LocatedVal<XrefEntT>] { self.ents.as_slice() }
 }
 
 pub struct XrefStreamP<'a> {
     stream: &'a StreamT,
 }
 
-struct XrefStreamDictInfo<'a> {
+pub struct XrefStreamDictInfo<'a> {
     size:     usize,
-    pub prev: usize,
+    prev:     Option<usize>,
     index:    Option<Vec<(usize, usize)>>, // like pdf_file::XrefSubSectT but without entries
     widths:   [usize; 3],
     filters:  Vec<Filter<'a>>,
+}
+
+impl XrefStreamDictInfo<'_> {
+    pub fn size(&self) -> usize { self.size }
+    pub fn prev(&self) -> Option<usize> { self.prev }
 }
 
 impl XrefStreamP<'_> {
@@ -318,12 +325,6 @@ impl XrefStreamP<'_> {
         let size = size.unwrap();
 
         let prev = dict.val().get_usize(b"Prev");
-        if prev.is_none() {
-            let msg = format!("No valid /Prev in xref stream dictionary.");
-            let err = ErrorKind::GuardError(msg);
-            return Err(locate_value(err, dict.start(), dict.end()))
-        }
-        let prev = prev.unwrap();
 
         let idx = dict.val().get_array(b"Index");
         let mut index = Vec::new();
