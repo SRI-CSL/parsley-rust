@@ -120,6 +120,7 @@ pub struct DictT {
 impl DictT {
     pub fn new(map: BTreeMap<Vec<u8>, Rc<LocatedVal<PDFObjT>>>) -> DictT { DictT { map } }
     pub fn map(&self) -> &BTreeMap<Vec<u8>, Rc<LocatedVal<PDFObjT>>> { &self.map }
+    pub fn map_mut(&mut self) -> &mut BTreeMap<Vec<u8>, Rc<LocatedVal<PDFObjT>>> { &mut self.map }
     pub fn get(&self, k: &[u8]) -> Option<&Rc<LocatedVal<PDFObjT>>> { self.map.get(&Vec::from(k)) }
     // conveniences:
     // get the usize value of a key

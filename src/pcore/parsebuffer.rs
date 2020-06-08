@@ -52,6 +52,7 @@ where
     }
 
     pub fn val(&self) -> &T { &self.val }
+    pub fn val_mut(&mut self) -> &mut T { &mut self.val }
     pub fn unwrap(self) -> T { self.val }
     pub fn start(&self) -> usize { self.start }
     pub fn end(&self) -> usize { self.end }
