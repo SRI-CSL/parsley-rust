@@ -91,47 +91,76 @@ struct ObjInfo {
 }
 
 // This assumes that the parse cursor is set at the startxref location.
+// The xref tables are arranged with the newest first and oldest last.
 fn parse_xref_with_trailer(
     fi: &FileInfo, ctxt: &mut PDFObjContext, pb: &mut dyn ParseBufferT,
-) -> Option<(LocatedVal<XrefSectT>, TrailerT)> {
-    let mut p = XrefSectP;
-    let xref = p.parse(pb);
-    if let Err(ref e) = xref {
-        ta3_log!(
-            Level::Info,
-            fi.file_offset(pb.get_cursor()),
-            "Could not parse xref table in {} at file-offset {} (pdf-offset {}): {}",
-            fi.display(),
-            fi.file_offset(e.start()),
-            e.start(),
-            e.val()
-        );
-        return None
-    }
-    let xref = xref.unwrap();
-    // Get trailer following the xref table.
-    match pb.scan(b"trailer") {
-        Ok(_) => ta3_log!(
-            Level::Info,
-            fi.file_offset(pb.get_cursor()),
-            "Found trailer."
-        ),
-        Err(e) => {
+) -> Option<(Vec<LocatedVal<XrefSectT>>, TrailerT)> {
+    // Collect all xref tables, following the /Prev entries.  This is
+    // not quite the right thing to do for linearized PDF from an
+    // application point-of-view, since they should be loaded lazily,
+    // but that's a difficult use case to support currently.
+    let mut xrefs = Vec::new();
+    let mut trlr = None;
+    loop {
+        let mut p = XrefSectP;
+        let xref = p.parse(pb);
+        if let Err(ref e) = xref {
             ta3_log!(
                 Level::Info,
+                fi.file_offset(pb.get_cursor()),
+                "Could not parse xref table in {} at file-offset {} (pdf-offset {}): {}",
+                fi.display(),
                 fi.file_offset(e.start()),
-                "Cannot find trailer: {}",
+                e.start(),
                 e.val()
             );
             return None
-        },
+        }
+        xrefs.push(xref.unwrap());
+        // Get trailer following the xref table.
+        match pb.scan(b"trailer") {
+            Ok(_) => ta3_log!(
+                Level::Info,
+                fi.file_offset(pb.get_cursor()),
+                "Found trailer."
+            ),
+            Err(e) => {
+                ta3_log!(
+                    Level::Info,
+                    fi.file_offset(e.start()),
+                    "Cannot find trailer: {}",
+                    e.val()
+                );
+                return None
+            },
+        }
+        let mut p = TrailerP::new(ctxt);
+        let t = p.parse(pb);
+        if let Err(e) = t {
+            panic!("Cannot parse trailer: {}", e.val());
+            //process::exit(1)
+        }
+        let t = t.unwrap();
+
+        // update trailer-derived info.
+        let prev = t.val().dict().get_usize(b"Prev");
+        match trlr {
+            None    => { trlr = Some(t) },
+            Some(_) => {
+                // Newer trailers make older ones redundant.
+                // TODO: should we check any constraints here?
+            }
+        }
+        if let Some(start) = prev {
+            // Go to the next xref table.  TODO: ensure that there is
+            // an %%EOF marker following the trailer.
+            pb.set_cursor(start);
+            continue
+        }
+        // There is no Prev, so this was the last xref table.
+        break
     }
-    let mut p = TrailerP::new(ctxt);
-    let trlr = p.parse(pb);
-    if let Err(e) = trlr {
-        panic!("Cannot parse trailer: {}", e.val());
-    }
-    return Some((xref, trlr.unwrap().unwrap()))
+    return Some((xrefs, trlr.unwrap().unwrap()))
 }
 
 // This assumes that the parse cursor is set at the startxref location.
@@ -197,8 +226,21 @@ fn get_xref_info(
     let cursor = pb.get_cursor();
     let info = parse_xref_with_trailer(fi, ctxt, pb);
     if info.is_some() {
-        let (xrsect, trailer) = info.unwrap();
-        let xrents = xrsect.val().ents();
+        let (xrsects, trailer) = info.unwrap();
+        // Collect the entries from possibly multiple xref tables,
+        // keeping the newest ones.
+        let mut xrents = Vec::new();
+        let mut idset = BTreeSet::new();
+        for ls in xrsects {
+            let xrsect = ls.val();
+            for e in xrsect.ents() {
+                let id = (e.val().obj(), e.val().gen());
+                if idset.insert(id) {
+                    // This is the newest version of the object.
+                    xrents.push(e)
+                }
+            }
+        }
         let root_ref = match trailer.dict().get(b"Root") {
             Some(rt) => Rc::clone(rt),
             None => {
