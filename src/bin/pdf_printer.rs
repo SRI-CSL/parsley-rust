@@ -100,6 +100,7 @@ fn parse_xref_with_trailer(
     // application point-of-view, since they should be loaded lazily,
     // but that's a difficult use case to support currently.
     let mut xrefs = Vec::new();
+    let mut cursorset = BTreeSet::new(); // to prevent infinite loops
     let mut trlr = None;
     loop {
         let mut p = XrefSectP;
@@ -152,10 +153,16 @@ fn parse_xref_with_trailer(
             }
         }
         if let Some(start) = prev {
-            // Go to the next xref table.  TODO: ensure that there is
-            // an %%EOF marker following the trailer.
-            pb.set_cursor(start);
-            continue
+            // Go to the next xref table, after ensuring we are not in
+            // an infinite loop.
+            // TODO: ensure that there is an %%EOF marker following
+            // the trailer.
+            if cursorset.insert(start) {
+                // This is a new location.
+                pb.set_cursor(start);
+                continue
+            }
+            panic!("Infinite /Prev loop detected in xref tables.")
         }
         // There is no Prev, so this was the last xref table.
         break
@@ -168,6 +175,7 @@ fn parse_xref_stream(
     fi: &FileInfo, ctxt: &mut PDFObjContext, pb: &mut dyn ParseBufferT,
 ) -> Option<Vec<LocatedVal<XrefStreamT>>> {
     let mut xrefs = Vec::new();
+    let mut cursorset = BTreeSet::new(); // to prevent infinite loops
     loop {
         let mut sp = IndirectP::new(ctxt);
         let xref_obj = sp.parse(pb);
@@ -208,9 +216,13 @@ fn parse_xref_stream(
                 let prev = xref_stm.val().dict().get_usize(b"Prev");
                 xrefs.push(xref_stm);
                 if let Some(start) = prev {
-                    // Go to the next xref table.
-                    pb.set_cursor(start);
-                    continue
+                    // Go to the next xref table, after ensuring we
+                    // are not in an infinite loop.
+                    if cursorset.insert(start) {
+                        pb.set_cursor(start);
+                        continue
+                    }
+                    panic!("Infinite /Prev loop detected in xref streams.")
                 }
                 // There is no Prev, so this was the last xref table.
                 break
