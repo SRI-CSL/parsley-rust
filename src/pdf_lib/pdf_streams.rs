@@ -273,7 +273,7 @@ impl XrefStreamT {
     pub fn new(dict: Rc<LocatedVal<DictT>>, ents: Vec<LocatedVal<XrefEntT>>) -> XrefStreamT {
         XrefStreamT { dict, ents }
     }
-    pub fn dict(&self) -> &LocatedVal<DictT> { self.dict.as_ref() }
+    pub fn dict(&self) -> &DictT { self.dict.val() }
     pub fn ents(&self) -> &[LocatedVal<XrefEntT>] { self.ents.as_slice() }
 }
 
