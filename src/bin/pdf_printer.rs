@@ -166,55 +166,67 @@ fn parse_xref_with_trailer(
 // This assumes that the parse cursor is set at the startxref location.
 fn parse_xref_stream(
     fi: &FileInfo, ctxt: &mut PDFObjContext, pb: &mut dyn ParseBufferT,
-) -> Option<LocatedVal<XrefStreamT>> {
-    // Check if we have an xref stream.
-    let mut sp = IndirectP::new(ctxt);
-    let xref_obj = sp.parse(pb);
-    if let Err(e) = xref_obj {
-        ta3_log!(
-            Level::Info,
-            fi.file_offset(pb.get_cursor()),
-            "Could not parse object for xref stream in {} at file-offset {} (pdf-offset {}): {}",
-            fi.display(),
-            fi.file_offset(e.start()),
-            e.start(),
-            e.val()
-        );
-        return None
-    };
-    let xref_obj = xref_obj.unwrap();
-    if let PDFObjT::Stream(ref s) = xref_obj.val().obj().val() {
-        let mut xp = XrefStreamP::new(s);
-        let xref_stm = xp.parse(pb);
-        if let Err(e) = xref_stm {
+) -> Option<Vec<LocatedVal<XrefStreamT>>> {
+    let mut xrefs = Vec::new();
+    loop {
+        let mut sp = IndirectP::new(ctxt);
+        let xref_obj = sp.parse(pb);
+        if let Err(e) = xref_obj {
             ta3_log!(
                 Level::Info,
                 fi.file_offset(pb.get_cursor()),
-                "Object is not a xref stream in {} at file-offset {} (pdf-offset {}): {}",
+                "Could not parse object for xref stream in {} at file-offset {} (pdf-offset {}): {}",
                 fi.display(),
                 fi.file_offset(e.start()),
                 e.start(),
                 e.val()
             );
             return None
-        } else {
-            ta3_log!(
-                Level::Info,
-                fi.file_offset(pb.get_cursor()),
-                "Found xref stream.",
-            );
-            return Some(xref_stm.unwrap())
+        };
+        let xref_obj = xref_obj.unwrap();
+        if let PDFObjT::Stream(ref s) = xref_obj.val().obj().val() {
+            let mut xp = XrefStreamP::new(s);
+            let xref_stm = xp.parse(pb);
+            if let Err(e) = xref_stm {
+                ta3_log!(
+                    Level::Info,
+                    fi.file_offset(pb.get_cursor()),
+                    "Object is not a xref stream in {} at file-offset {} (pdf-offset {}): {}",
+                    fi.display(),
+                    fi.file_offset(e.start()),
+                    e.start(),
+                    e.val()
+                );
+                return None
+            } else {
+                ta3_log!(
+                    Level::Info,
+                    fi.file_offset(pb.get_cursor()),
+                    "Found xref stream.",
+                );
+                let xref_stm = xref_stm.unwrap();
+                let prev = xref_stm.val().dict().get_usize(b"Prev");
+                xrefs.push(xref_stm);
+                if let Some(start) = prev {
+                    // Go to the next xref table.
+                    pb.set_cursor(start);
+                    continue
+                }
+                // There is no Prev, so this was the last xref table.
+                break
+            }
         }
+        ta3_log!(
+            Level::Info,
+            fi.file_offset(pb.get_cursor()),
+            "Could not find xref stream in {} at file-offset {} (pdf-offset {})",
+            fi.display(),
+            fi.file_offset(pb.get_cursor()),
+            pb.get_cursor()
+        );
+        return None
     }
-    ta3_log!(
-        Level::Info,
-        fi.file_offset(pb.get_cursor()),
-        "Could not find xref stream in {} at file-offset {} (pdf-offset {})",
-        fi.display(),
-        fi.file_offset(pb.get_cursor()),
-        pb.get_cursor()
-    );
-    return None
+    return Some(xrefs)
 }
 
 // This assumes that the parse cursor is set at the startxref
@@ -250,23 +262,37 @@ fn get_xref_info(
         };
         return (xrents, root_ref)
     }
+
     pb.set_cursor(cursor);
-    let info = parse_xref_stream(fi, ctxt, pb);
-    if info.is_some() {
-        let xrstrm = info.unwrap();
-        let root_ref = match xrstrm.val().dict().val().get(b"Root") {
-            Some(rt) => Rc::clone(rt),
-            None => {
-                panic!("No root reference found in xref stream dictionary!");
-            },
-        };
-        let mut xrents = Vec::new();
-        for e in xrstrm.val().ents() {
-            xrents.push(*e)
-        }
-        return (xrents, root_ref)
+    let xrefs = parse_xref_stream(fi, ctxt, pb);
+    if xrefs.is_none() {
+        panic!("No xref information found at startxref.")
     }
-    panic!("No xref information found at startxref.")
+    let xrstrms = xrefs.unwrap();
+    let mut root = None;
+    let mut xrents = Vec::new();
+    let mut idset = BTreeSet::new();
+    for xrstrm in xrstrms {
+        let xrstrm = xrstrm.val();
+        for e in xrstrm.ents() {
+            let id = (e.val().obj(), e.val().gen());
+            if idset.insert(id) {
+                // This is the newest version of the object.
+                xrents.push(*e)
+            }
+        }
+        if root.is_none() {
+            match xrstrm.dict().get(b"Root") {
+                Some(rt) => { root = Some(Rc::clone(rt)) },
+                None     => {}
+            }
+        }
+    };
+    if root.is_none() {
+        panic!("No root reference found in xref stream dictionary!");
+    };
+    let root = root.unwrap();
+    return (xrents, root)
 }
 
 // Get the in-use object locations from the xref entries.
