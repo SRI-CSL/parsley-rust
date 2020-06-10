@@ -74,6 +74,13 @@ macro_rules! ta3_log {
     })
 }
 
+macro_rules! exit_log {
+    ($pos:expr, $($arg:tt)+) => ({
+        log!(Level::Error, "at {:>10} - {}", $pos, format_args!($($arg)+));
+        process::exit(1)
+    })
+}
+
 struct FileInfo<'a> {
     display:     std::path::Display<'a>,
     pdf_hdr_ofs: usize,
@@ -136,21 +143,21 @@ fn parse_xref_with_trailer(
             },
         }
         let mut p = TrailerP::new(ctxt);
+        let tloc = pb.get_cursor();
         let t = p.parse(pb);
         if let Err(e) = t {
-            panic!("Cannot parse trailer: {}", e.val());
-            //process::exit(1)
+            exit_log!(fi.file_offset(tloc), "Cannot parse trailer: {}", e.val());
         }
         let t = t.unwrap();
 
         // update trailer-derived info.
         let prev = t.val().dict().get_usize(b"Prev");
         match trlr {
-            None    => { trlr = Some(t) },
+            None => trlr = Some(t),
             Some(_) => {
                 // Newer trailers make older ones redundant.
                 // TODO: should we check any constraints here?
-            }
+            },
         }
         if let Some(start) = prev {
             // Go to the next xref table, after ensuring we are not in
@@ -162,7 +169,10 @@ fn parse_xref_with_trailer(
                 pb.set_cursor(start);
                 continue
             }
-            panic!("Infinite /Prev loop detected in xref tables.")
+            exit_log!(
+                fi.file_offset(tloc),
+                "Infinite /Prev loop detected in xref tables."
+            )
         }
         // There is no Prev, so this was the last xref table.
         break
@@ -222,7 +232,10 @@ fn parse_xref_stream(
                         pb.set_cursor(start);
                         continue
                     }
-                    panic!("Infinite /Prev loop detected in xref streams.")
+                    exit_log!(
+                        fi.file_offset(start),
+                        "Infinite /Prev loop detected in xref tables."
+                    )
                 }
                 // There is no Prev, so this was the last xref table.
                 break
@@ -269,7 +282,10 @@ fn get_xref_info(
             Some(rt) => Rc::clone(rt),
             None => {
                 // FIXME: Make this a constraint on the Trailer parser.
-                panic!("No root reference found in trailer!");
+                exit_log!(
+                    fi.file_offset(pb.get_cursor()),
+                    "No root reference found in trailer!"
+                );
             },
         };
         return (xrents, root_ref)
@@ -278,7 +294,10 @@ fn get_xref_info(
     pb.set_cursor(cursor);
     let xrefs = parse_xref_stream(fi, ctxt, pb);
     if xrefs.is_none() {
-        panic!("No xref information found at startxref.")
+        exit_log!(
+            fi.file_offset(cursor),
+            "No xref information found at startxref."
+        )
     }
     let xrstrms = xrefs.unwrap();
     let mut root = None;
@@ -295,13 +314,16 @@ fn get_xref_info(
         }
         if root.is_none() {
             match xrstrm.dict().get(b"Root") {
-                Some(rt) => { root = Some(Rc::clone(rt)) },
-                None     => {}
+                Some(rt) => root = Some(Rc::clone(rt)),
+                None => {},
             }
         }
-    };
+    }
     if root.is_none() {
-        panic!("No root reference found in xref stream dictionary!");
+        exit_log!(
+            fi.file_offset(pb.get_cursor()),
+            "No root reference found in xref stream dictionary!"
+        );
     };
     let root = root.unwrap();
     return (xrents, root)
@@ -366,7 +388,8 @@ fn parse_objects(
         pb.set_cursor(ofs);
         let lobj = p.parse(pb);
         if let Err(e) = lobj {
-            panic!(
+            exit_log!(
+                fi.file_offset(e.start()),
                 "Cannot parse object at file-offset {} (pdf-offset {}) in {}: {}",
                 fi.file_offset(e.start()),
                 e.start(),
@@ -378,7 +401,8 @@ fn parse_objects(
                                          // Validate that the object is what we expect.
                                          // TODO: this constraint should be enforced in the library.
         if (io.num(), io.gen()) != (*id, *gen) {
-            panic!(
+            exit_log!(
+                fi.file_offset(ofs),
                 "unexpected object ({},{}) found: expected ({},{}) from xref entry",
                 io.num(),
                 io.gen(),
@@ -481,7 +505,7 @@ fn parse_file(test_file: &str) {
     // Print current path
     let path = env::current_dir();
     if let Err(_) = path {
-        panic!("Cannot get current dir!");
+        exit_log!(0, "Cannot get current dir!");
     }
     let mut path = path.unwrap();
     path.push(test_file);
@@ -490,7 +514,7 @@ fn parse_file(test_file: &str) {
     // Open the path in read-only mode, returns `io::Result<File>`
     let mut file = match File::open(&path.as_path()) {
         Err(why) => {
-            panic!("Couldn't open {}: {}", display, why.to_string());
+            exit_log!(0, "Couldn't open {}: {}", display, why.to_string());
         },
         Ok(file) => file,
     };
@@ -499,7 +523,7 @@ fn parse_file(test_file: &str) {
     let mut v = Vec::new();
     match file.read_to_end(&mut v) {
         Err(why) => {
-            panic!("Couldn't read {}: {}", display, why.to_string());
+            exit_log!(0, "Couldn't read {}: {}", display, why.to_string());
         },
         Ok(_) => (),
     };
@@ -524,7 +548,7 @@ fn parse_file(test_file: &str) {
             nbytes
         },
         Err(e) => {
-            panic!("Cannot find header: {}", e.val());
+            exit_log!(0, "Cannot find PDF magic: {}", e.val());
         },
     };
     let fi = FileInfo {
@@ -536,7 +560,12 @@ fn parse_file(test_file: &str) {
     let mut p = HeaderP;
     let hdr = p.parse(&mut pb);
     if let Err(e) = hdr {
-        panic!("Unable to parse header from {}: {}", fi.display(), e.val());
+        exit_log!(
+            fi.file_offset(0),
+            "Unable to parse header from {}: {}",
+            fi.display(),
+            e.val()
+        );
     }
     // Todo: some sanity check of header.
 
@@ -565,7 +594,12 @@ fn parse_file(test_file: &str) {
     // Scan backward for startxref.
     let sxref = pb.backward_scan(b"startxref");
     if let Err(e) = sxref {
-        panic!("Could not find startxref in {}: {}", fi.display(), e.val());
+        exit_log!(
+            0,
+            "Could not find startxref in {}: {}",
+            fi.display(),
+            e.val()
+        );
     }
     let sxref_ofs = buflen - sxref.unwrap();
     ta3_log!(
@@ -578,7 +612,8 @@ fn parse_file(test_file: &str) {
     let mut p = StartXrefP;
     let sxref = p.parse(&mut pb);
     if let Err(e) = sxref {
-        panic!(
+        exit_log!(
+            fi.file_offset(sxref_ofs),
             "Could not parse startxref in {} at file-offset {} (pdf-offset {}): {}",
             fi.display(),
             fi.file_offset(e.start()),
@@ -629,13 +664,16 @@ fn parse_file(test_file: &str) {
         match ctxt.lookup_obj(r.id()) {
             Some(obj) => obj,
             None => {
-                panic!("Root object {:?} not found from reference!", r.id());
+                exit_log!(0, "Root object {:?} not found!", r.id());
             },
         }
     } else {
         // Is there any case where this is not the case?  Should
         // this constraint be part of the safe subset specification?
-        panic!("Root object is not a reference!");
+        exit_log!(
+            fi.file_offset(root_ref.loc_start()),
+            "Root object is not a reference!"
+        );
     };
 
     dump_root(&fi, &ctxt, &root_obj);
