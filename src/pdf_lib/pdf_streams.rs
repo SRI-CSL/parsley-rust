@@ -297,6 +297,8 @@ impl XrefStreamDictInfo<'_> {
 impl XrefStreamP<'_> {
     pub fn new(stream: &StreamT) -> XrefStreamP { XrefStreamP { stream } }
 
+    pub fn stream(&self) -> &StreamT { self.stream }
+
     fn get_dict_info(&self) -> ParseResult<XrefStreamDictInfo> {
         let dict = self.stream.dict();
         let stream_type = dict.val().get_name(b"Type");
@@ -495,38 +497,46 @@ impl ParsleyParser for XrefStreamP<'_> {
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let meta = self.get_dict_info()?;
+        println!("Parsed xref meta for {} objects.", meta.size());
+
+        // Create a parse view on the stream content.
+        let st = self.stream().stream().val();
+        let mut view = RestrictView::new(st.start(), st.size());
+        let mut input : ParseBuffer = view.transform(buf)?;
 
         // This vector is just being used to hoist the view generated
         // by a loop iteration to use as input in the next iteration.
         // There might be a standard idiomatic way of doing this; for
         // now, this seems the simplest that avoids an unsafe block.
         let mut views: Vec<ParseBuffer> = Vec::new();
-        // Selects the input for the iteration
+
+        // Selects the input for the iteration from the view stack.
         fn get_input<'a>(
-            views: &'a mut Vec<ParseBuffer>, buf: &'a mut dyn ParseBufferT,
+            inp: &'a mut dyn ParseBufferT,
+            views: &'a mut Vec<ParseBuffer>
         ) -> &'a mut dyn ParseBufferT {
             if views.is_empty() {
-                buf
+                inp
             } else {
                 let last = views.len() - 1;
                 &mut views[last]
             }
         }
         for filter in &meta.filters {
-            let input = get_input(&mut views, buf);
             let f = filter.name().as_string();
             let mut decoder = match f.as_str() {
                 "FlateDecode" => FlateDecode::new(filter.options()),
-                _ => {
-                    let msg = format!("Cannot handle filter {} in xref stream", f);
+                s => {
+                    let msg = format!("Cannot handle filter {} in xref stream", s);
                     let err = ErrorKind::GuardError(msg);
                     return Err(self.stream.dict().place(err))
                 },
             };
+            let input = get_input(&mut input, &mut views);
             let output = decoder.transform(input)?;
             views.push(output);
         }
-        let input = get_input(&mut views, buf);
+        let input = get_input(&mut input, &mut views);
         let ents = self.parse_stream(input, &meta)?;
         let xref = XrefStreamT::new(Rc::clone(&self.stream.dict()), ents);
         let end = input.get_cursor();
