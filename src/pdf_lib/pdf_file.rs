@@ -81,20 +81,23 @@ impl ParsleyParser for XrefEntP {
         // The offset (inuse case) or next object (free case) is 10 digits.
         let mut inf = buf.extract(10)?;
         let mut infs = String::new();
-        if let Err(_) = inf.read_to_string(&mut infs) {
-            let err = ErrorKind::GuardError("bad xref ofs".to_string());
+        if let Err(e) = inf.read_to_string(&mut infs) {
+            let msg = format!("bad xref offset: {}", e);
+            let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             return Err(locate_value(err, start, end))
         }
         // check if all bytes read are digits
         if infs.matches(&mut |c: char| c.is_ascii_digit()).count() != 10 {
-            let err = ErrorKind::GuardError("bad format for xref ofs".to_string());
+            let msg = format!("bad format for xref offset: {}", infs);
+            let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             return Err(locate_value(err, start, end))
         }
         let info = usize::from_str_radix(&infs, 10);
-        if let Err(_) = info {
-            let err = ErrorKind::GuardError("bad xref ofs conversion".to_string());
+        if let Err(e) = info {
+            let msg = format!("bad xref offset conversion: {}", e);
+            let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             return Err(locate_value(err, start, end))
         }
@@ -106,27 +109,30 @@ impl ParsleyParser for XrefEntP {
         // The generation number is 5 digits.
         let mut gen = buf.extract(5)?;
         let mut gens = String::new();
-        if let Err(_) = gen.read_to_string(&mut gens) {
-            let err = ErrorKind::GuardError("bad xref gen".to_string());
+        if let Err(e) = gen.read_to_string(&mut gens) {
+            let msg = format!("bad xref generation: {}", e);
+            let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             return Err(locate_value(err, start, end))
         }
         // check if all bytes read are digits
         if gens.matches(&mut |c: char| c.is_ascii_digit()).count() != 5 {
-            let err = ErrorKind::GuardError("bad format for xref gen".to_string());
+            let err = ErrorKind::GuardError("bad format for xref generation".to_string());
             let end = buf.get_cursor();
             return Err(locate_value(err, start, end))
         }
         let gen = usize::from_str_radix(&gens, 10);
-        if let Err(_) = gen {
-            let err = ErrorKind::GuardError("bad xref gen".to_string());
+        if let Err(e) = gen {
+            let msg = format!("bad xref generation: {}", e);
+            let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             return Err(locate_value(err, start, end))
         }
         let gen = gen.unwrap();
         // Check generation constraint
         if gen > 65535 {
-            let err = ErrorKind::GuardError("invalid xref gen".to_string());
+            let msg = format!("invalid xref generation: {}", gen);
+            let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             return Err(locate_value(err, start, end))
         }
@@ -196,8 +202,9 @@ impl ParsleyParser for XrefSubSectP {
 
         let mut int = IntegerP;
         let xstart = usize::try_from(int.parse(buf)?.val().int_val());
-        if let Err(_) = xstart {
-            let err = ErrorKind::GuardError("conversion error on xref-subsect start".to_string());
+        if let Err(e) = xstart {
+            let msg = format!("conversion error on xref-subsect start: {}", e);
+            let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             return Err(locate_value(err, start, end))
         }
@@ -205,8 +212,9 @@ impl ParsleyParser for XrefSubSectP {
 
         let _ = buf.exact(b" ")?;
         let xcount = usize::try_from(int.parse(buf)?.val().int_val());
-        if let Err(_) = xcount {
-            let err = ErrorKind::GuardError("conversion error on xref-subsect count".to_string());
+        if let Err(e) = xcount {
+            let msg = format!("conversion error on xref-subsect count: {}", e);
+            let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             return Err(locate_value(err, start, end))
         }
@@ -372,8 +380,9 @@ impl ParsleyParser for XrefSectP {
         let mut ws = WhitespaceEOL::new(true);
         ws.parse(buf)?;
 
-        if let Err(_) = buf.exact(b"xref") {
-            let err = ErrorKind::GuardError("not at xref".to_string());
+        if let Err(e) = buf.exact(b"xref") {
+            let msg = format!("not at xref: {}", e.val());
+            let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             return Err(locate_value(err, start, end))
         }
@@ -388,7 +397,12 @@ impl ParsleyParser for XrefSectP {
         loop {
             let mut p = XrefSubSectP;
             let sect = p.parse(buf);
-            if let Err(_) = sect {
+            if let Err(e) = sect {
+                // If this is an error on the first subsection, report
+                // this error as the result.
+                if sects.len() == 0 {
+                    return Err(e)
+                }
                 break
             }
             sects.push(sect.unwrap());
@@ -465,8 +479,9 @@ impl ParsleyParser for TrailerP<'_> {
     // This assumes we are positioned at 'trailer'.
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
-        if let Err(_) = buf.exact(b"trailer") {
-            let err = ErrorKind::GuardError("not at trailer".to_string());
+        if let Err(e) = buf.exact(b"trailer") {
+            let msg = format!("not at trailer: {}", e.val());
+            let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             return Err(locate_value(err, start, end))
         }
@@ -506,8 +521,9 @@ impl ParsleyParser for StartXrefP {
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
 
-        if let Err(_) = buf.exact(b"startxref") {
-            let err = ErrorKind::GuardError("not at startxref".to_string());
+        if let Err(e) = buf.exact(b"startxref") {
+            let msg = format!("not at startxref: {}", e.val());
+            let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             return Err(locate_value(err, start, end))
         }
@@ -516,8 +532,9 @@ impl ParsleyParser for StartXrefP {
 
         let mut int = IntegerP;
         let offset = usize::try_from(int.parse(buf)?.val().int_val());
-        if let Err(_) = offset {
-            let err = ErrorKind::GuardError("conversion error on startxref".to_string());
+        if let Err(e) = offset {
+            let msg = format!("conversion error on startxref: {}", e);
+            let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             return Err(locate_value(err, start, end))
         }
@@ -614,7 +631,7 @@ mod test_pdf_file {
         assert_eq!(
             ent,
             Err(LocatedVal::new(
-                ErrorKind::GuardError("invalid xref gen".to_string()),
+                ErrorKind::GuardError("invalid xref generation: 65536".to_string()),
                 0,
                 16
             ))
