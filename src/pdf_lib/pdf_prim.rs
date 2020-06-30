@@ -442,11 +442,19 @@ impl ParsleyParser for RawLiteralString {
                 Some(40) => {
                     // '('
                     buf.incr_cursor();
+                    // distinguish an escaped '(', ensuring the escape
+                    // itself is not escaped.
                     if let Some(last) = bytes.last() {
                         let escaped = *last == 92; // '\' escaped '('
+                        let escaped_escape =
+                            if bytes.len() >= 2 {
+                                bytes.get(bytes.len() - 2) == Some(&92)
+                            } else {
+                                false
+                            };
                         v.extend_from_slice(&bytes);
                         v.extend_from_slice(b"(");
-                        if !escaped {
+                        if !escaped | escaped_escape {
                             depth += 1
                         }
                     } else {
@@ -458,10 +466,18 @@ impl ParsleyParser for RawLiteralString {
                 Some(41) => {
                     // ')'
                     buf.incr_cursor();
+                    // distinguish an escaped ')', ensuring the escape
+                    // itself is not escaped.
                     if let Some(last) = bytes.last() {
                         let escaped = *last == 92;
+                        let escaped_escape =
+                            if bytes.len() >= 2 {
+                                bytes.get(bytes.len() - 2) == Some(&92)
+                            } else {
+                                false
+                            };
                         v.extend_from_slice(&bytes);
-                        if !escaped {
+                        if !escaped | escaped_escape {
                             depth -= 1;
                             if depth == 0 {
                                 break
@@ -1213,6 +1229,24 @@ mod test_pdf_prim {
             Ok(LocatedVal::new(Vec::from("1a\\(90\\)".as_bytes()), 0, 10))
         );
         assert_eq!(pb.get_cursor(), 10);
+
+        // escaped escapes
+
+        let v = Vec::from("(1a90\\\\) ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(
+            lit.parse(&mut pb),
+            Ok(LocatedVal::new(Vec::from("1a90\\\\".as_bytes()), 0, 10))
+        );
+        assert_eq!(pb.get_cursor(), 8);
+
+        let v = Vec::from("(1a\\\\(90\\\\)) ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(
+            lit.parse(&mut pb),
+            Ok(LocatedVal::new(Vec::from("1a\\\\(90\\\\)".as_bytes()), 0, 10))
+        );
+        assert_eq!(pb.get_cursor(), 12);
     }
 
     #[test]
