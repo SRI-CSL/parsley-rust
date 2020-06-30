@@ -296,7 +296,7 @@ fn get_xref_info(
     if xrefs.is_none() {
         exit_log!(
             fi.file_offset(cursor),
-            "No xref information found at startxref."
+            "No valid xref information found at startxref."
         )
     }
     let xrstrms = xrefs.unwrap();
@@ -345,8 +345,15 @@ fn info_from_xref_entries(fi: &FileInfo, xref_ents: &[LocatedVal<XrefEntT>]) -> 
                 ta3_log!(
                     Level::Info,
                     fi.file_offset(o.loc_start()),
-                    "   inuse object at {}.",
-                    *file_ofs
+                    "   inuse object ({},{}) at {}{}.",
+                    ent.obj(),
+                    ent.gen(),
+                    *file_ofs,
+                    if *file_ofs == 0 {
+                        " (possibly invalid entry)"
+                    } else {
+                        ""
+                    }
                 );
                 id_offsets.push(ObjInfo {
                     id:  ent.obj(),
@@ -379,9 +386,10 @@ fn parse_objects(
         ta3_log!(
             Level::Info,
             fi.file_offset(ofs),
-            "parsing object ({},{}) at file-offset {} (pdf-offset {})",
+            "parsing object ({},{}) at {}file-offset {} (pdf-offset {})",
             id,
             gen,
+            if ofs == 0 { "(possibly invalid) " } else { "" },
             fi.file_offset(ofs),
             ofs
         );
@@ -390,7 +398,9 @@ fn parse_objects(
         if let Err(e) = lobj {
             exit_log!(
                 fi.file_offset(e.start()),
-                "Cannot parse object at file-offset {} (pdf-offset {}) in {}: {}",
+                "Cannot parse object ({},{}) at file-offset {} (pdf-offset {}) in {}: {}",
+                id,
+                gen,
                 fi.file_offset(e.start()),
                 e.start(),
                 fi.display(),
