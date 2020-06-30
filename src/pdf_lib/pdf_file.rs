@@ -485,7 +485,7 @@ impl ParsleyParser for TrailerP<'_> {
             let end = buf.get_cursor();
             return Err(locate_value(err, start, end))
         }
-        let mut ws = WhitespaceEOL::new(false); // need to consume an EOL
+        let mut ws = WhitespaceEOL::new(true); // optional whitespace
         ws.parse(buf)?;
 
         let mut dp = DictP::new(&mut self.ctxt);
