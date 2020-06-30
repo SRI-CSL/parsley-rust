@@ -51,6 +51,7 @@ impl ParsleyPrimitive for AsciiCharPrimitive {
     }
 }
 
+
 // Convenience wrappers around the primitive interfaces, that allow
 // use with the primitive combinators.
 
@@ -105,6 +106,7 @@ mod test_prim_ascii {
         let r = <AsciiCharPrimitive as ParsleyPrimitive>::parse(&w);
         assert_eq!(r, Ok(('A', 1)));
     }
+
 
     #[test]
     fn empty() {

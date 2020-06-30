@@ -27,6 +27,18 @@ pub struct Sequence<'a, P1: ParsleyParser, P2: ParsleyParser> {
     p2: &'a mut P2,
 }
 
+// TODO: Make Sequences arbitrary length
+pub struct NewSequence<'a, P: ParsleyParser> {
+    p: &'a mut Vec<P>,
+}
+
+//impl<'a, P> NewSequence<'a, P>
+//where 
+    //P: Vec<ParsleyParser>,
+//{
+    //pub fn new(p: &'a mut P) -> NewSequence<'a, P> {NewSequence { p } }
+//}
+
 impl<'a, P1, P2> Sequence<'a, P1, P2>
 where
     P1: ParsleyParser,

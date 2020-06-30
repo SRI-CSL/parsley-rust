@@ -16,8 +16,23 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+extern crate byteorder; // 1.3.1
+extern crate num_bigint;
+use byteorder::{ByteOrder, BigEndian};
 /// Primitives for handling binary data.
-use super::parsebuffer::{LocatedVal, ParseBufferT, ParseResult, ParsleyParser};
+use super::parsebuffer::{ParsleyParser, ParseBuffer, ParseResult, LocatedVal, ErrorKind, ParseBufferT};
+use std::slice;
+use bit_vec::BitVec;
+use bit_set::BitSet;
+
+// function to report located errors with sensible location
+pub fn make_error(val: ErrorKind, s: usize, e: usize) -> LocatedVal<ErrorKind> {
+    if s < e {
+        LocatedVal::new(val, s, e)
+    } else {
+        LocatedVal::new(val, e, s)
+    }
+}
 
 pub struct BinaryScanner {
     tag: Vec<u8>,
@@ -75,25 +90,484 @@ impl ParsleyParser for BinaryMatcher {
    For now, just do the inefficient thing and copy the data, until
    we properly grok lifetimes and traits.
 
-pub struct BinaryBuffer {
-    len: usize,
-    phantom: PhantomData<&'a [u8]>
+   pub struct BinaryBuffer {
+   len: usize,
+   phantom: PhantomData<&'a [u8]>
+   }
+
+   impl<'a> BinaryBuffer<'a> {
+   pub fn new(len: usize) -> BinaryBuffer<'a> {
+   BinaryBuffer { len, phantom: PhantomData }
+   }
+   }
+
+   impl<'a> ParsleyParser for BinaryBuffer<'a> {
+   type T<'a> = &'a [u8];
+
+   fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
+   buf.extract(self.len)
+   }
+   }
+   */
+
+
+pub struct ABigInt {
 }
 
-impl<'a> BinaryBuffer<'a> {
-    pub fn new(len: usize) -> BinaryBuffer<'a> {
-        BinaryBuffer { len, phantom: PhantomData }
+impl ABigInt {
+    pub fn new() -> ABigInt {
+        ABigInt { }
     }
 }
 
-impl<'a> ParsleyParser for BinaryBuffer<'a> {
-    type T<'a> = &'a [u8];
+impl ParsleyParser for ABigInt {
+    type T = LocatedVal<Vec<num_bigint::BigUint>>;
 
-    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
-        buf.extract(self.len)
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let len  = buf.scan(" ".as_bytes())?;
+
+        if len == 0 {
+            buf.set_cursor(start);
+            return Err(make_error(ErrorKind::EndOfBuffer, 0, 0));;
+        }
+        let mut ret = Vec::new();
+        let end = buf.get_cursor();
+        let start_cursor = buf.set_cursor(start);
+        use num_bigint::BigUint;
+        let err = ErrorKind::EndOfBuffer;
+        let mut bytes = buf.extract(len);
+        match &mut bytes {
+            Ok(val) => { 
+                match std::str::from_utf8(val) {
+                    Ok(v) => {
+                        ret.push(BigUint::from_bytes_be(v.as_bytes())); 
+                    }
+                    Err(v) => { make_error(err, start, start); }
+                }
+            }
+            Err(val) => { make_error(err, start, start); }
+        }
+        Ok(LocatedVal::new(ret, start, end))
     }
 }
-*/
+pub struct CharParser {
+    arg: char
+}
+
+impl CharParser {
+    pub fn new(arg: char) -> CharParser {
+        CharParser { arg }
+    }
+}
+
+impl ParsleyParser for CharParser {
+    type T = LocatedVal<Vec<u8>>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let bytes = buf.extract(1)?;
+        let mut ret = Vec::new();
+        let mut cmp = self.arg as u8; // type cast to an integer
+        ret.extend_from_slice(bytes);
+        let end = buf.get_cursor();
+        if cmp == ret[0]
+        {
+            Ok(LocatedVal::new(ret, start, end))
+        }
+        else
+        {
+            panic!("Parsing failed, expected {:?} but got {:?}", cmp, ret[0]); 
+            //Ok(LocatedVal::new(ret, start, end))
+        }
+    }
+}
+
+pub struct TokenParser<'a> {
+    arg: &'a str,
+    len: usize
+}
+
+impl TokenParser<'_> {
+    pub fn new<'a>(arg: &'a str, len: usize) -> TokenParser {
+        // TODO: verify the two lengths
+        TokenParser { arg, len }
+    }
+}
+
+impl ParsleyParser for TokenParser<'_> {
+    type T = LocatedVal<Vec<u8>>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let bytes = buf.extract(self.len)?;
+        let mut ret = Vec::new();
+        let mut cmp = self.arg.to_string().into_bytes();
+        ret.extend_from_slice(bytes);
+        let end = buf.get_cursor();
+        assert_eq!(cmp, ret, "TokenParser failed :{:?} and {:?} did not match.", cmp, ret);
+        Ok(LocatedVal::new(ret, start, end))
+    }
+}
+
+pub struct IntObj7 {
+}
+
+impl IntObj7 {
+    pub fn new() -> IntObj7 {
+        IntObj7 {}
+    }
+}
+
+impl ParsleyParser for IntObj7 {
+    type T = LocatedVal<Vec<u8>>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let mut bytes = buf.extract(1)?;
+        let other = BitSet::from_bytes(&[bytes[0]]);
+        let mut bv = other.into_bit_vec();
+        let end = buf.get_cursor();
+        let mut result: Vec<u8> = Vec::new();
+        for i in 0..7 {
+            if bv[i] == true
+            {
+                result.push(1)
+            }
+            else
+            {
+                result.push(0)
+            }
+        }
+
+        Ok(LocatedVal::new(result, start, end))
+    }
+}
+
+pub struct IntObj6 {
+}
+
+impl IntObj6 {
+    pub fn new() -> IntObj6 {
+        IntObj6 {}
+    }
+}
+
+impl ParsleyParser for IntObj6 {
+    type T = LocatedVal<Vec<u8>>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let mut bytes = buf.extract(1)?;
+        let other = BitSet::from_bytes(&[bytes[0]]);
+        let mut bv = other.into_bit_vec();
+        let end = buf.get_cursor();
+        let mut result: Vec<u8> = Vec::new();
+        for i in 0..6 {
+            if bv[i] == true
+            {
+                result.push(1)
+            }
+            else
+            {
+                result.push(0)
+            }
+        }
+
+        Ok(LocatedVal::new(result, start, end))
+    }
+}
+pub struct IntObj5 {
+}
+
+impl IntObj5 {
+    pub fn new() -> IntObj5 {
+        IntObj5 {}
+    }
+}
+
+impl ParsleyParser for IntObj5 {
+    type T = LocatedVal<Vec<u8>>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let mut bytes = buf.extract(1)?;
+        let other = BitSet::from_bytes(&[bytes[0]]);
+        let mut bv = other.into_bit_vec();
+        let end = buf.get_cursor();
+        let mut result: Vec<u8> = Vec::new();
+        for i in 0..5 {
+            if bv[i] == true
+            {
+                result.push(1)
+            }
+            else
+            {
+                result.push(0)
+            }
+        }
+
+        Ok(LocatedVal::new(result, start, end))
+    }
+}
+pub struct IntObj4 {
+}
+
+impl IntObj4 {
+    pub fn new() -> IntObj4 {
+        IntObj4 {}
+    }
+}
+
+impl ParsleyParser for IntObj4 {
+    type T = LocatedVal<Vec<u8>>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let mut bytes = buf.extract(1)?;
+        let other = BitSet::from_bytes(&[bytes[0]]);
+        let mut bv = other.into_bit_vec();
+        let end = buf.get_cursor();
+        let mut result: Vec<u8> = Vec::new();
+        for i in 0..4 {
+            if bv[i] == true
+            {
+                result.push(1)
+            }
+            else
+            {
+                result.push(0)
+            }
+        }
+
+        Ok(LocatedVal::new(result, start, end))
+    }
+}
+pub struct IntObj3 {
+}
+
+impl IntObj3 {
+    pub fn new() -> IntObj3 {
+        IntObj3 {}
+    }
+}
+
+impl ParsleyParser for IntObj3 {
+    type T = LocatedVal<Vec<u8>>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let mut bytes = buf.extract(1)?;
+        let other = BitSet::from_bytes(&[bytes[0]]);
+        let mut bv = other.into_bit_vec();
+        let end = buf.get_cursor();
+        let mut result: Vec<u8> = Vec::new();
+        for i in 0..3 {
+            if bv[i] == true
+            {
+                result.push(1)
+            }
+            else
+            {
+                result.push(0)
+            }
+        }
+
+        Ok(LocatedVal::new(result, start, end))
+    }
+}
+pub struct IntObj2 {
+}
+
+impl IntObj2 {
+    pub fn new() -> IntObj2 {
+        IntObj2 {}
+    }
+}
+
+impl ParsleyParser for IntObj2 {
+    type T = LocatedVal<Vec<u8>>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let mut bytes = buf.extract(1)?;
+        let other = BitSet::from_bytes(&[bytes[0]]);
+        let mut bv = other.into_bit_vec();
+        let end = buf.get_cursor();
+        let mut result: Vec<u8> = Vec::new();
+        for i in 0..2 {
+            if bv[i] == true
+            {
+                result.push(1)
+            }
+            else
+            {
+                result.push(0)
+            }
+        }
+
+        Ok(LocatedVal::new(result, start, end))
+    }
+}
+
+pub struct IntObj1 {
+}
+
+impl IntObj1 {
+    pub fn new() -> IntObj1 {
+        IntObj1 {}
+    }
+}
+impl ParsleyParser for IntObj1 {
+    type T = LocatedVal<Vec<u8>>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let mut bytes = buf.extract(1)?;
+        let other = BitSet::from_bytes(&[bytes[0]]);
+        let mut bv = other.into_bit_vec();
+        let end = buf.get_cursor();
+        let mut result: Vec<u8> = Vec::new();
+        for i in 0..1 {
+            if bv[i] == true
+            {
+                result.push(1)
+            }
+            else
+            {
+                result.push(0)
+            }
+        }
+        Ok(LocatedVal::new(result, start, end))
+    }
+}
+
+pub struct IntObj128 {
+}
+
+impl IntObj128 {
+    pub fn new() -> IntObj128 {
+        IntObj128 {}
+    }
+}
+
+impl ParsleyParser for IntObj128 {
+    type T = LocatedVal<Vec<u128>>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let mut bytes = buf.extract(16)?;
+        let mut result: Vec<u128> = Vec::new();
+        // Convert and extract a 32 bit integer?
+        for i in (0..16).step_by(16) {
+            result.push(BigEndian::read_u128(&bytes[i..]));
+        }
+        let end = buf.get_cursor();
+
+        Ok(LocatedVal::new(result, start, end))
+    }
+}
+pub struct IntObj64 {
+}
+
+impl IntObj64 {
+    pub fn new() -> IntObj64 {
+        IntObj64 {}
+    }
+}
+
+impl ParsleyParser for IntObj64 {
+    type T = LocatedVal<Vec<u64>>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let mut bytes = buf.extract(8)?;
+        let mut result: Vec<u64> = Vec::new();
+        // Convert and extract a 32 bit integer?
+        for i in (0..8).step_by(8) {
+            result.push(BigEndian::read_u64(&bytes[i..]));
+        }
+        let end = buf.get_cursor();
+
+        Ok(LocatedVal::new(result, start, end))
+    }
+}
+pub struct IntObj32 {
+}
+
+impl IntObj32 {
+    pub fn new() -> IntObj32 {
+        IntObj32 {}
+    }
+}
+
+impl ParsleyParser for IntObj32 {
+    type T = LocatedVal<Vec<u32>>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let mut bytes = buf.extract(4)?;
+        let mut result: Vec<u32> = Vec::new();
+        // Convert and extract a 32 bit integer?
+        for i in (0..4).step_by(4) {
+            result.push(BigEndian::read_u32(&bytes[i..]));
+        }
+        let end = buf.get_cursor();
+
+        Ok(LocatedVal::new(result, start, end))
+    }
+}
+
+pub struct IntObj16 {
+}
+
+impl IntObj16 {
+    pub fn new() -> IntObj16 {
+        IntObj16 {}
+    }
+}
+
+impl ParsleyParser for IntObj16 {
+    type T = LocatedVal<Vec<u16>>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let mut bytes = buf.extract(2)?;
+        let mut result: Vec<u16> = Vec::new();
+        let mut dst = [0; 1];
+        // Convert and extract a 16 bit integer?
+        for i in (0..2).step_by(2) {
+            result.push(BigEndian::read_u16(&bytes[i..]));
+        }
+        //println!("{:?}", result);
+        let end = buf.get_cursor();
+
+        Ok(LocatedVal::new(result, start, end))
+    }
+}
+pub struct IntObj8 {
+}
+
+impl IntObj8 {
+    pub fn new() -> IntObj8 {
+        IntObj8 {}
+    }
+}
+
+impl ParsleyParser for IntObj8 {
+    type T = LocatedVal<Vec<u8>>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let mut bytes = buf.extract(1)?;
+        let mut result: Vec<u8> = Vec::new();
+        // Convert and extract a 8 bit integer?
+        result.push(bytes[0]);
+        let end = buf.get_cursor();
+
+        Ok(LocatedVal::new(result, start, end))
+    }
+}
 
 pub struct BinaryBuffer {
     len: usize,
@@ -164,6 +638,115 @@ mod test_binary {
         let e = locate_value(ErrorKind::GuardError("match".to_string()), 0, 0);
         assert_eq!(s.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
+    }
+
+    #[test]
+    fn test_integers() {
+        let mut s = IntObj8::new();
+        let mut pb = ParseBuffer::new(Vec::from("\x05".as_bytes()));
+        let mut val = vec![5];
+        let mut e = Ok(LocatedVal::new(val, 0, 1));
+        assert_eq!(s.parse(&mut pb), e);
+
+        let mut s = IntObj8::new();
+        let mut pb = ParseBuffer::new(Vec::from("\x05".as_bytes()));
+        let mut val = vec![3];
+        let mut e = Ok(LocatedVal::new(val, 0, 2));
+        assert_ne!(s.parse(&mut pb), e);
+
+        let mut s = IntObj16::new();
+        let mut pb = ParseBuffer::new(Vec::from("\x00\x05".as_bytes()));
+        let mut val = vec![5];
+        let mut e = Ok(LocatedVal::new(val, 0, 2));
+        assert_eq!(s.parse(&mut pb), e);
+
+        let mut s = IntObj16::new();
+        let mut pb = ParseBuffer::new(Vec::from("\x00\x05".as_bytes()));
+        let mut val = vec![3];
+        let mut e = Ok(LocatedVal::new(val, 0, 2));
+        assert_ne!(s.parse(&mut pb), e);
+
+        let mut s = IntObj32::new();
+        let mut pb = ParseBuffer::new(Vec::from("\x00\x00\x00\x05".as_bytes()));
+        let mut val = vec![5];
+        let mut e = Ok(LocatedVal::new(val, 0, 2));
+        assert_eq!(s.parse(&mut pb), e);
+
+        let mut s = IntObj32::new();
+        let mut pb = ParseBuffer::new(Vec::from("\x00\x00\x00\x05".as_bytes()));
+        let mut val = vec![3];
+        let mut e = Ok(LocatedVal::new(val, 0, 2));
+        assert_ne!(s.parse(&mut pb), e);
+
+        let mut s = IntObj64::new();
+        let mut pb = ParseBuffer::new(Vec::from("\x00\x00\x00\x00\x00\x00\x00\x05".as_bytes()));
+        let mut val = vec![5];
+        let mut e = Ok(LocatedVal::new(val, 0, 8));
+        assert_eq!(s.parse(&mut pb), e);
+
+        let mut s = IntObj64::new();
+        let mut pb = ParseBuffer::new(Vec::from("\x00\x00\x00\x00\x00\x00\x00\x05".as_bytes()));
+        let mut val = vec![3];
+        let mut e = Ok(LocatedVal::new(val, 0, 8));
+        assert_ne!(s.parse(&mut pb), e);
+
+        let mut s = IntObj128::new();
+        let mut pb = ParseBuffer::new(Vec::from("\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x05".as_bytes()));
+        let mut val = vec![5];
+        let mut e = Ok(LocatedVal::new(val, 0, 16));
+        assert_eq!(s.parse(&mut pb), e);
+
+        let mut s = IntObj128::new();
+        let mut pb = ParseBuffer::new(Vec::from("\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x05".as_bytes()));
+        let mut val = vec![3];
+        let mut e = Ok(LocatedVal::new(val, 0, 16));
+        assert_ne!(s.parse(&mut pb), e);
+    }
+
+    #[test]
+    fn char_parser() {
+        let mut character = CharParser::new('\x00');
+        let mut v: Vec<u8> = Vec::new();
+        v.extend_from_slice("\x00".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let val = vec![0];
+        let mut e = Ok(LocatedVal::new(val, 0, 1));
+        assert_eq!(character.parse(&mut pb), e);
+    }
+
+    #[test]    
+    #[should_panic]
+    fn char_fail_parser() {
+        let mut character = CharParser::new('\x00');
+        let mut v: Vec<u8> = Vec::new();
+        v.extend_from_slice("\x01".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let val = vec![0];
+        let mut e = Ok(LocatedVal::new(val, 0, 1));
+        assert_ne!(character.parse(&mut pb), e);
+    }
+
+    #[test]
+    fn token_parser() {
+        let mut character = TokenParser::new("\x01\x05\x06", 3);
+        let mut v: Vec<u8> = Vec::new();
+        v.extend_from_slice("\x01\x05\x06".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let val = vec![1, 5, 6];
+        let mut e = Ok(LocatedVal::new(val, 0, 1));
+        assert_eq!(character.parse(&mut pb), e);
+    }
+
+    #[test]
+    #[should_panic]
+    fn token_fail_parser() {
+        let mut character = TokenParser::new("\x01\x04\x06", 3);
+        let mut v: Vec<u8> = Vec::new();
+        v.extend_from_slice("\x01\x05\x06".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let val = vec![1, 5, 6];
+        let mut e = Ok(LocatedVal::new(val, 0, 1));
+        assert_ne!(character.parse(&mut pb), e);
     }
 
     #[test]
