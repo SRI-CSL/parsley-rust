@@ -446,63 +446,78 @@ impl ParsleyParser for RawLiteralString {
             return Err(LocatedVal::new(err, start, start))
         };
 
-        let mut v = Vec::new();
+        // match the backslashes and parens we see
+        let mut last_slash : Option<usize> = None;
         let mut depth = 1;
-        buf.incr_cursor();
 
+        buf.incr_cursor();
+        let mut v = Vec::new();
         loop {
-            let bytes = buf.parse_bytes_until(b"()")?;
+            let bytes = buf.parse_bytes_until(b"()\\")?;
             match buf.peek() {
                 Some(40) => {
                     // '('
+                    let curpos = buf.get_cursor();
                     buf.incr_cursor();
-                    // distinguish an escaped '(', ensuring the escape
-                    // itself is not escaped.
-                    if let Some(last) = bytes.last() {
-                        let escaped = *last == 92; // '\' escaped '('
-                        let escaped_escape = if bytes.len() >= 2 {
-                            bytes.get(bytes.len() - 2) == Some(&92)
-                        } else {
-                            false
-                        };
-                        v.extend_from_slice(&bytes);
-                        v.extend_from_slice(b"(");
-                        if !escaped | escaped_escape {
-                            depth += 1
+                    v.extend_from_slice(&bytes);
+                    v.extend_from_slice(b"(");
+
+                    match last_slash {
+                        Some(pos) if pos + 1 == curpos => {
+                            // this is an escaped paren
+                        },
+                        _ => {
+                            // this is not an escaped paren
+                            depth += 1;
+                            // reset the slash state
+                            last_slash = None
                         }
-                    } else {
-                        depth += 1; // unescaped '('
-                        v.extend_from_slice(&bytes);
-                        v.extend_from_slice(b"(");
                     }
                 },
                 Some(41) => {
                     // ')'
+                    let curpos = buf.get_cursor();
                     buf.incr_cursor();
-                    // distinguish an escaped ')', ensuring the escape
-                    // itself is not escaped.
-                    if let Some(last) = bytes.last() {
-                        let escaped = *last == 92;
-                        let escaped_escape = if bytes.len() >= 2 {
-                            bytes.get(bytes.len() - 2) == Some(&92)
-                        } else {
-                            false
-                        };
-                        v.extend_from_slice(&bytes);
-                        if !escaped | escaped_escape {
+                    v.extend_from_slice(&bytes);
+
+                    // append the ')' only if it does not terminate the string.
+                    match last_slash {
+                        Some(pos) if pos + 1 == curpos => {
+                            // this is an escaped paren
+                        },
+                        _ => {
                             depth -= 1;
                             if depth == 0 {
+                                // this terminates the string, so break the loop
                                 break
+                            } else {
+                                // reset the slash state as optimization
+                                last_slash = None
                             }
                         }
-                        v.extend_from_slice(b")");
-                    } else {
-                        v.extend_from_slice(&bytes);
-                        depth -= 1;
-                        if depth == 0 {
-                            break
-                        }
-                        v.extend_from_slice(b")");
+                    };
+                    v.extend_from_slice(b")");
+                },
+                Some(92) => {
+                    // '\'
+                    let curpos = buf.get_cursor();
+                    buf.incr_cursor();
+                    v.extend_from_slice(&bytes);
+                    v.extend_from_slice(b"\\");
+
+                    // Toggle the backslash state.
+                    match last_slash {
+                        Some(pos) =>
+                            if pos + 1 == curpos {
+                                // this is a \\, so reset the state.
+                                last_slash = None
+                            } else {
+                                // we're beginning a new escape.
+                                last_slash = Some(curpos)
+                            }
+                        None =>
+                            // we're beginning a new escape.
+                            last_slash = Some(curpos)
                     }
                 },
                 Some(_) => {
@@ -1241,8 +1256,23 @@ mod test_pdf_prim {
             Ok(LocatedVal::new(Vec::from("1a\\(90\\)".as_bytes()), 0, 10))
         );
         assert_eq!(pb.get_cursor(), 10);
+    }
 
-        // escaped escapes
+    #[test]
+    fn raw_lit_string_escaped_escapes() {
+        let mut lit = RawLiteralString;
+
+        let v = Vec::from("(1a\\\\\\(90\\\\) ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(
+            lit.parse(&mut pb),
+            Ok(LocatedVal::new(
+                Vec::from("1a\\\\\\(90\\\\".as_bytes()),
+                0,
+                10
+            ))
+        );
+        assert_eq!(pb.get_cursor(), 12);
 
         let v = Vec::from("(1a90\\\\) ".as_bytes());
         let mut pb = ParseBuffer::new(v);
