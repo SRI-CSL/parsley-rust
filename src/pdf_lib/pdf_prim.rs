@@ -249,17 +249,31 @@ impl ParsleyParser for IntegerP {
 // Real objects.
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct RealT(i64, i64); // rational number representation: (numerator, denominator)
+pub struct RealT(i128, i128); // rational number representation: (numerator, denominator)
 
 impl RealT {
-    pub fn new(n: i64, d: i64) -> RealT { RealT(n, d) }
+    pub fn new(n: i128, d: i128) -> RealT { RealT(n, d) }
 
     pub fn is_positive(&self) -> bool { self.0 >= 0 }
     pub fn is_zero(&self) -> bool { self.0 == 0 }
-    pub fn is_integer(&self) -> bool { self.1 == 1 }
-    // FIXME: this is a hacky way to implement integer conversion.
-    // It's done this way so that we don't have to panic.
-    pub fn numerator(&self) -> i64 { self.0 }
+
+    // This predicate needs to return true when the value is
+    // representable by IntegerT.
+    pub fn is_integer(&self) -> bool {
+        // for now, just ensure denominator is 1, and numerator is
+        // representable.  this should handle almost all cases.
+        let conv = <i64 as TryFrom<i128>>::try_from(self.0);
+        if conv.is_ok() {
+            self.1 == 1
+        } else {
+            false
+        }
+    }
+
+    pub fn numerator(&self) -> i64 {
+        let conv = <i64 as TryFrom<i128>>::try_from(self.0);
+        conv.unwrap()
+    }
 }
 
 pub struct RealP;
@@ -287,9 +301,9 @@ impl ParsleyParser for RealP {
             buf.set_cursor(start);
             return Err(locate_value(err, start, end))
         }
-        let mut num: i64 = 0;
+        let mut num: i128 = 0;
         for c in num_str.iter() {
-            let tmp = i64::checked_mul(num, 10);
+            let tmp = i128::checked_mul(num, 10);
             if let None = tmp {
                 let end = buf.get_cursor();
                 let err = ErrorKind::GuardError("numerical overflow".to_string());
@@ -297,7 +311,7 @@ impl ParsleyParser for RealP {
                 return Err(locate_value(err, start, end))
             }
             num = tmp.unwrap();
-            let tmp = i64::checked_add(num, i64::from(c - 48));
+            let tmp = i128::checked_add(num, i128::from(c - 48));
             if let None = tmp {
                 let end = buf.get_cursor();
                 let err = ErrorKind::GuardError("numerical overflow".to_string());
@@ -308,12 +322,12 @@ impl ParsleyParser for RealP {
         }
         if buf.peek() == Some(46) {
             // '.'
-            let mut den: i64 = 1;
+            let mut den: i128 = 1;
             buf.incr_cursor();
             let s = buf.parse_allowed_bytes(b"0123456789");
             if let Ok(den_str) = s {
                 for c in den_str.iter() {
-                    let tmp = i64::checked_mul(num, 10);
+                    let tmp = i128::checked_mul(num, 10);
                     if let None = tmp {
                         let end = buf.get_cursor();
                         let err = ErrorKind::GuardError("numerical overflow".to_string());
@@ -321,7 +335,7 @@ impl ParsleyParser for RealP {
                         return Err(locate_value(err, start, end))
                     }
                     num = tmp.unwrap();
-                    let tmp = i64::checked_add(num, i64::from(c - 48));
+                    let tmp = i128::checked_add(num, i128::from(c - 48));
                     if let None = tmp {
                         let end = buf.get_cursor();
                         let err = ErrorKind::GuardError("numerical overflow".to_string());
@@ -329,7 +343,7 @@ impl ParsleyParser for RealP {
                         return Err(locate_value(err, start, end))
                     }
                     num = tmp.unwrap();
-                    let tmp = i64::checked_mul(den, 10);
+                    let tmp = i128::checked_mul(den, 10);
                     if let None = tmp {
                         let end = buf.get_cursor();
                         let err = ErrorKind::GuardError("numerical overflow".to_string());
