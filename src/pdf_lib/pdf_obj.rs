@@ -332,7 +332,7 @@ impl ReferenceP {
 
         let mut cursor = buf.get_cursor();
         let num = int.parse(buf)?;
-        if !num.val().is_positive() {
+        if !(num.val().is_zero() || num.val().is_positive()) {
             let msg = format!("invalid ref-object id: {}", num.val().int_val());
             let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();

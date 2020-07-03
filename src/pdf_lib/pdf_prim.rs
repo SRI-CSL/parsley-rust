@@ -249,17 +249,31 @@ impl ParsleyParser for IntegerP {
 // Real objects.
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct RealT(i64, i64); // rational number representation: (numerator, denominator)
+pub struct RealT(i128, i128); // rational number representation: (numerator, denominator)
 
 impl RealT {
-    pub fn new(n: i64, d: i64) -> RealT { RealT(n, d) }
+    pub fn new(n: i128, d: i128) -> RealT { RealT(n, d) }
 
     pub fn is_positive(&self) -> bool { self.0 >= 0 }
     pub fn is_zero(&self) -> bool { self.0 == 0 }
-    pub fn is_integer(&self) -> bool { self.1 == 1 }
-    // FIXME: this is a hacky way to implement integer conversion.
-    // It's done this way so that we don't have to panic.
-    pub fn numerator(&self) -> i64 { self.0 }
+
+    // This predicate needs to return true when the value is
+    // representable by IntegerT.
+    pub fn is_integer(&self) -> bool {
+        // for now, just ensure denominator is 1, and numerator is
+        // representable.  this should handle almost all cases.
+        let conv = <i64 as TryFrom<i128>>::try_from(self.0);
+        if conv.is_ok() {
+            self.1 == 1
+        } else {
+            false
+        }
+    }
+
+    pub fn numerator(&self) -> i64 {
+        let conv = <i64 as TryFrom<i128>>::try_from(self.0);
+        conv.unwrap()
+    }
 }
 
 pub struct RealP;
@@ -287,9 +301,9 @@ impl ParsleyParser for RealP {
             buf.set_cursor(start);
             return Err(locate_value(err, start, end))
         }
-        let mut num: i64 = 0;
+        let mut num: i128 = 0;
         for c in num_str.iter() {
-            let tmp = i64::checked_mul(num, 10);
+            let tmp = i128::checked_mul(num, 10);
             if let None = tmp {
                 let end = buf.get_cursor();
                 let err = ErrorKind::GuardError("numerical overflow".to_string());
@@ -297,7 +311,7 @@ impl ParsleyParser for RealP {
                 return Err(locate_value(err, start, end))
             }
             num = tmp.unwrap();
-            let tmp = i64::checked_add(num, i64::from(c - 48));
+            let tmp = i128::checked_add(num, i128::from(c - 48));
             if let None = tmp {
                 let end = buf.get_cursor();
                 let err = ErrorKind::GuardError("numerical overflow".to_string());
@@ -308,12 +322,12 @@ impl ParsleyParser for RealP {
         }
         if buf.peek() == Some(46) {
             // '.'
-            let mut den: i64 = 1;
+            let mut den: i128 = 1;
             buf.incr_cursor();
             let s = buf.parse_allowed_bytes(b"0123456789");
             if let Ok(den_str) = s {
                 for c in den_str.iter() {
-                    let tmp = i64::checked_mul(num, 10);
+                    let tmp = i128::checked_mul(num, 10);
                     if let None = tmp {
                         let end = buf.get_cursor();
                         let err = ErrorKind::GuardError("numerical overflow".to_string());
@@ -321,7 +335,7 @@ impl ParsleyParser for RealP {
                         return Err(locate_value(err, start, end))
                     }
                     num = tmp.unwrap();
-                    let tmp = i64::checked_add(num, i64::from(c - 48));
+                    let tmp = i128::checked_add(num, i128::from(c - 48));
                     if let None = tmp {
                         let end = buf.get_cursor();
                         let err = ErrorKind::GuardError("numerical overflow".to_string());
@@ -329,7 +343,7 @@ impl ParsleyParser for RealP {
                         return Err(locate_value(err, start, end))
                     }
                     num = tmp.unwrap();
-                    let tmp = i64::checked_mul(den, 10);
+                    let tmp = i128::checked_mul(den, 10);
                     if let None = tmp {
                         let end = buf.get_cursor();
                         let err = ErrorKind::GuardError("numerical overflow".to_string());
@@ -432,49 +446,78 @@ impl ParsleyParser for RawLiteralString {
             return Err(LocatedVal::new(err, start, start))
         };
 
-        let mut v = Vec::new();
+        // match the backslashes and parens we see
+        let mut last_slash : Option<usize> = None;
         let mut depth = 1;
-        buf.incr_cursor();
 
+        buf.incr_cursor();
+        let mut v = Vec::new();
         loop {
-            let bytes = buf.parse_bytes_until(b"()")?;
+            let bytes = buf.parse_bytes_until(b"()\\")?;
             match buf.peek() {
                 Some(40) => {
                     // '('
+                    let curpos = buf.get_cursor();
                     buf.incr_cursor();
-                    if let Some(last) = bytes.last() {
-                        let escaped = *last == 92; // '\' escaped '('
-                        v.extend_from_slice(&bytes);
-                        v.extend_from_slice(b"(");
-                        if !escaped {
-                            depth += 1
+                    v.extend_from_slice(&bytes);
+                    v.extend_from_slice(b"(");
+
+                    match last_slash {
+                        Some(pos) if pos + 1 == curpos => {
+                            // this is an escaped paren
+                        },
+                        _ => {
+                            // this is not an escaped paren
+                            depth += 1;
+                            // reset the slash state
+                            last_slash = None
                         }
-                    } else {
-                        depth += 1; // unescaped '('
-                        v.extend_from_slice(&bytes);
-                        v.extend_from_slice(b"(");
                     }
                 },
                 Some(41) => {
                     // ')'
+                    let curpos = buf.get_cursor();
                     buf.incr_cursor();
-                    if let Some(last) = bytes.last() {
-                        let escaped = *last == 92;
-                        v.extend_from_slice(&bytes);
-                        if !escaped {
+                    v.extend_from_slice(&bytes);
+
+                    // append the ')' only if it does not terminate the string.
+                    match last_slash {
+                        Some(pos) if pos + 1 == curpos => {
+                            // this is an escaped paren
+                        },
+                        _ => {
                             depth -= 1;
                             if depth == 0 {
+                                // this terminates the string, so break the loop
                                 break
+                            } else {
+                                // reset the slash state as optimization
+                                last_slash = None
                             }
                         }
-                        v.extend_from_slice(b")");
-                    } else {
-                        v.extend_from_slice(&bytes);
-                        depth -= 1;
-                        if depth == 0 {
-                            break
-                        }
-                        v.extend_from_slice(b")");
+                    };
+                    v.extend_from_slice(b")");
+                },
+                Some(92) => {
+                    // '\'
+                    let curpos = buf.get_cursor();
+                    buf.incr_cursor();
+                    v.extend_from_slice(&bytes);
+                    v.extend_from_slice(b"\\");
+
+                    // Toggle the backslash state.
+                    match last_slash {
+                        Some(pos) =>
+                            if pos + 1 == curpos {
+                                // this is a \\, so reset the state.
+                                last_slash = None
+                            } else {
+                                // we're beginning a new escape.
+                                last_slash = Some(curpos)
+                            }
+                        None =>
+                            // we're beginning a new escape.
+                            last_slash = Some(curpos)
                     }
                 },
                 Some(_) => {
@@ -1213,6 +1256,43 @@ mod test_pdf_prim {
             Ok(LocatedVal::new(Vec::from("1a\\(90\\)".as_bytes()), 0, 10))
         );
         assert_eq!(pb.get_cursor(), 10);
+    }
+
+    #[test]
+    fn raw_lit_string_escaped_escapes() {
+        let mut lit = RawLiteralString;
+
+        let v = Vec::from("(1a\\\\\\(90\\\\) ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(
+            lit.parse(&mut pb),
+            Ok(LocatedVal::new(
+                Vec::from("1a\\\\\\(90\\\\".as_bytes()),
+                0,
+                10
+            ))
+        );
+        assert_eq!(pb.get_cursor(), 12);
+
+        let v = Vec::from("(1a90\\\\) ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(
+            lit.parse(&mut pb),
+            Ok(LocatedVal::new(Vec::from("1a90\\\\".as_bytes()), 0, 10))
+        );
+        assert_eq!(pb.get_cursor(), 8);
+
+        let v = Vec::from("(1a\\\\(90\\\\)) ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(
+            lit.parse(&mut pb),
+            Ok(LocatedVal::new(
+                Vec::from("1a\\\\(90\\\\)".as_bytes()),
+                0,
+                10
+            ))
+        );
+        assert_eq!(pb.get_cursor(), 12);
     }
 
     #[test]
