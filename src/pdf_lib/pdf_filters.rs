@@ -161,6 +161,7 @@ impl BufferTransformT for FlateDecode<'_> {
                         return Ok(ParseBuffer::new(out_buffer));
 
                     } else if predictor >= 10 && predictor <= 15 {
+                        println!("predictor of PNG");
                         // PNG
                         let row_length = columns * colors + 1;
                         let rows = (decoded.len() as i64) /row_length;
@@ -203,7 +204,7 @@ impl BufferTransformT for FlateDecode<'_> {
                                 2 => {
                                     // pfUp  Predicts same as sample above.
                                     for j in 1 .. row_length {
-                                        row_data[j as usize] += prev_row[j as usize];
+                                        row_data[j as usize] = row_data[j as usize].wrapping_add(prev_row[j as usize]);
                                     }
                                 }
                                 3 => {

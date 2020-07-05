@@ -361,9 +361,19 @@ fn info_from_xref_entries(fi: &FileInfo, xref_ents: &[LocatedVal<XrefEntT>]) -> 
                     ofs: (*file_ofs).try_into().unwrap(),
                 })
             },
-            XrefEntStatus::InStream { .. } => {
-                // TODO:
-                assert!(false)
+            XrefEntStatus::InStream { stream_obj, obj_index } => {
+                ta3_log!(
+                    Level::Info,
+                    fi.file_offset(o.loc_start()),
+                    "   instream object at {}.",
+                    *stream_obj
+                );
+
+                id_offsets.push(ObjInfo {
+                    id:  ent.obj(),
+                    gen: ent.gen(),
+                    ofs: (*stream_obj).try_into().unwrap(),
+                })
             },
         }
     }
