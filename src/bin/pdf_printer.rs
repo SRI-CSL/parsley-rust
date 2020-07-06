@@ -28,7 +28,6 @@ use std::convert::TryInto;
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
-use std::panic;
 use std::path::Path;
 use std::process;
 use std::rc::Rc;
@@ -203,8 +202,10 @@ fn parse_xref_stream(
         };
         let xref_obj = xref_obj.unwrap();
         if let PDFObjT::Stream(ref s) = xref_obj.val().obj().val() {
+            let content = s.stream().val();
+            let mut xref_buf = ParseBuffer::new_view(pb, content.start(), content.size());
             let mut xp = XrefStreamP::new(s);
-            let xref_stm = xp.parse(pb);
+            let xref_stm = xp.parse(&mut xref_buf);
             if let Err(e) = xref_stm {
                 ta3_log!(
                     Level::Info,
@@ -217,12 +218,13 @@ fn parse_xref_stream(
                 );
                 return None
             } else {
+                let xref_stm = xref_stm.unwrap();
                 ta3_log!(
                     Level::Info,
                     fi.file_offset(pb.get_cursor()),
-                    "Found xref stream.",
+                    "Found xref stream with {} entries.",
+                    xref_stm.val().ents().len()
                 );
-                let xref_stm = xref_stm.unwrap();
                 let prev = xref_stm.val().dict().get_usize(b"Prev");
                 xrefs.push(xref_stm);
                 if let Some(start) = prev {
@@ -361,9 +363,19 @@ fn info_from_xref_entries(fi: &FileInfo, xref_ents: &[LocatedVal<XrefEntT>]) -> 
                     ofs: (*file_ofs).try_into().unwrap(),
                 })
             },
-            XrefEntStatus::InStream { .. } => {
-                // TODO:
-                assert!(false)
+            XrefEntStatus::InStream {
+                stream_obj,
+                obj_index,
+            } => {
+                ta3_log!(
+                    Level::Info,
+                    fi.file_offset(o.loc_start()),
+                    "   skipping instream object ({},{}) at index {} in stream {}.",
+                    ent.obj(),
+                    ent.gen(),
+                    obj_index,
+                    stream_obj
+                );
             },
         }
     }
@@ -381,6 +393,21 @@ fn parse_objects(
     // These have to be indirect/labelled objects.
     let mut objs = Vec::new();
     for ObjInfo { id, gen, ofs } in obj_infos.iter() {
+        // If we've already parsed this object (e.g. it is one of the
+        // xref-streams), skip it.  This can happen because the
+        // xref-streams are objects themselves, and their catalog of
+        // objects can include an entry for themselves.
+        if ctxt.lookup_obj((*id, *gen)).is_some() {
+            ta3_log!(
+                Level::Info,
+                fi.file_offset(*ofs),
+                "skipping already parsed object ({},{})",
+                id,
+                gen
+            );
+            continue
+        }
+
         let mut p = IndirectP::new(ctxt);
         let ofs = (*ofs).try_into().unwrap();
         ta3_log!(
