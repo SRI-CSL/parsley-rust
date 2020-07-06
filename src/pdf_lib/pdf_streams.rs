@@ -327,8 +327,8 @@ impl XrefStreamP<'_> {
         let prev = dict.val().get_usize(b"Prev");
 
         let idx = dict.val().get_array(b"Index");
-        let mut index = Vec::new();
-        if let Some(i) = idx {
+        let index = if let Some(i) = idx {
+            let mut index_ents = Vec::new();
             if i.objs().len() % 2 != 0 {
                 let msg = format!(
                     "Invalid non-even length {} for /Index in xref stream dictionary.",
@@ -344,7 +344,7 @@ impl XrefStreamP<'_> {
                 .zip(i.objs().iter().skip(1).step_by(2))
             {
                 if let (PDFObjT::Integer(s), PDFObjT::Integer(c)) = (s.val(), c.val()) {
-                    index.push((s.usize_val(), c.usize_val()))
+                    index_ents.push((s.usize_val(), c.usize_val()))
                 } else {
                     let msg =
                         format!("Invalid non-integer entries in /Index in xref stream dictionary.");
@@ -352,8 +352,11 @@ impl XrefStreamP<'_> {
                     return Err(locate_value(err, dict.start(), dict.end()))
                 }
             }
-            // TODO: ensure that subsections cannot overlap
-        }
+            Some(index_ents)
+        // TODO: ensure that subsections cannot overlap
+        } else {
+            None
+        };
 
         let w = dict.val().get_array(b"W");
         if w.is_none() {
@@ -399,7 +402,7 @@ impl XrefStreamP<'_> {
         Ok(XrefStreamDictInfo {
             size,
             prev,
-            index: Some(index),
+            index,
             widths,
             filters,
         })
@@ -452,7 +455,7 @@ impl XrefStreamP<'_> {
                 let width = meta.widths[1];
                 let field2 = self.parse_usize_with_width(buf, width)?;
                 // Field #3
-                let width = meta.widths[1];
+                let width = meta.widths[2];
                 let field3 = if width > 0 {
                     self.parse_usize_with_width(buf, width)?
                 } else {
@@ -537,6 +540,8 @@ impl ParsleyParser for XrefStreamP<'_> {
 #[cfg(test)]
 mod test_object_stream {
     use std::collections::BTreeMap;
+    use std::fs::File;
+    use std::io::Read;
     use std::rc::Rc;
 
     use super::super::super::pcore::parsebuffer::{
@@ -545,7 +550,7 @@ mod test_object_stream {
     use super::super::pdf_obj::{
         ArrayT, DictP, DictT, IndirectP, IndirectT, PDFObjContext, PDFObjT,
     };
-    use super::{ObjStreamP, ObjStreamT};
+    use super::{ObjStreamP, ObjStreamT, XrefStreamP};
 
     fn make_dict_buf(n: usize, first: usize) -> Vec<u8> {
         let v = format!("<</Type /ObjStm /N {} /First {}>>", n, first);
@@ -766,6 +771,40 @@ endobj");
             let ost = osp.parse(&mut stream_buf);
             let ost = ost.unwrap();
             assert_eq!(ost.val().objs().len(), 73)
+        } else {
+            assert!(false);
+        }
+    }
+
+    fn get_test_data(test_file: &str) -> Vec<u8> {
+        let mut file = match File::open(test_file) {
+            Err(why) => panic!("Cannot open {}: {}", test_file, why.to_string()),
+            Ok(f) => f,
+        };
+        let mut v = Vec::new();
+        match file.read_to_end(&mut v) {
+            Err(why) => panic!("Cannot read {}: {}", test_file, why.to_string()),
+            Ok(_) => (),
+        };
+        v
+    }
+
+    #[test]
+    fn test_xref_stream() {
+        let v = get_test_data("tests/test_files/xref_stm.obj");
+        let mut pb = ParseBuffer::new(v);
+        let mut ctxt = PDFObjContext::new();
+        let mut p = IndirectP::new(&mut ctxt);
+        let io = p.parse(&mut pb).expect("unable to parse stream");
+        let io = io.val();
+        if let PDFObjT::Stream(ref s) = io.obj().val() {
+            let content = s.stream().val();
+            let mut xref_buf = ParseBuffer::new_view(&pb, content.start(), content.size());
+            let mut xrsp = XrefStreamP::new(s);
+            let xrt = xrsp.parse(&mut xref_buf).unwrap();
+            let ents = xrt.val().ents();
+            let size = s.dict().val().get_usize(b"Size").unwrap();
+            assert_eq!(size, ents.len())
         } else {
             assert!(false);
         }
