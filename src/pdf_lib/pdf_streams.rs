@@ -171,9 +171,27 @@ impl ObjStreamP<'_> {
             let mut p = PDFObjP::new(&mut self.ctxt);
             let start = buf.get_cursor();
             let o = p.parse(buf)?;
-            let obj = IndirectT::new(*onum, 0, Rc::new(o));
+            let obj = Rc::new(o);
+            let ind = IndirectT::new(*onum, 0, Rc::clone(&obj));
+            // Register the object into the context so that it can be
+            // looked up by its id.
+            match self.ctxt.register_obj(&ind, Rc::clone(&obj)) {
+                None => (),
+                Some(old) => {
+                    let loc = old.start();
+                    let msg = format!(
+                        "non-unique object id ({}, {}), first found near offset {}",
+                        *onum,
+                        0,
+                        loc
+                    );
+                    let err = ErrorKind::GuardError(msg);
+                    let end = buf.get_cursor();
+                    return Err(locate_value(err, start, end))
+                }
+            }
             let end = buf.get_cursor();
-            objs.push(LocatedVal::new(obj, start, end))
+            objs.push(LocatedVal::new(ind, start, end))
         }
         Ok(objs)
     }
