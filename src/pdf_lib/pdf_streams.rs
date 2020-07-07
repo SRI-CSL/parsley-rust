@@ -520,10 +520,7 @@ impl ParsleyParser for XrefStreamP<'_> {
         let meta = self.get_dict_info()?;
         println!("Parsed xref meta for {} objects.", meta.size());
 
-        // Create a parse view on the stream content.
-        let st = self.stream().stream().val();
-        let mut view = RestrictView::new(st.start(), st.size());
-        let mut input : ParseBuffer = view.transform(buf)?;
+        let input = buf;
 
         // This vector is just being used to hoist the view generated
         // by a loop iteration to use as input in the next iteration.
@@ -553,11 +550,11 @@ impl ParsleyParser for XrefStreamP<'_> {
                     return Err(self.stream.dict().place(err))
                 },
             };
-            let input = get_input(&mut input, &mut views);
+            let input = get_input(input, &mut views);
             let output = decoder.transform(input)?;
             views.push(output);
         }
-        let input = get_input(&mut input, &mut views);
+        let input = get_input(input, &mut views);
         let ents = self.parse_stream(input, &meta)?;
         let xref = XrefStreamT::new(Rc::clone(&self.stream.dict()), ents);
         let end = input.get_cursor();
