@@ -447,7 +447,7 @@ impl ParsleyParser for RawLiteralString {
         };
 
         // match the backslashes and parens we see
-        let mut last_slash : Option<usize> = None;
+        let mut last_slash: Option<usize> = None;
         let mut depth = 1;
 
         buf.incr_cursor();
@@ -471,7 +471,7 @@ impl ParsleyParser for RawLiteralString {
                             depth += 1;
                             // reset the slash state
                             last_slash = None
-                        }
+                        },
                     }
                 },
                 Some(41) => {
@@ -494,7 +494,7 @@ impl ParsleyParser for RawLiteralString {
                                 // reset the slash state as optimization
                                 last_slash = None
                             }
-                        }
+                        },
                     };
                     v.extend_from_slice(b")");
                 },
@@ -507,7 +507,7 @@ impl ParsleyParser for RawLiteralString {
 
                     // Toggle the backslash state.
                     match last_slash {
-                        Some(pos) =>
+                        Some(pos) => {
                             if pos + 1 == curpos {
                                 // this is a \\, so reset the state.
                                 last_slash = None
@@ -515,9 +515,12 @@ impl ParsleyParser for RawLiteralString {
                                 // we're beginning a new escape.
                                 last_slash = Some(curpos)
                             }
+                        },
                         None =>
-                            // we're beginning a new escape.
+                        // we're beginning a new escape.
+                        {
                             last_slash = Some(curpos)
+                        },
                     }
                 },
                 Some(_) => {
