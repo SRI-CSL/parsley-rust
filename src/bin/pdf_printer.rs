@@ -43,7 +43,9 @@ use parsley_rust::pdf_lib::pdf_file::{
     HeaderP, StartXrefP, TrailerP, TrailerT, XrefSectP, XrefSectT,
 };
 use parsley_rust::pdf_lib::pdf_obj::{IndirectP, PDFObjContext, PDFObjT};
-use parsley_rust::pdf_lib::pdf_streams::{XrefEntStatus, XrefEntT, XrefStreamP, XrefStreamT};
+use parsley_rust::pdf_lib::pdf_streams::{
+    ObjStreamP, XrefEntStatus, XrefEntT, XrefStreamP, XrefStreamT,
+};
 
 /* from: https://osr.jpl.nasa.gov/wiki/pages/viewpage.action?spaceKey=SD&title=TA2+PDF+Safe+Parser+Evaluation
 
@@ -90,10 +92,9 @@ impl FileInfo<'_> {
     fn display(&self) -> &std::path::Display { &self.display }
 }
 
-struct ObjInfo {
-    id:  usize,
-    gen: usize,
-    ofs: usize,
+enum ObjInfo {
+    InFile { id: usize, gen: usize, ofs: usize },
+    Stream { id: usize, gen: usize },
 }
 
 // This assumes that the parse cursor is set at the startxref location.
@@ -210,7 +211,7 @@ fn parse_xref_stream(
                 ta3_log!(
                     Level::Info,
                     fi.file_offset(pb.get_cursor()),
-                    "Object is not a xref stream in {} at file-offset {} (pdf-offset {}): {}",
+                    "Cannot parse xref stream in {} at file-offset {} (pdf-offset {}): {}",
                     fi.display(),
                     fi.file_offset(e.start()),
                     e.start(),
@@ -357,7 +358,7 @@ fn info_from_xref_entries(fi: &FileInfo, xref_ents: &[LocatedVal<XrefEntT>]) -> 
                         ""
                     }
                 );
-                id_offsets.push(ObjInfo {
+                id_offsets.push(ObjInfo::InFile {
                     id:  ent.obj(),
                     gen: ent.gen(),
                     ofs: (*file_ofs).try_into().unwrap(),
@@ -370,12 +371,16 @@ fn info_from_xref_entries(fi: &FileInfo, xref_ents: &[LocatedVal<XrefEntT>]) -> 
                 ta3_log!(
                     Level::Info,
                     fi.file_offset(o.loc_start()),
-                    "   skipping instream object ({},{}) at index {} in stream {}.",
+                    "   instream object ({},{}) at index {} in stream {}.",
                     ent.obj(),
                     ent.gen(),
                     obj_index,
                     stream_obj
                 );
+                id_offsets.push(ObjInfo::Stream {
+                    id:  *stream_obj,
+                    gen: 0, // object streams have an implicit generation of 0
+                })
             },
         }
     }
@@ -390,64 +395,149 @@ fn parse_objects(
     fi: &FileInfo, ctxt: &mut PDFObjContext, obj_infos: &[ObjInfo], pb: &mut dyn ParseBufferT,
 ) {
     // Get the outermost objects at each offset in the xref table.
-    // These have to be indirect/labelled objects.
-    let mut objs = Vec::new();
-    for ObjInfo { id, gen, ofs } in obj_infos.iter() {
-        // If we've already parsed this object (e.g. it is one of the
-        // xref-streams), skip it.  This can happen because the
-        // xref-streams are objects themselves, and their catalog of
-        // objects can include an entry for themselves.
-        if ctxt.lookup_obj((*id, *gen)).is_some() {
-            ta3_log!(
-                Level::Info,
-                fi.file_offset(*ofs),
-                "skipping already parsed object ({},{})",
-                id,
-                gen
-            );
-            continue
-        }
+    // These have to be indirect/labelled objects.  Collect any
+    // references to object streams since they will need to be parsed
+    // subsequently.
+    let mut obj_streams = BTreeSet::new();
+    for obj in obj_infos.iter() {
+        match obj {
+            ObjInfo::Stream { id, gen } => {
+                let _ = obj_streams.insert((*id, *gen));
+            },
+            ObjInfo::InFile { id, gen, ofs } => {
+                // If we've already parsed this object (e.g. it is one of the
+                // xref-streams), skip it.  This can happen because the
+                // xref-streams are objects themselves, and their catalog of
+                // objects can include an entry for themselves.
+                if ctxt.lookup_obj((*id, *gen)).is_some() {
+                    ta3_log!(
+                        Level::Info,
+                        fi.file_offset(*ofs),
+                        "skipping already parsed object ({},{})",
+                        id,
+                        gen
+                    );
+                    continue
+                }
 
-        let mut p = IndirectP::new(ctxt);
-        let ofs = (*ofs).try_into().unwrap();
+                let mut p = IndirectP::new(ctxt);
+                let ofs = (*ofs).try_into().unwrap();
+                ta3_log!(
+                    Level::Info,
+                    fi.file_offset(ofs),
+                    "parsing object ({},{}) at {}file-offset {} (pdf-offset {})",
+                    id,
+                    gen,
+                    if ofs == 0 { "(possibly invalid) " } else { "" },
+                    fi.file_offset(ofs),
+                    ofs
+                );
+                pb.set_cursor(ofs);
+                let lobj = p.parse(pb);
+                if let Err(e) = lobj {
+                    exit_log!(
+                        fi.file_offset(e.start()),
+                        "Cannot parse object ({},{}) at file-offset {} (pdf-offset {}) in {}: {}",
+                        id,
+                        gen,
+                        fi.file_offset(e.start()),
+                        e.start(),
+                        fi.display(),
+                        e.val()
+                    );
+                }
+                let io = lobj.unwrap().unwrap(); // unwrap Result, LocatedVal.
+
+                // Validate that the object is what we expect.
+                // TODO: this constraint should be enforced in the library.
+                if (io.num(), io.gen()) != (*id, *gen) {
+                    exit_log!(
+                        fi.file_offset(ofs),
+                        "unexpected object ({},{}) found: expected ({},{}) from xref entry",
+                        io.num(),
+                        io.gen(),
+                        id,
+                        gen
+                    )
+                }
+            },
+        }
+    }
+
+    // Now do the second pass over the object streams, collecting only
+    // those that are actually defined.  In this pass, we only use
+    // immutable borrows on ctxt.
+    let mut defined_obj_streams = BTreeSet::new();
+    for id in obj_streams.iter() {
+        match ctxt.lookup_obj(*id) {
+            None => {
+                ta3_log!(
+                    Level::Warn,
+                    fi.file_offset(0),
+                    "stream object ({},{}) not found",
+                    id.0,
+                    id.1
+                );
+            },
+            Some(obj) => {
+                if let PDFObjT::Stream(_) = obj.val() {
+                    let _ = defined_obj_streams.insert((id, Rc::clone(obj)));
+                } else {
+                    ta3_log!(
+                        Level::Warn,
+                        fi.file_offset(0),
+                        "object ({},{}) is not a stream",
+                        id.0,
+                        id.1
+                    );
+                }
+            },
+        }
+    }
+
+    // Now parse the object streams.
+    for (id, obj) in defined_obj_streams.iter() {
         ta3_log!(
             Level::Info,
-            fi.file_offset(ofs),
-            "parsing object ({},{}) at {}file-offset {} (pdf-offset {})",
-            id,
-            gen,
-            if ofs == 0 { "(possibly invalid) " } else { "" },
-            fi.file_offset(ofs),
-            ofs
+            fi.file_offset(0),
+            "parsing stream object ({},{})",
+            id.0,
+            id.1
         );
-        pb.set_cursor(ofs);
-        let lobj = p.parse(pb);
-        if let Err(e) = lobj {
-            exit_log!(
-                fi.file_offset(e.start()),
-                "Cannot parse object ({},{}) at file-offset {} (pdf-offset {}) in {}: {}",
-                id,
-                gen,
-                fi.file_offset(e.start()),
-                e.start(),
-                fi.display(),
-                e.val()
-            );
+
+        if let PDFObjT::Stream(ref s) = obj.val() {
+            let content = s.stream().val();
+            let mut obj_buf = ParseBuffer::new_view(pb, content.start(), content.size());
+            let mut op = ObjStreamP::new(ctxt, Rc::clone(s.dict()));
+            let obj_stm = op.parse(&mut obj_buf);
+            if let Err(e) = obj_stm {
+                ta3_log!(
+                    Level::Error,
+                    fi.file_offset(pb.get_cursor()),
+                    "Cannot parse object stream in {} at file-offset {} (pdf-offset {}): {}",
+                    fi.display(),
+                    fi.file_offset(e.start()),
+                    e.start(),
+                    e.val()
+                );
+            // TODO: we could stop parsing here, but since this is
+            // a nested parse, we opt to continue for now.
+            } else {
+                let obj_stm = obj_stm.unwrap();
+                for o in obj_stm.val().objs() {
+                    ta3_log!(
+                        Level::Info,
+                        fi.file_offset(content.start()),
+                        "Parsed object ({},{}) of {} from stream ({},{}).",
+                        o.val().num(),
+                        o.val().gen(),
+                        obj_stm.val().objs().len(),
+                        id.0,
+                        id.1
+                    );
+                }
+            }
         }
-        let io = lobj.unwrap().unwrap(); // unwrap Result, LocatedVal.
-                                         // Validate that the object is what we expect.
-                                         // TODO: this constraint should be enforced in the library.
-        if (io.num(), io.gen()) != (*id, *gen) {
-            exit_log!(
-                fi.file_offset(ofs),
-                "unexpected object ({},{}) found: expected ({},{}) from xref entry",
-                io.num(),
-                io.gen(),
-                id,
-                gen
-            )
-        }
-        objs.push(io)
     }
 }
 
