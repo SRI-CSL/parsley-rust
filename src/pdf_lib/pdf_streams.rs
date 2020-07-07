@@ -834,4 +834,25 @@ endobj");
             assert!(false);
         }
     }
+
+    #[test]
+    fn test_xref_stream_flate() {
+        let v = get_test_data("tests/test_files/xref_stm_flate.obj");
+        let mut pb = ParseBuffer::new(v);
+        let mut ctxt = PDFObjContext::new();
+        let mut p = IndirectP::new(&mut ctxt);
+        let io = p.parse(&mut pb).expect("unable to parse stream");
+        let io = io.val();
+        if let PDFObjT::Stream(ref s) = io.obj().val() {
+            let content = s.stream().val();
+            let mut xref_buf = ParseBuffer::new_view(&pb, content.start(), content.size());
+            let mut xrsp = XrefStreamP::new(s);
+            let xrt = xrsp.parse(&mut xref_buf).unwrap();
+            let ents = xrt.val().ents();
+            let size = s.dict().val().get_usize(b"Size").unwrap();
+            assert_eq!(size, ents.len())
+        } else {
+            assert!(false);
+        }
+    }
 }
