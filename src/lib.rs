@@ -16,5 +16,10 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+#[macro_use]
+extern crate log;
+extern crate env_logger;
+extern crate log_panics;
+
 pub mod pcore;
 pub mod pdf_lib;

@@ -45,6 +45,7 @@ use parsley_rust::pdf_lib::pdf_file::{
 use parsley_rust::pdf_lib::pdf_obj::{IndirectP, PDFObjContext, PDFObjT};
 use parsley_rust::pdf_lib::pdf_streams::{
     ObjStreamP, XrefEntStatus, XrefEntT, XrefStreamP, XrefStreamT,
+    ProcessedStreamP
 };
 
 /* from: https://osr.jpl.nasa.gov/wiki/pages/viewpage.action?spaceKey=SD&title=TA2+PDF+Safe+Parser+Evaluation
@@ -565,7 +566,7 @@ fn parse_objects(
 
 // Perform a breadth-first traversal of the root object, logging
 // each object type and location as we go.
-fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFObjT>>) {
+fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFObjT>>, pb: &mut dyn ParseBufferT) {
     debug!("Beginning breadth-first traversal of root object:");
 
     let log_obj = |t: &str, loc: &dyn Location, depth: u32| {
@@ -579,6 +580,8 @@ fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFOb
             fi.file_offset(loc.loc_end())
         )
     };
+
+    let mut streams = BTreeSet::new();
 
     let mut obj_queue = VecDeque::new();
     obj_queue.push_back((Rc::clone(root_obj), 0)); // depth 0
@@ -624,13 +627,27 @@ fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFOb
             },
             PDFObjT::Stream(s) => {
                 log_obj("stream", o.as_ref() as &dyn Location, depth);
-                for (_, v) in s.dict().val().map().iter() {
+                for (k, v) in s.dict().val().map().iter() {
+                    // log the key
+                    match std::str::from_utf8(k) {
+                        Ok(key) => {
+                            ta3_log!(
+                                Level::Debug,
+                                fi.file_offset(o.start()),
+                                "  stream dict key: {}",
+                                key
+                            )
+                        },
+                        Err(_) => ()
+                    }
+
                     // TODO: print key names
                     if !processed.contains(v) {
                         obj_queue.push_back((Rc::clone(v), depth + 1));
                         processed.insert(Rc::clone(v));
                     }
                 }
+                streams.insert(Rc::clone(&o));
             },
             PDFObjT::Reference(r) => {
                 let loc = o.as_ref() as &dyn Location;
@@ -658,6 +675,16 @@ fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFOb
             PDFObjT::Comment(_) => log_obj("comment", o.as_ref() as &dyn Location, depth),
             PDFObjT::Integer(_) => log_obj("number<integer>", o.as_ref() as &dyn Location, depth),
             PDFObjT::Real(_) => log_obj("number<real>", o.as_ref() as &dyn Location, depth),
+        }
+    }
+
+    for o in streams.iter() {
+        if let PDFObjT::Stream(s) = o.val() {
+            // construct a processed stream to generate any compression logs.
+            let content = s.stream().val();
+            let mut stm_buf = ParseBuffer::new_view(pb, content.start(), content.size());
+            let mut sp = ProcessedStreamP::new(s);
+            let _pstm = sp.parse(&mut stm_buf);
         }
     }
 }
@@ -871,7 +898,7 @@ fn parse_file(test_file: &str) {
         );
     };
 
-    dump_root(&fi, &ctxt, &root_obj);
+    dump_root(&fi, &ctxt, &root_obj, &mut pb);
     dump_stats(&fi);
 }
 

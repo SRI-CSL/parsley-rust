@@ -16,6 +16,16 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+// use this macro to log messages with position argument:
+
+use log::{Level};
+
+macro_rules! ta3_log {
+    ($lvl:expr, $pos:expr, $($arg:tt)+) => ({
+        log!($lvl, "at {:>10} - {}", $pos, format_args!($($arg)+))
+    })
+}
+
 use flate2::write::ZlibDecoder;
 use std::io::Write;
 
@@ -35,13 +45,7 @@ impl FlateDecode<'_> {
 
 impl BufferTransformT for FlateDecode<'_> {
     fn transform(&mut self, buf: &dyn ParseBufferT) -> TransformResult {
-        if self.options.is_some() {
-            let err = ErrorKind::TransformError(format!(
-                "flatedecode error: filter options not yet supported"
-            ));
-            let loc = buf.get_location();
-            return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
-        }
+        let comp_size = buf.buf().len();
         let mut decoder = ZlibDecoder::new(Vec::new());
         // PDF streams can have bytes trailing the filter content, so
         // write_all() could cause spurious errors due to the trailing
@@ -58,13 +62,32 @@ impl BufferTransformT for FlateDecode<'_> {
                 // 'n' bytes consumed
             },
         }
-        match decoder.finish() {
+        let res = match decoder.finish() {
             Err(e) => {
                 let err = ErrorKind::TransformError(format!("flatedecode finish error: {}", e));
                 let loc = buf.get_location();
                 return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
             },
-            Ok(decoded) => Ok(ParseBuffer::new(decoded)),
+            Ok(decoded) => {
+                let decomp_size = decoded.len();
+                ta3_log!(
+                    Level::Info,
+                    0,
+                    " DECOMPRESSION: compressed_size={}  decompress_size={}",
+                    comp_size,
+                    decomp_size,
+                );
+                println!("comp_size={} decomp_size={}", comp_size, decomp_size);
+                Ok(ParseBuffer::new(decoded))
+            },
+        };
+        if self.options.is_some() {
+            let err = ErrorKind::TransformError(format!(
+                "flatedecode error: filter options not yet supported"
+            ));
+            let loc = buf.get_location();
+            return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
         }
+        res
     }
 }

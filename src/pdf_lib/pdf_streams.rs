@@ -555,6 +555,82 @@ impl ParsleyParser for XrefStreamP<'_> {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ProcessedStreamT {
+    dict: Rc<LocatedVal<DictT>>,
+    content: Vec<u8>,
+}
+
+impl ProcessedStreamT {
+    pub fn new(dict: Rc<LocatedVal<DictT>>, content: Vec<u8>) -> ProcessedStreamT {
+        ProcessedStreamT { dict, content }
+    }
+    pub fn dict(&self) -> &DictT { self.dict.val() }
+    pub fn content(&self) -> &[u8] { self.content.as_slice() }
+}
+
+pub struct ProcessedStreamP<'a> {
+    stream: &'a StreamT,
+}
+
+pub struct ProcessedStreamDictInfo<'a> {
+    filters: Vec<Filter<'a>>,
+}
+
+impl ProcessedStreamP<'_> {
+    pub fn new(stream: &StreamT) -> ProcessedStreamP { ProcessedStreamP { stream } }
+
+    fn get_dict_info(&self) -> ParseResult<ProcessedStreamDictInfo> {
+        let filters = self.stream.filters()?;
+        Ok(ProcessedStreamDictInfo { filters })
+    }
+}
+
+impl ParsleyParser for ProcessedStreamP<'_> {
+    type T = LocatedVal<ProcessedStreamT>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let meta = self.get_dict_info()?;
+
+        // This vector is just being used to hoist the view generated
+        // by a loop iteration to use as input in the next iteration.
+        // There might be a standard idiomatic way of doing this; for
+        // now, this seems the simplest that avoids an unsafe block.
+        let mut views: Vec<ParseBuffer> = Vec::new();
+        // Selects the input for the iteration
+        fn get_input<'a>(
+            views: &'a mut Vec<ParseBuffer>, buf: &'a mut dyn ParseBufferT,
+        ) -> &'a mut dyn ParseBufferT {
+            if views.is_empty() {
+                buf
+            } else {
+                let last = views.len() - 1;
+                &mut views[last]
+            }
+        }
+        for filter in &meta.filters {
+            let input = get_input(&mut views, buf);
+            let f = filter.name().as_string();
+            let mut decoder = match f.as_str() {
+                "FlateDecode" => FlateDecode::new(filter.options()),
+                _ => {
+                    let msg = format!("Cannot handle filter {} in xref stream", f);
+                    let err = ErrorKind::GuardError(msg);
+                    return Err(self.stream.dict().place(err))
+                },
+            };
+            let output = decoder.transform(input)?;
+            views.push(output);
+        }
+        let outbuf = get_input(&mut views, buf);
+        let content: Vec<u8> = Vec::from(outbuf.buf());
+        let stm = ProcessedStreamT::new(Rc::clone(&self.stream.dict()), content);
+        let end = outbuf.get_cursor();
+        Ok(LocatedVal::new(stm, start, end))
+    }
+}
+
 #[cfg(test)]
 mod test_object_stream {
     use std::collections::BTreeMap;
