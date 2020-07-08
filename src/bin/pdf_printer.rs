@@ -152,6 +152,7 @@ fn parse_xref_with_trailer(
 
         // update trailer-derived info.
         let prev = t.val().dict().get_usize(b"Prev");
+        let prev_loc = t.start();
         match trlr {
             None => trlr = Some(t),
             Some(_) => {
@@ -166,8 +167,15 @@ fn parse_xref_with_trailer(
             // the trailer.
             if cursorset.insert(start) {
                 // This is a new location.
-                pb.set_cursor(start);
-                continue
+                if pb.check_cursor(start) {
+                    pb.set_cursor(start);
+                    continue
+                }
+                exit_log!(
+                    fi.file_offset(prev_loc),
+                    "/Prev specifies out-of-bounds offset {}",
+                    start
+                );
             }
             exit_log!(
                 fi.file_offset(tloc),
@@ -227,13 +235,21 @@ fn parse_xref_stream(
                     xref_stm.val().ents().len()
                 );
                 let prev = xref_stm.val().dict().get_usize(b"Prev");
+                let prev_loc = xref_stm.start();
                 xrefs.push(xref_stm);
                 if let Some(start) = prev {
                     // Go to the next xref table, after ensuring we
                     // are not in an infinite loop.
                     if cursorset.insert(start) {
-                        pb.set_cursor(start);
-                        continue
+                        if pb.check_cursor(start) {
+                            pb.set_cursor(start);
+                            continue
+                        }
+                        exit_log!(
+                            fi.file_offset(prev_loc),
+                            "/Prev specifies out-of-bounds offset {}",
+                            start
+                        );
                     }
                     exit_log!(
                         fi.file_offset(start),
@@ -771,8 +787,14 @@ fn parse_file(test_file: &str) {
     let mut ctxt = PDFObjContext::new();
 
     // Parse xref table at that offset.
-    pb.set_cursor(sxref.offset().try_into().unwrap());
-
+    if !pb.check_cursor(sxref_offset) {
+        exit_log!(
+            fi.file_offset(sxref_loc_start),
+            "startxref specifies out-of-bounds offset {}",
+            sxref_offset
+        );
+    }
+    pb.set_cursor(sxref_offset);
     let (xref_ents, root_ref) = get_xref_info(&fi, &mut ctxt, &mut pb);
     ta3_log!(
         Level::Info,
