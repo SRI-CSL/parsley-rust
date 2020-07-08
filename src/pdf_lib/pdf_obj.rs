@@ -185,8 +185,9 @@ impl DictP<'_> {
                 let key = n.val().normalize();
                 if names.contains(&key) {
                     let msg = format!("non-unique dictionary key: {}", n.val().as_string());
-                    let err = ErrorKind::GuardError(msg);
-                    return Err(n.place(err))
+                    println!("{}", msg);
+                    //let err = ErrorKind::GuardError(msg);
+                    //return Err(n.place(err))
                 }
 
                 // do not require whitespace between key/value pairs
