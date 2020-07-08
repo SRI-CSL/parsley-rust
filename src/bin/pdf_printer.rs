@@ -85,6 +85,8 @@ macro_rules! exit_log {
 struct FileInfo<'a> {
     display:     std::path::Display<'a>,
     pdf_hdr_ofs: usize,
+    cursors: BTreeSet<usize>,
+    file_size: u64
 }
 
 impl FileInfo<'_> {
@@ -100,7 +102,7 @@ enum ObjInfo {
 // This assumes that the parse cursor is set at the startxref location.
 // The xref tables are arranged with the newest first and oldest last.
 fn parse_xref_with_trailer(
-    fi: &FileInfo, ctxt: &mut PDFObjContext, pb: &mut dyn ParseBufferT,
+    fi: &mut FileInfo, ctxt: &mut PDFObjContext, pb: &mut dyn ParseBufferT,
 ) -> Option<(Vec<LocatedVal<XrefSectT>>, TrailerT)> {
     // Collect all xref tables, following the /Prev entries.  This is
     // not quite the right thing to do for linearized PDF from an
@@ -169,6 +171,7 @@ fn parse_xref_with_trailer(
                 // This is a new location.
                 if pb.check_cursor(start) {
                     pb.set_cursor(start);
+                    fi.cursors.insert(start);
                     continue
                 }
                 exit_log!(
@@ -190,7 +193,7 @@ fn parse_xref_with_trailer(
 
 // This assumes that the parse cursor is set at the startxref location.
 fn parse_xref_stream(
-    fi: &FileInfo, ctxt: &mut PDFObjContext, pb: &mut dyn ParseBufferT,
+    fi: &mut FileInfo, ctxt: &mut PDFObjContext, pb: &mut dyn ParseBufferT,
 ) -> Option<Vec<LocatedVal<XrefStreamT>>> {
     let mut xrefs = Vec::new();
     let mut cursorset = BTreeSet::new(); // to prevent infinite loops
@@ -243,6 +246,7 @@ fn parse_xref_stream(
                     if cursorset.insert(start) {
                         if pb.check_cursor(start) {
                             pb.set_cursor(start);
+                            fi.cursors.insert(start);
                             continue
                         }
                         exit_log!(
@@ -277,7 +281,7 @@ fn parse_xref_stream(
 // location.  This tries getting it from the xref table and trailer,
 // failing which it tries getting it from a xref stream.
 fn get_xref_info(
-    fi: &FileInfo, ctxt: &mut PDFObjContext, pb: &mut dyn ParseBufferT,
+    fi: &mut FileInfo, ctxt: &mut PDFObjContext, pb: &mut dyn ParseBufferT,
 ) -> (Vec<LocatedVal<XrefEntT>>, Rc<LocatedVal<PDFObjT>>) {
     let cursor = pb.get_cursor();
     let info = parse_xref_with_trailer(fi, ctxt, pb);
@@ -311,6 +315,7 @@ fn get_xref_info(
     }
 
     pb.set_cursor(cursor);
+    fi.cursors.insert(cursor);
     let xrefs = parse_xref_stream(fi, ctxt, pb);
     if xrefs.is_none() {
         exit_log!(
@@ -408,7 +413,7 @@ fn info_from_xref_entries(fi: &FileInfo, xref_ents: &[LocatedVal<XrefEntT>]) -> 
 // the parsed object matches the identity expected from the xref
 // information.
 fn parse_objects(
-    fi: &FileInfo, ctxt: &mut PDFObjContext, obj_infos: &[ObjInfo], pb: &mut dyn ParseBufferT,
+    fi: &mut FileInfo, ctxt: &mut PDFObjContext, obj_infos: &[ObjInfo], pb: &mut dyn ParseBufferT,
 ) {
     // Get the outermost objects at each offset in the xref table.
     // These have to be indirect/labelled objects.  Collect any
@@ -449,6 +454,7 @@ fn parse_objects(
                     ofs
                 );
                 pb.set_cursor(ofs);
+                fi.cursors.insert(ofs);
                 let lobj = p.parse(pb);
                 if let Err(e) = lobj {
                     exit_log!(
@@ -656,6 +662,29 @@ fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFOb
     }
 }
 
+fn dump_stats(fi: &FileInfo) {
+    // hacky way to get first(), which is only on nightly.
+    for v in fi.cursors.iter() {
+        ta3_log!(
+            Level::Info,
+            0,
+            "Smallest traversed file-offset: {}.",
+            fi.file_offset(*v)
+        );
+        break
+    }
+    match fi.cursors.iter().last() {
+        Some(v) =>
+            ta3_log!(
+                Level::Info,
+                0,
+                "Largest traversed file-offset: {} (size: {}).",
+                fi.file_offset(*v),
+                fi.file_size),
+        None => ()
+    }
+}
+
 fn parse_file(test_file: &str) {
     // Print current path
     let path = env::current_dir();
@@ -673,6 +702,7 @@ fn parse_file(test_file: &str) {
         },
         Ok(file) => file,
     };
+    let file_size = file.metadata().unwrap().len();
 
     // Read the file contents into a string, returns `io::Result<usize>`
     let mut v = Vec::new();
@@ -706,9 +736,11 @@ fn parse_file(test_file: &str) {
             exit_log!(0, "Cannot find PDF magic: {}", e.val());
         },
     };
-    let fi = FileInfo {
+    let mut fi = FileInfo {
         pdf_hdr_ofs,
         display,
+        cursors: BTreeSet::new(),
+        file_size,
     };
 
     let buflen = pb.remaining();
@@ -726,6 +758,7 @@ fn parse_file(test_file: &str) {
 
     // From end of buffer, scan backwards for %EOF, if present.
     pb.set_cursor(buflen);
+    fi.cursors.insert(buflen);
     let eof = pb.backward_scan(b"%%EOF");
     if let Err(e) = eof {
         ta3_log!(
@@ -807,7 +840,8 @@ fn parse_file(test_file: &str) {
         );
     }
     pb.set_cursor(sxref_offset);
-    let (xref_ents, root_ref) = get_xref_info(&fi, &mut ctxt, &mut pb);
+    fi.cursors.insert(sxref_offset);
+    let (xref_ents, root_ref) = get_xref_info(&mut fi, &mut ctxt, &mut pb);
     ta3_log!(
         Level::Info,
         fi.file_offset(pb.get_cursor()),
@@ -818,7 +852,7 @@ fn parse_file(test_file: &str) {
     let id_offsets = info_from_xref_entries(&fi, &xref_ents);
 
     // Parse the objects using their xref entries, and put them into the context.
-    parse_objects(&fi, &mut ctxt, &id_offsets, &mut pb);
+    parse_objects(&mut fi, &mut ctxt, &id_offsets, &mut pb);
 
     let root_obj: &Rc<LocatedVal<PDFObjT>> = if let PDFObjT::Reference(r) = root_ref.val() {
         // TODO: this constraint should be enforced in the library.
@@ -838,6 +872,7 @@ fn parse_file(test_file: &str) {
     };
 
     dump_root(&fi, &ctxt, &root_obj);
+    dump_stats(&fi);
 }
 
 fn print_usage(code: i32) {
