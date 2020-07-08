@@ -597,7 +597,19 @@ fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFOb
             },
             PDFObjT::Dict(d) => {
                 log_obj("dict", o.as_ref() as &dyn Location, depth);
-                for (_, v) in d.map().iter() {
+                for (k, v) in d.map().iter() {
+                    // log the key
+                    match std::str::from_utf8(k) {
+                        Ok(key) => {
+                            ta3_log!(
+                                Level::Debug,
+                                fi.file_offset(o.start()),
+                                "  dict key: {}",
+                                key
+                            )
+                        },
+                        Err(_) => ()
+                    }
                     if !processed.contains(v) {
                         obj_queue.push_back((Rc::clone(v), depth + 1));
                         processed.insert(Rc::clone(v));
