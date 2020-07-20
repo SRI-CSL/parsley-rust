@@ -244,6 +244,7 @@ pub trait ParseBufferT {
 
     // cursor management
 
+    fn check_cursor(&self, ofs: usize) -> bool;
     fn set_cursor(&mut self, ofs: usize);
     fn incr_cursor(&mut self);
     fn decr_cursor(&mut self);
@@ -377,6 +378,9 @@ impl ParseBufferT for ParseBuffer {
     fn set_cursor(&mut self, ofs: usize) {
         assert!(ofs <= self.size);
         self.ofs = ofs
+    }
+    fn check_cursor(&self, ofs: usize) -> bool {
+        ofs <= self.size
     }
 
     fn incr_cursor(&mut self) -> () {
