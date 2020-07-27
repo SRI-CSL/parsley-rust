@@ -45,7 +45,6 @@ impl BufferTransformT for FlateDecode<'_> {
                              _ => None
                         }})
             .unwrap_or(1);
-
         let colors = self.options
             .and_then(|x| { x.get(b"Colors") })
             .and_then(|x| { match x.val() {
@@ -53,7 +52,6 @@ impl BufferTransformT for FlateDecode<'_> {
                              _ => None
                         }})
             .unwrap_or(1);
-
         let bitspercolumn = self.options
             .and_then(|x| { x.get(b"BitsPerComponent") })
             .and_then(|x| { match x.val() {
@@ -61,7 +59,6 @@ impl BufferTransformT for FlateDecode<'_> {
                              _ => None
                         }})
             .unwrap_or(8);
-
         let columns = self.options
             .and_then(|x| { x.get(b"Columns") })
             .and_then(|x| { match x.val() {
@@ -69,22 +66,13 @@ impl BufferTransformT for FlateDecode<'_> {
                              _ => None
                         }})
             .unwrap_or(1);
-
-        let earlyexchange = self.options
+        let _earlyexchange = self.options
             .and_then(|x| { x.get(b"EarlyExchange") })
             .and_then(|x| { match x.val() {
                              PDFObjT::Integer(x) => Some(x.int_val()),
                              _ => None
                         }})
             .unwrap_or(1);
-
-        // debug info
-        println!("Read options as:");
-        println!("Predictor: {:?}", predictor);
-        println!("Colors: {:?}", colors);
-        println!("Bpc: {:?}", bitspercolumn);
-        println!("Early exhange: {:?}", earlyexchange);
-        println!("All options {:?}", self.options);
 
         let mut decoder = ZlibDecoder::new(Vec::new());
 
@@ -100,9 +88,8 @@ impl BufferTransformT for FlateDecode<'_> {
                 let loc = buf.get_location();
                 return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
             },
-            Ok(_n) => {
-                // n bytes consumed
-                println!("read n bytes...");
+            Ok(_) => {
+                // all bytes consumed
             },
         }
 
@@ -113,16 +100,12 @@ impl BufferTransformT for FlateDecode<'_> {
                 return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
             },
             Ok(decoded) => {
-                println!("Flate decoding finished!");
-                println!("Predictor value: {:?}", predictor);
-
                 let mut row_data = std::vec::Vec::<u8>::new();
                 let mut out_buffer = std::vec::Vec::<u8>::new();
 
                 if predictor > 1 {
                     if predictor == 2 {
-                        println!("TIFF encoding");
-
+                        // TIFF encoding
                         let row_length = columns * colors;
                         if row_length < 1 {
                             // No data.
@@ -161,94 +144,120 @@ impl BufferTransformT for FlateDecode<'_> {
                         return Ok(ParseBuffer::new(out_buffer));
 
                     } else if predictor >= 10 && predictor <= 15 {
-                        println!("predictor of PNG");
                         // PNG
-                        let row_length = columns * colors + 1;
-                        let rows = (decoded.len() as i64) /row_length;
+                        let row_length = (columns * colors + 1) as usize;
+                        let rows = (decoded.len() as usize)/row_length;
+                        let bytes_per_pixel = (bitspercolumn / 8) as usize;
 
-                        if (decoded.len() as i64) % row_length != 0 {
-                            println!("Error:: invalid row length");
+                        if row_length > (decoded.len() as usize) {
+                            let err = ErrorKind::TransformError(format!("PNG filter: decoded size too small for specified columns"));
+                            let loc = buf.get_location();
+                            return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
                         }
 
-                        if row_length > (decoded.len() as i64) {
-                            println!("ERROR: row length cannot be greater than data len");
+                        if (decoded.len() as usize) % row_length != 0 {
+                            let err = ErrorKind::TransformError(format!("PNG filter: decoded size does not match multiple of specified columns"));
+                            let loc = buf.get_location();
+                            return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
                         }
 
                         let mut prev_row = std::vec::Vec::<u8>::new();
-
-                        for _ in 0..row_length {
+                        for _ in 0 .. row_length {
                             prev_row.push(0);
                         }
-
-                        let bytes_per_pixel = bitspercolumn;
-
-                        for i in 0 .. rows {
+                        for r in 0 .. rows {
                             row_data.clear();
-                            for j in row_length*i .. row_length*(i+1) {
-                                row_data.push(decoded[j as usize]);
+                            for j in row_length*r .. row_length*(r+1) {
+                                row_data.push(decoded[j]);
                             }
 
-                            let fb = row_data[0];
-
-                            match fb {
-                                0 => {
-                                    // pfNone no prediction (raw).
-                                    println!("No prediction!")
-                                }
-                                1 => {
-                                    // pfSub predicts same as left sample.
-                                    for k in 1 + bytes_per_pixel..row_length {
-                                        row_data[k as usize] = row_data[(k - bytes_per_pixel) as usize]
+                            match predictor {
+                                10 => {
+                                    // PNG None
+                                    if row_data[0] != 0 {
+                                        let err = ErrorKind::TransformError(format!("PNG filter: a row filter is not None for None predictor"));
+                                        let loc = buf.get_location();
+                                        return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
                                     }
                                 }
-                                2 => {
-                                    // pfUp  Predicts same as sample above.
+                                11 => {
+                                    // PNG Sub
+                                    if row_data[0] != 1 {
+                                        let err = ErrorKind::TransformError(format!("PNG filter: a row filter is not Sub for Sub predictor"));
+                                        let loc = buf.get_location();
+                                        return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+                                    }
+                                    for k in 1 + bytes_per_pixel .. row_length {
+                                        row_data[k] = row_data[k].wrapping_add(row_data[k - bytes_per_pixel])
+                                    }
+                                }
+                                12 => {
+                                    // PNG Up
+                                    if row_data[0] != 2 {
+                                        let err = ErrorKind::TransformError(format!("PNG filter: a row filter is not Up for Up predictor"));
+                                        let loc = buf.get_location();
+                                        return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+                                    }
                                     for j in 1 .. row_length {
-                                        row_data[j as usize] = row_data[j as usize].wrapping_add(prev_row[j as usize]);
+                                        row_data[j] = row_data[j].wrapping_add(prev_row[j]);
                                     }
                                 }
-                                3 => {
-                                    // pfAvg  Predict based on left and above.
-                                    for j in 1..bytes_per_pixel+1 {
-                                        row_data[j as usize] += prev_row[j as usize]/2;
+                                13 => {
+                                    // PNG Avg
+                                    if row_data[0] != 3 {
+                                        let err = ErrorKind::TransformError(format!("PNG filter: a row filter is not Avg for Avg predictor"));
+                                        let loc = buf.get_location();
+                                        return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
                                     }
-
-                                    for j in bytes_per_pixel+1..row_length {
-                                        row_data[j as usize] = (row_data[(j-bytes_per_pixel) as usize] + prev_row[j as usize])/2;
+                                    for j in 1 .. 1 + bytes_per_pixel {
+                                        row_data[j] = row_data[j].wrapping_add(prev_row[j]/2);
+                                    }
+                                    for j in bytes_per_pixel .. row_length {
+                                        let incr = (row_data[j - bytes_per_pixel] + prev_row[j]) / 2;
+                                        row_data[j] = row_data[j].wrapping_add(incr)
                                     }
                                 }
-                                4 => {
-                                    // pfPaeth  Paeth algorithm prediction.
+                                14 => {
+                                    if row_data[0] != 4 {
+                                        let err = ErrorKind::TransformError(format!("PNG filter: a row filter is not Paeth for Paeth predictor"));
+                                        let loc = buf.get_location();
+                                        return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+                                    }
+                                    // Paeth algorithm prediction.
                                     let mut a = 0;
                                     let mut c = 0;
                                     for j in 1 .. row_length {
-                                        let b = prev_row[j as usize];
+                                        let b = prev_row[j];
                                         if j >= bytes_per_pixel + 1 {
-                                            a = row_data[(j - bytes_per_pixel) as usize];
-                                            c = prev_row[(j - bytes_per_pixel) as usize];
+                                            a = row_data[j - bytes_per_pixel];
+                                            c = prev_row[j - bytes_per_pixel];
                                         }
-                                        row_data[j as usize] = paeth(a, b, c);
+                                        row_data[j] = paeth(a, b, c);
                                     }
                                 }
-                                _ => { println!("fb > 4!");}
+                                _ => {
+                                    let err = ErrorKind::TransformError(format!("PNG filter: unknown predictor {}", predictor));
+                                    let loc = buf.get_location();
+                                    return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+                                }
                             }
 
                             // update prev row
                             for j in 0 .. row_length {
-                                prev_row[j as usize] = row_data[j as usize];
+                                prev_row[j] = row_data[j];
                             }
 
                             // put data in output buffer
-                            for &i in &row_data {
-                                out_buffer.push(i);
+                            for j in 1 .. row_length {
+                                out_buffer.push(row_data[j]);
                             }
                         }
-
                         return Ok(ParseBuffer::new(out_buffer));
                     }
                 } else {
-                    // predictor <= 1
-                    println!("ERROR: pridictor < 1!>");
+                    let err = ErrorKind::TransformError(format!("PNG filter: unknown predictor {}", predictor));
+                    let loc = buf.get_location();
+                    return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
                 }
                 return Ok(ParseBuffer::new(decoded));
             }
@@ -326,7 +335,7 @@ impl BufferTransformT for LZWDecode<'_> {
             .unwrap_or(1);
 
         // debug info
-        println!("Read options as:");
+        println!("LZW read options as:");
         println!("Predictor: {:?}", predictor);
         println!("Colors: {:?}", colors);
         println!("Bpc: {:?}", bitspercolumn);
