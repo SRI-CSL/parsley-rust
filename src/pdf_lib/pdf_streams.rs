@@ -181,14 +181,12 @@ impl ObjStreamP<'_> {
                     let loc = old.start();
                     let msg = format!(
                         "non-unique object id ({}, {}), first found near offset {}",
-                        *onum,
-                        0,
-                        loc
+                        *onum, 0, loc
                     );
                     let err = ErrorKind::GuardError(msg);
                     let end = buf.get_cursor();
                     return Err(locate_value(err, start, end))
-                }
+                },
             }
             let end = buf.get_cursor();
             objs.push(LocatedVal::new(ind, start, end))
@@ -530,8 +528,7 @@ impl ParsleyParser for XrefStreamP<'_> {
 
         // Selects the input for the iteration from the view stack.
         fn get_input<'a>(
-            inp: &'a mut dyn ParseBufferT,
-            views: &'a mut Vec<ParseBuffer>
+            inp: &'a mut dyn ParseBufferT, views: &'a mut Vec<ParseBuffer>,
         ) -> &'a mut dyn ParseBufferT {
             if views.is_empty() {
                 inp

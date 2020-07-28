@@ -379,9 +379,7 @@ impl ParseBufferT for ParseBuffer {
         assert!(ofs <= self.size);
         self.ofs = ofs
     }
-    fn check_cursor(&self, ofs: usize) -> bool {
-        ofs <= self.size
-    }
+    fn check_cursor(&self, ofs: usize) -> bool { ofs <= self.size }
 
     fn incr_cursor(&mut self) -> () {
         assert!(self.ofs < self.size);
