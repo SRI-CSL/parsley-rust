@@ -105,7 +105,7 @@ impl BufferTransformT for FlateDecode<'_> {
                 return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
             },
             Ok(decoded) => {
-                return filter(
+                return flate_lzw_filter(
                     decoded,
                     &buf.get_location(),
                     predictor as usize,
@@ -140,7 +140,7 @@ pub struct LZWDecode<'a> {
 }
 
 impl LZWDecode<'_> {
-    pub fn new<'a>(options: &'a Option<&'a DictT>) -> FlateDecode { FlateDecode { options } }
+    pub fn new<'a>(options: &'a Option<&'a DictT>) -> LZWDecode { LZWDecode { options } }
 }
 
 impl BufferTransformT for LZWDecode<'_> {
@@ -189,7 +189,7 @@ impl BufferTransformT for LZWDecode<'_> {
 
         let decoded = decode_bytes_lzw(buf, earlyexchange);
 
-        filter(
+        flate_lzw_filter(
             decoded,
             &buf.get_location(),
             predictor as usize,
@@ -233,7 +233,7 @@ fn decode_bytes_lzw(buf: &dyn ParseBufferT, earlyexchange: i64) -> Vec<u8> {
     return out
 }
 
-fn filter(
+fn flate_lzw_filter(
     decoded: Vec<u8>, loc: &dyn Location, predictor: usize, colors: usize, columns: usize,
     bitspercolumn: usize,
 ) -> TransformResult {
