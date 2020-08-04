@@ -114,15 +114,21 @@ impl BufferTransformT for FlateDecode<'_> {
 
                         let rows = (decoded.len() as i64) / row_length;
                         if (decoded.len() as i64)%row_length != 0 {
-                            println!("ERROR: TIFF encoding: Invalid row length.");
+                            let err = ErrorKind::TransformError(format!("TIFF encoding error: Invalid row length."));
+                            let loc = buf.get_location();
+                            return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
                         }
 
                         if row_length%colors != 0 {
-                            println!("ERROR: TIFF encoding: Invalid row length.");
+                            let err = ErrorKind::TransformError(format!("TIFF encoding error: Invalid row length."));
+                            let loc = buf.get_location();
+                            return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
                         }
 
                         if row_length > (decoded.len() as i64) {
-                            println!("ERROR: Row length cannot be longer than data length.");
+                            let err = ErrorKind::TransformError(format!("TIFF encoding error: Row length cannot be longer than data length."));
+                            let loc = buf.get_location();
+                            return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
                         }
 
                         for i in 0..rows {
@@ -335,12 +341,12 @@ impl BufferTransformT for LZWDecode<'_> {
             .unwrap_or(1);
 
         // debug info
-        println!("LZW read options as:");
-        println!("Predictor: {:?}", predictor);
-        println!("Colors: {:?}", colors);
-        println!("Bpc: {:?}", bitspercolumn);
-        println!("Early exhange: {:?}", earlyexchange);
-        println!("All options {:?}", self.options);
+        // println!("LZW read options as:");
+        // println!("Predictor: {:?}", predictor);
+        // println!("Colors: {:?}", colors);
+        // println!("Bpc: {:?}", bitspercolumn);
+        // println!("Early exhange: {:?}", earlyexchange);
+        // println!("All options {:?}", self.options);
 
         let mut out = std::vec::Vec::<u8>::new();
 
@@ -349,29 +355,32 @@ impl BufferTransformT for LZWDecode<'_> {
         // apply transformations
         if predictor > 1 {
             if predictor == 2 {
-                println!("TIFF encoding");
                 let row_length : i64 = colors * columns;
 
                 if row_length < 1 {
-                    println!("ERROR: Row length < 1...");
-                    return Ok(ParseBuffer::new([].to_vec()));
+                    let err = ErrorKind::TransformError(format!("TIFF encoding error: Row length < 1..."));
+                    let loc = buf.get_location();
+                    return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
                 }
 
                 let rows = (decoded.len() as i64)/row_length;
 
 		if (decoded.len() as i64) % row_length != 0 {
-                    println!("TIFF : invalid row length");
-                    return Ok(ParseBuffer::new([].to_vec()));
+                    let err = ErrorKind::TransformError(format!("TIFF encoding error: invalid row length."));
+                    let loc = buf.get_location();
+                    return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
 		}
 
                 if row_length % colors != 0 {
-                    println!("Invalid row length for colors.");
-                    return Ok(ParseBuffer::new([].to_vec()));
+                    let err = ErrorKind::TransformError(format!("TIFF encoding eror: Invalid row length for colors."));
+                    let loc = buf.get_location();
+                    return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
                 }
 
                 if row_length > (decoded.len()) as i64 {
-                    println!("ERROR: row len cannot be > data len!");
-
+                    let err = ErrorKind::TransformError(format!("TIFF encoding error: row len cannot be > data len!"));
+                    let loc = buf.get_location();
+                    return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
                 }
 
                 let mut row_data = vec![];
@@ -387,23 +396,26 @@ impl BufferTransformT for LZWDecode<'_> {
 
                 return Ok(ParseBuffer::new(out.to_vec()));
             } else if predictor >= 10 && predictor <= 15 {
-                println!("PNG encoding...");
                 let row_length = columns * colors + 1;
 
                 if row_length < 1 {
-                    println!("ERROR: Row length < 1...");
-                    return Ok(ParseBuffer::new([].to_vec()));
+                    let err = ErrorKind::TransformError(format!("PNG enconding error: row length < 1!"));
+                    let loc = buf.get_location();
+                    return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
                 }
 
                 let rows = (decoded.len() as i64)/row_length;
 
 		if (decoded.len() as i64) % row_length != 0 {
-                    println!("PNG : invalid row length");
-                    return Ok(ParseBuffer::new([].to_vec()));
+                    let err = ErrorKind::TransformError(format!("PNG encoding error: Invalid row length!"));
+                    let loc = buf.get_location();
+                    return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
 		}
 
                 if row_length > (decoded.len() as i64) {
-                    println!("ERROR: row len cannot be > data len!");
+                    let err = ErrorKind::TransformError(format!("PNG encoding  error: row len cannot be > data len!"));
+                    let loc = buf.get_location();
+                    return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
                 }
 
                 // output buffer
@@ -426,7 +438,7 @@ impl BufferTransformT for LZWDecode<'_> {
 
                     let fb = row_data[0];
                     match fb {
-                        0 => println!("no predition made"),
+                        0 => println!("No predition made"),
                         1 => {
                             // sub: same as left
                             for k in 2usize .. (row_length as usize) {
@@ -439,7 +451,9 @@ impl BufferTransformT for LZWDecode<'_> {
                             }
                         },
                         _ => {
-                            println!("Error: invalid filter byte!");
+                            let err = ErrorKind::TransformError(format!("PNG encoding error: Invalid filter byte!"));
+                            let loc = buf.get_location();
+                            return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
                         }
                     }
 
@@ -453,8 +467,9 @@ impl BufferTransformT for LZWDecode<'_> {
                 // return
                 return Ok(ParseBuffer::new(out));
             } else {
-                println!("ERROR: unsupported predictor!");
-                return Ok(ParseBuffer::new([].to_vec()));
+                let err = ErrorKind::TransformError(format!("PNG encoding error: Unsupported predictor!"));
+                let loc = buf.get_location();
+                return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
             }
         }
 
