@@ -125,8 +125,17 @@ impl DictT {
     // conveniences:
     // get the usize value of a key
     pub fn get_usize(&self, k: &[u8]) -> Option<usize> {
+        // TODO: the option return-type does not allow distinguishing
+        // between a key that's not present, from one that is present
+        // but with an invalid (non-usize) integer.
         self.get(k).map_or(None, |lobj| match lobj.val() {
-            PDFObjT::Integer(i) => Some(i.usize_val()),
+            PDFObjT::Integer(i) => {
+                if i.is_usize() {
+                    Some(i.usize_val())
+                } else {
+                    None
+                }
+            },
             _ => None,
         })
     }
@@ -332,8 +341,8 @@ impl ReferenceP {
 
         let mut cursor = buf.get_cursor();
         let num = int.parse(buf)?;
-        if !(num.val().is_zero() || num.val().is_positive()) {
-            let msg = format!("invalid ref-object id: {}", num.val().int_val());
+        if !(num.val().is_zero() || num.val().is_usize()) {
+            let msg = format!("invalid or unsupported ref-object id: {}", num.val().int_val());
             let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             buf.set_cursor(cursor);
@@ -343,8 +352,8 @@ impl ReferenceP {
 
         cursor = buf.get_cursor();
         let gen = int.parse(buf)?;
-        if !(gen.val().is_zero() || gen.val().is_positive()) {
-            let msg = format!("invalid ref-object generation: {}", gen.val().int_val());
+        if !(gen.val().is_zero() || gen.val().is_usize()) {
+            let msg = format!("invalid or unsupported ref-object generation: {}", gen.val().int_val());
             let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             buf.set_cursor(cursor);
@@ -585,8 +594,8 @@ impl IndirectP<'_> {
         let start = buf.get_cursor();
         let mut cursor = start;
         let num = int.parse(buf)?;
-        if !num.val().is_positive() {
-            let msg = format!("invalid object id: {}", num.val().int_val());
+        if !num.val().is_usize() {
+            let msg = format!("invalid or unsupported object id: {}", num.val().int_val());
             let err = ErrorKind::GuardError(msg);
             buf.set_cursor(cursor);
             return Err(num.place(err))
@@ -594,8 +603,8 @@ impl IndirectP<'_> {
         ws.parse(buf)?;
         cursor = buf.get_cursor();
         let gen = int.parse(buf)?;
-        if !(gen.val().is_zero() || gen.val().is_positive()) {
-            let msg = format!("invalid object generation: {}", gen.val().int_val());
+        if !(gen.val().is_zero() || gen.val().is_usize()) {
+            let msg = format!("invalid or unsupported object generation: {}", gen.val().int_val());
             let err = ErrorKind::GuardError(msg);
             buf.set_cursor(cursor);
             return Err(gen.place(err))

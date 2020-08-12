@@ -111,7 +111,7 @@ impl ObjStreamP<'_> {
             // get the object#
             let mut cursor = buf.get_cursor();
             let obj = int.parse(buf)?;
-            if !obj.val().is_positive() {
+            if !obj.val().is_usize() {
                 let msg = format!("invalid object id: {}", obj.val().int_val());
                 let err = ErrorKind::GuardError(msg);
                 buf.set_cursor(cursor);
@@ -123,6 +123,12 @@ impl ObjStreamP<'_> {
             // get the offset.
             cursor = buf.get_cursor();
             let ofs = int.parse(buf)?;
+            if !ofs.val().is_usize() {
+                let msg = format!("invalid or unsupported offset: {}", ofs.val().int_val());
+                let err = ErrorKind::GuardError(msg);
+                buf.set_cursor(cursor);
+                return Err(ofs.place(err))
+            }
             // ensure that the offset is ordered.
             let ofs_val = ofs.val().usize_val();
             if ofs_val <= last_ofs && obj_ofs.len() > 0 {
@@ -362,6 +368,18 @@ impl XrefStreamP<'_> {
                 .zip(i.objs().iter().skip(1).step_by(2))
             {
                 if let (PDFObjT::Integer(s), PDFObjT::Integer(c)) = (s.val(), c.val()) {
+                    if !s.is_usize() {
+                        let msg = format!("Invalid or unsupported integer in xref stream /Index: {}",
+                                          s.int_val());
+                        let err = ErrorKind::GuardError(msg);
+                        return Err(locate_value(err, dict.start(), dict.end()))
+                    }
+                    if !c.is_usize() {
+                        let msg = format!("Invalid or unsupported integer in xref stream /Index: {}",
+                                          c.int_val());
+                        let err = ErrorKind::GuardError(msg);
+                        return Err(locate_value(err, dict.start(), dict.end()))
+                    }
                     index_ents.push((s.usize_val(), c.usize_val()))
                 } else {
                     let msg =
@@ -391,6 +409,12 @@ impl XrefStreamP<'_> {
         let mut w_array = Vec::new();
         for o in w.objs() {
             if let PDFObjT::Integer(i) = o.val() {
+                if !i.is_usize() {
+                    let msg = format!("Invalid or unsupported integer in /W in xref stream dictionary: {}",
+                                      i.int_val());
+                    let err = ErrorKind::GuardError(msg);
+                    return Err(locate_value(err, dict.start(), dict.end()))
+                }
                 let sz = i.usize_val();
                 // Implementation detail: do not handle integer widths larger than 4 bytes
                 if sz > 4 {

@@ -185,9 +185,16 @@ pub struct IntegerT(i64);
 impl IntegerT {
     pub fn new(i: i64) -> IntegerT { IntegerT(i) }
     pub fn int_val(&self) -> i64 { self.0 }
+    pub fn is_usize(&self) -> bool {
+        let u = <usize as TryFrom<i64>>::try_from(self.0);
+        if let Err(_) = u {
+            false
+        } else {
+            true
+        }
+    }
     pub fn usize_val(&self) -> usize {
         let u = <usize as TryFrom<i64>>::try_from(self.0);
-        // TODO: handle conversion errors.
         u.unwrap()
     }
     pub fn is_zero(&self) -> bool { self.0 == 0 }
