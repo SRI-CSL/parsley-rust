@@ -369,14 +369,18 @@ impl XrefStreamP<'_> {
             {
                 if let (PDFObjT::Integer(s), PDFObjT::Integer(c)) = (s.val(), c.val()) {
                     if !s.is_usize() {
-                        let msg = format!("Invalid or unsupported integer in xref stream /Index: {}",
-                                          s.int_val());
+                        let msg = format!(
+                            "Invalid or unsupported integer in xref stream /Index: {}",
+                            s.int_val()
+                        );
                         let err = ErrorKind::GuardError(msg);
                         return Err(locate_value(err, dict.start(), dict.end()))
                     }
                     if !c.is_usize() {
-                        let msg = format!("Invalid or unsupported integer in xref stream /Index: {}",
-                                          c.int_val());
+                        let msg = format!(
+                            "Invalid or unsupported integer in xref stream /Index: {}",
+                            c.int_val()
+                        );
                         let err = ErrorKind::GuardError(msg);
                         return Err(locate_value(err, dict.start(), dict.end()))
                     }
@@ -410,8 +414,10 @@ impl XrefStreamP<'_> {
         for o in w.objs() {
             if let PDFObjT::Integer(i) = o.val() {
                 if !i.is_usize() {
-                    let msg = format!("Invalid or unsupported integer in /W in xref stream dictionary: {}",
-                                      i.int_val());
+                    let msg = format!(
+                        "Invalid or unsupported integer in /W in xref stream dictionary: {}",
+                        i.int_val()
+                    );
                     let err = ErrorKind::GuardError(msg);
                     return Err(locate_value(err, dict.start(), dict.end()))
                 }

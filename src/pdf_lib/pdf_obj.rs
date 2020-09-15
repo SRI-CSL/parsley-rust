@@ -342,7 +342,10 @@ impl ReferenceP {
         let mut cursor = buf.get_cursor();
         let num = int.parse(buf)?;
         if !(num.val().is_zero() || num.val().is_usize()) {
-            let msg = format!("invalid or unsupported ref-object id: {}", num.val().int_val());
+            let msg = format!(
+                "invalid or unsupported ref-object id: {}",
+                num.val().int_val()
+            );
             let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             buf.set_cursor(cursor);
@@ -353,7 +356,10 @@ impl ReferenceP {
         cursor = buf.get_cursor();
         let gen = int.parse(buf)?;
         if !(gen.val().is_zero() || gen.val().is_usize()) {
-            let msg = format!("invalid or unsupported ref-object generation: {}", gen.val().int_val());
+            let msg = format!(
+                "invalid or unsupported ref-object generation: {}",
+                gen.val().int_val()
+            );
             let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
             buf.set_cursor(cursor);
@@ -604,7 +610,10 @@ impl IndirectP<'_> {
         cursor = buf.get_cursor();
         let gen = int.parse(buf)?;
         if !(gen.val().is_zero() || gen.val().is_usize()) {
-            let msg = format!("invalid or unsupported object generation: {}", gen.val().int_val());
+            let msg = format!(
+                "invalid or unsupported object generation: {}",
+                gen.val().int_val()
+            );
             let err = ErrorKind::GuardError(msg);
             buf.set_cursor(cursor);
             return Err(gen.place(err))
