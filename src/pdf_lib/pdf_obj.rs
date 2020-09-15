@@ -319,7 +319,7 @@ impl StreamT {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Copy, Clone)]
 pub struct ReferenceT {
     num: usize,
     gen: usize,
