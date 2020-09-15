@@ -753,7 +753,7 @@ mod test_pdf_obj {
         let v = Vec::from("\r\n -1 0 R \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let e = locate_value(
-            ErrorKind::GuardError("invalid ref-object id: -1".to_string()),
+            ErrorKind::GuardError("invalid or unsupported ref-object id: -1".to_string()),
             5,
             7,
         );
@@ -764,7 +764,7 @@ mod test_pdf_obj {
         let v = Vec::from("\r\n 1 -1 R \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let e = locate_value(
-            ErrorKind::GuardError("invalid ref-object generation: -1".to_string()),
+            ErrorKind::GuardError("invalid or unsupported ref-object generation: -1".to_string()),
             7,
             9,
         );
@@ -849,7 +849,7 @@ mod test_pdf_obj {
         let v = Vec::from("[ -1 0 R ] \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let e = locate_value(
-            ErrorKind::GuardError("invalid ref-object id: -1".to_string()),
+            ErrorKind::GuardError("invalid or unsupported ref-object id: -1".to_string()),
             2,
             4,
         );

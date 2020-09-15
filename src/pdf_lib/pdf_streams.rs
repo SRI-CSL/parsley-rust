@@ -652,7 +652,7 @@ mod test_object_stream {
         // invalid object id
         let mut buf = ParseBuffer::new(Vec::from("10 0 0 1 30".as_bytes()));
         let chk = osp.parse_metadata(&mut buf, 3).err().unwrap();
-        let err = "invalid object id: 0";
+        let err = "not at number";
         assert_eq!(
             chk,
             locate_value(ErrorKind::GuardError(String::from(err)), 0, 0)
