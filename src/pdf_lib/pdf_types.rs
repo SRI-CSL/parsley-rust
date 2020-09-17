@@ -5,11 +5,18 @@ use std::rc::Rc;
 
 /* Basic type structure of PDF objects */
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub enum DictKeySpec {
+    Required,
+    Optional,
+    Forbidden,
+}
+
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DictEntry {
     key: Vec<u8>,
     typ: Rc<PDFType>,
-    opt: bool,
+    opt: DictKeySpec,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -40,7 +47,8 @@ pub enum PDFType {
 pub enum TypeCheckError {
     RefNotFound(ReferenceT),
     ArraySizeMismatch(/* expected */ usize, /* found */ usize),
-    MissingDictKey(Vec<u8>),
+    MissingKey(Vec<u8>),
+    ForbiddenKey(Vec<u8>),
     TypeMismatch(/* expected */ Rc<PDFType>, /* found */ PDFType),
 }
 
@@ -120,15 +128,24 @@ pub fn check_type(
                 for ent in ents {
                     let val = d.get(&ent.key);
                     match (val, ent.opt, ent.typ.as_ref()) {
-                        (None, true, _) => continue,
-                        (None, false, _) => {
+                        (None, DictKeySpec::Optional, _) => continue,
+                        (None, DictKeySpec::Forbidden, _) => continue,
+                        (None, DictKeySpec::Required, _) => {
                             // TODO: make a new key type to avoid this
                             let mut k = Vec::new();
                             for e in &ent.key {
                                 k.push(*e)
                             }
-                            return Some(TypeCheckError::MissingDictKey(k))
+                            return Some(TypeCheckError::MissingKey(k))
                         },
+                        (Some(_), DictKeySpec::Forbidden, _) => {
+                            // TODO: make a new key type to avoid this
+                            let mut k = Vec::new();
+                            for e in &ent.key {
+                                k.push(*e)
+                            }
+                            return Some(TypeCheckError::ForbiddenKey(k))
+                        }
                         (Some(_), _, PDFType::Any) => continue,
                         (Some(v), _, _) => q.push_back((Rc::clone(v), Rc::clone(&ent.typ))),
                     }
@@ -139,14 +156,23 @@ pub fn check_type(
                 for ent in ents {
                     let val = s.dict().val().get(&ent.key);
                     match (val, ent.opt, ent.typ.as_ref()) {
-                        (None, true, _) => continue,
-                        (None, false, _) => {
+                        (None, DictKeySpec::Optional, _) => continue,
+                        (None, DictKeySpec::Forbidden, _) => continue,
+                        (None, DictKeySpec::Required, _) => {
                             // TODO: make a new key type to avoid this
                             let mut k = Vec::new();
                             for e in &ent.key {
                                 k.push(*e)
                             }
-                            return Some(TypeCheckError::MissingDictKey(k))
+                            return Some(TypeCheckError::MissingKey(k))
+                        },
+                        (Some(_), DictKeySpec::Forbidden, _) => {
+                            // TODO: make a new key type to avoid this
+                            let mut k = Vec::new();
+                            for e in &ent.key {
+                                k.push(*e)
+                            }
+                            return Some(TypeCheckError::ForbiddenKey(k))
                         },
                         (Some(_), _, PDFType::Any) => continue,
                         (Some(v), _, _) => q.push_back((Rc::clone(v), Rc::clone(&ent.typ))),
@@ -163,7 +189,7 @@ pub fn check_type(
 mod test_pdf_types {
     use super::super::super::pcore::parsebuffer::{ParseBuffer, ParsleyParser};
     use super::super::pdf_obj::{PDFObjContext, PDFObjP};
-    use super::{check_type, DictEntry, PDFPrimType, PDFType};
+    use super::{check_type, DictEntry, DictKeySpec, PDFPrimType, PDFType};
     use std::rc::Rc;
 
     fn mk_rectangle_type() -> PDFType {
@@ -194,14 +220,19 @@ mod test_pdf_types {
         let ent1 = DictEntry {
             key: Vec::from("Entry"),
             typ: Rc::new(mk_rectangle_type()),
-            opt: false,
+            opt: DictKeySpec::Required,
         };
         let ent2 = DictEntry {
-            key: Vec::from("Dummy"),
+            key: Vec::from("Dummy1"),
             typ: Rc::new(mk_rectangle_type()),
-            opt: true,
+            opt: DictKeySpec::Forbidden,
         };
-        let typ = PDFType::Dict(vec![ent1, ent2]);
+        let ent3 = DictEntry {
+            key: Vec::from("Dummy2"),
+            typ: Rc::new(mk_rectangle_type()),
+            opt: DictKeySpec::Optional,
+        };
+        let typ = PDFType::Dict(vec![ent1, ent2, ent3]);
         assert_eq!(check_type(&ctxt, Rc::new(obj), Rc::new(typ)), None);
     }
 }
