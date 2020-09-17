@@ -131,19 +131,11 @@ pub fn check_type(
                         (None, DictKeySpec::Optional, _) => continue,
                         (None, DictKeySpec::Forbidden, _) => continue,
                         (None, DictKeySpec::Required, _) => {
-                            // TODO: make a new key type to avoid this
-                            let mut k = Vec::new();
-                            for e in &ent.key {
-                                k.push(*e)
-                            }
+                            let k = ent.key.clone();
                             return Some(TypeCheckError::MissingKey(k))
                         },
                         (Some(_), DictKeySpec::Forbidden, _) => {
-                            // TODO: make a new key type to avoid this
-                            let mut k = Vec::new();
-                            for e in &ent.key {
-                                k.push(*e)
-                            }
+                            let k = ent.key.clone();
                             return Some(TypeCheckError::ForbiddenKey(k))
                         }
                         (Some(_), _, PDFType::Any) => continue,
@@ -159,19 +151,11 @@ pub fn check_type(
                         (None, DictKeySpec::Optional, _) => continue,
                         (None, DictKeySpec::Forbidden, _) => continue,
                         (None, DictKeySpec::Required, _) => {
-                            // TODO: make a new key type to avoid this
-                            let mut k = Vec::new();
-                            for e in &ent.key {
-                                k.push(*e)
-                            }
+                            let k = ent.key.clone();
                             return Some(TypeCheckError::MissingKey(k))
                         },
                         (Some(_), DictKeySpec::Forbidden, _) => {
-                            // TODO: make a new key type to avoid this
-                            let mut k = Vec::new();
-                            for e in &ent.key {
-                                k.push(*e)
-                            }
+                            let k = ent.key.clone();
                             return Some(TypeCheckError::ForbiddenKey(k))
                         },
                         (Some(_), _, PDFType::Any) => continue,
