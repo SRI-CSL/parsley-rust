@@ -945,6 +945,43 @@ mod test_pdf_obj {
     }
 
     #[test]
+    fn dict_eq() {
+        // Ensure dict equality is independent of ordering of map insertions.
+
+        let mut map = BTreeMap::new();
+        let key = NameT::new(Vec::from("Entry1".as_bytes()));
+        let entval = LocatedVal::new(PDFObjT::Null(()), 9, 16);
+        map.insert(
+            LocatedVal::new(key, 2, 8).val().normalize(),
+            Rc::new(entval),
+        );
+        let key = NameT::new(Vec::from("Entry2".as_bytes()));
+        let entval = LocatedVal::new(PDFObjT::Boolean(true), 9, 16);
+        map.insert(
+            LocatedVal::new(key, 2, 8).val().normalize(),
+            Rc::new(entval),
+        );
+        let l = PDFObjT::Dict(DictT::new(map));
+
+        let mut map = BTreeMap::new();
+        let key = NameT::new(Vec::from("Entry2".as_bytes()));
+        let entval = LocatedVal::new(PDFObjT::Boolean(true), 9, 16);
+        map.insert(
+            LocatedVal::new(key, 2, 8).val().normalize(),
+            Rc::new(entval),
+        );
+        let key = NameT::new(Vec::from("Entry1".as_bytes()));
+        let entval = LocatedVal::new(PDFObjT::Null(()), 9, 16);
+        map.insert(
+            LocatedVal::new(key, 2, 8).val().normalize(),
+            Rc::new(entval),
+        );
+        let r = PDFObjT::Dict(DictT::new(map));
+
+        assert_eq!(l, r);
+    }
+
+    #[test]
     #[rustfmt::skip]
     fn indirect() {
         let mut ctxt = PDFObjContext::new();
