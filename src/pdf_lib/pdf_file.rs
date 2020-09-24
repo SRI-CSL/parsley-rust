@@ -559,6 +559,8 @@ mod test_pdf_file {
     use super::{BodyP, BodyT, HeaderP, HeaderT, StartXrefP, StartXrefT, TrailerP, TrailerT};
     use super::{XrefEntP, XrefEntT, XrefSectP, XrefSectT, XrefSubSectP, XrefSubSectT};
 
+    fn mk_new_context() -> PDFObjContext { PDFObjContext::new(10) }
+
     #[test]
     fn test_header() {
         let mut p = HeaderP;
@@ -764,7 +766,7 @@ mod test_pdf_file {
 
     #[test]
     fn test_body_without_comments() {
-        let mut ctxt = PDFObjContext::new();
+        let mut ctxt = mk_new_context();
         let mut p = BodyP::new(&mut ctxt);
         // body snippet from hello world, but with embedded comments removed
         let v = Vec::from(
@@ -833,7 +835,7 @@ endobj
 
     #[test]
     fn test_body_with_comments() {
-        let mut ctxt = PDFObjContext::new();
+        let mut ctxt = mk_new_context();
         let mut p = BodyP::new(&mut ctxt);
         // original body snippet from hello world (with embedded comments)
         let v = Vec::from(
@@ -901,7 +903,7 @@ endobj"
 
     #[test]
     fn test_trailer() {
-        let mut ctxt = PDFObjContext::new();
+        let mut ctxt = mk_new_context();
         let mut p = TrailerP::new(&mut ctxt);
         //01234567
         //890

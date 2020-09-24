@@ -784,7 +784,8 @@ fn parse_file(test_file: &str) {
     );
 
     // Create the pdf object context.
-    let mut ctxt = PDFObjContext::new();
+    // TODO: control max-depth via command-line option.
+    let mut ctxt = PDFObjContext::new(50);
 
     // Parse xref table at that offset.
     if !pb.check_cursor(sxref_offset) {

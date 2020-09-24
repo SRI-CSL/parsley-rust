@@ -275,13 +275,15 @@ pub fn check_type(
 
 #[cfg(test)]
 mod test_pdf_types {
-    use super::super::super::pcore::parsebuffer::{LocatedVal, ParseBuffer, ParsleyParser};
-    use super::super::pdf_obj::{PDFObjContext, PDFObjP, PDFObjT};
+    use super::super::super::pcore::parsebuffer::{LocatedVal, ParseBuffer};
+    use super::super::pdf_obj::{PDFObjContext, parse_pdf_obj, PDFObjT};
     use super::super::pdf_prim::NameT;
     use super::{
         check_type, DictEntry, DictKeySpec, PDFPrimType, PDFType, TypeCheck, TypeCheckError,
     };
     use std::rc::Rc;
+
+    fn mk_new_context() -> PDFObjContext { PDFObjContext::new(10) }
 
     fn mk_rectangle_typchk() -> Rc<TypeCheck> {
         Rc::new(TypeCheck::new(Rc::new(PDFType::Array {
@@ -305,22 +307,20 @@ mod test_pdf_types {
 
     #[test]
     fn test_rectangle() {
-        let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut ctxt = mk_new_context();
         let v = Vec::from("[1 2 3 4]".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = p.parse(&mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let typ = mk_rectangle_typchk();
         assert_eq!(check_type(&ctxt, Rc::new(obj), typ), None);
     }
 
     #[test]
     fn test_dict() {
-        let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut ctxt = mk_new_context();
         let v = Vec::from("<< /Entry [ 1 1 4 5 ] >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = p.parse(&mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
 
         let ent1 = DictEntry {
             key: Vec::from("Entry"),
@@ -343,11 +343,10 @@ mod test_pdf_types {
 
     #[test]
     fn test_dict_required() {
-        let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut ctxt = mk_new_context();
         let v = Vec::from("<< /Entry [ 1 1 4 5 ] >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = p.parse(&mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
 
         let ent = DictEntry {
             key: Vec::from("Dummy"),
@@ -363,11 +362,10 @@ mod test_pdf_types {
 
     #[test]
     fn test_dict_forbidden() {
-        let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut ctxt = mk_new_context();
         let v = Vec::from("<< /Entry [ 1 1 4 5 ] >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = p.parse(&mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
 
         let ent = DictEntry {
             key: Vec::from("Entry"),
@@ -384,11 +382,10 @@ mod test_pdf_types {
     #[test]
     fn test_dict_allowed_value() {
         // valid value for required key
-        let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut ctxt = mk_new_context();
         let v = Vec::from("<< /PageMode /UseNone >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = p.parse(&mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let ent = DictEntry {
             key: Vec::from("PageMode"),
             chk: mk_pagemode_typchk(),
@@ -398,11 +395,10 @@ mod test_pdf_types {
         assert_eq!(check_type(&ctxt, Rc::new(obj), Rc::new(typ)), None);
 
         // valid value for optional key
-        let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut ctxt = mk_new_context();
         let v = Vec::from("<< /PageMode /UseNone >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = p.parse(&mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let ent = DictEntry {
             key: Vec::from("PageMode"),
             chk: mk_pagemode_typchk(),
@@ -412,11 +408,10 @@ mod test_pdf_types {
         assert_eq!(check_type(&ctxt, Rc::new(obj), Rc::new(typ)), None);
 
         // optional key absent
-        let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut ctxt = mk_new_context();
         let v = Vec::from("<< >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = p.parse(&mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let ent = DictEntry {
             key: Vec::from("PageMode"),
             chk: mk_pagemode_typchk(),
@@ -426,11 +421,10 @@ mod test_pdf_types {
         assert_eq!(check_type(&ctxt, Rc::new(obj), Rc::new(typ)), None);
 
         // forbidden key present
-        let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut ctxt = mk_new_context();
         let v = Vec::from("<< /PageMode /UseNone >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = p.parse(&mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let ent = DictEntry {
             key: Vec::from("PageMode"),
             chk: mk_pagemode_typchk(),
@@ -443,11 +437,10 @@ mod test_pdf_types {
         );
 
         // invalid value for optional key
-        let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut ctxt = mk_new_context();
         let v = Vec::from("<< /PageMode /Dummy >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = p.parse(&mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let ent = DictEntry {
             key: Vec::from("PageMode"),
             chk: mk_pagemode_typchk(),
