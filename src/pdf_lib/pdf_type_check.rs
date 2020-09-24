@@ -276,7 +276,7 @@ pub fn check_type(
 #[cfg(test)]
 mod test_pdf_types {
     use super::super::super::pcore::parsebuffer::{LocatedVal, ParseBuffer};
-    use super::super::pdf_obj::{PDFObjContext, parse_pdf_obj, PDFObjT};
+    use super::super::pdf_obj::{parse_pdf_obj, PDFObjContext, PDFObjT};
     use super::super::pdf_prim::NameT;
     use super::{
         check_type, DictEntry, DictKeySpec, PDFPrimType, PDFType, TypeCheck, TypeCheckError,

@@ -24,7 +24,7 @@ use super::super::pcore::parsebuffer::{
 use super::super::pcore::transforms::{BufferTransformT, RestrictView, RestrictViewFrom};
 
 use super::pdf_filters::FlateDecode;
-use super::pdf_obj::{DictT, Filter, IndirectT, PDFObjContext, parse_pdf_obj, PDFObjT, StreamT};
+use super::pdf_obj::{parse_pdf_obj, DictT, Filter, IndirectT, PDFObjContext, PDFObjT, StreamT};
 use super::pdf_prim::{IntegerP, WhitespaceEOL};
 
 type ObjStreamMetadata = Vec<(usize, usize)>; // (object#, offset) pairs
