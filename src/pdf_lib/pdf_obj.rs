@@ -46,14 +46,19 @@ impl Location for PDFLocation {
 // collected during parsing.
 
 pub struct PDFObjContext {
-    // This maps object identifiers to their objects.
-    defns: BTreeMap<(usize, usize), Rc<LocatedVal<PDFObjT>>>,
+    // Maps object identifiers to their objects.
+    defns:     BTreeMap<(usize, usize), Rc<LocatedVal<PDFObjT>>>,
+    // Tracks the recursion depth.
+    max_depth: usize,
+    cur_depth: usize,
 }
 
 impl PDFObjContext {
-    pub fn new() -> PDFObjContext {
+    pub fn new(max_depth: usize) -> PDFObjContext {
         PDFObjContext {
             defns: BTreeMap::new(),
+            max_depth,
+            cur_depth: 0,
         }
     }
     pub fn register_obj(
@@ -64,6 +69,19 @@ impl PDFObjContext {
     pub fn lookup_obj(&self, oid: (usize, usize)) -> Option<&Rc<LocatedVal<PDFObjT>>> {
         self.defns.get(&oid)
     }
+    pub fn enter_obj(&mut self) -> bool {
+        if self.cur_depth == self.max_depth {
+            return false
+        } else {
+            self.cur_depth += 1;
+            return true
+        }
+    }
+    pub fn leave_obj(&mut self) {
+        assert!(self.cur_depth != 0);
+        self.cur_depth -= 1;
+    }
+    pub fn depth(&self) -> usize { self.cur_depth }
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -100,8 +118,7 @@ impl ArrayP<'_> {
             let mut ws = WhitespaceEOL::new(true);
             ws.parse(buf)?;
             if let Err(_) = buf.exact(b"]") {
-                let mut p = PDFObjP::new(&mut self.ctxt);
-                let o = p.parse(buf)?;
+                let o = parse_pdf_obj(&mut self.ctxt, buf)?;
                 objs.push(Rc::new(o));
             } else {
                 end = true;
@@ -202,8 +219,7 @@ impl DictP<'_> {
                 let mut ws = WhitespaceEOL::new(true);
                 ws.parse(buf)?;
 
-                let mut p = PDFObjP::new(&mut self.ctxt);
-                let o = p.parse(buf)?;
+                let o = parse_pdf_obj(&mut self.ctxt, buf)?;
 
                 // Entries with 'null' values are treated as though
                 // the entry does not exist.
@@ -393,12 +409,13 @@ pub enum PDFObjT {
     Real(RealT),
 }
 
-pub struct PDFObjP<'a> {
+// Private to ensure that the parse_pdf_obj wrapper is used.
+struct PDFObjP<'a> {
     ctxt: &'a mut PDFObjContext,
 }
 
 impl PDFObjP<'_> {
-    pub fn new<'a>(ctxt: &'a mut PDFObjContext) -> PDFObjP<'a> { PDFObjP { ctxt } }
+    fn new<'a>(ctxt: &'a mut PDFObjContext) -> PDFObjP<'a> { PDFObjP { ctxt } }
 
     // The top-level basic object parser, as an internal helper.  Note
     // that this does not parse streams, even though they are 'basic'
@@ -571,6 +588,23 @@ impl ParsleyParser for PDFObjP<'_> {
     }
 }
 
+// Wrapper to handle the recursion depth.
+pub fn parse_pdf_obj(
+    ctxt: &mut PDFObjContext, buf: &mut dyn ParseBufferT,
+) -> ParseResult<LocatedVal<PDFObjT>> {
+    if ctxt.enter_obj() {
+        let mut p = PDFObjP::new(ctxt);
+        let o = p.parse(buf);
+        ctxt.leave_obj();
+        o
+    } else {
+        let start = buf.get_cursor();
+        let msg = format!("max recursion bound {} exceeded", ctxt.depth());
+        let err = ErrorKind::GuardError(msg);
+        return Err(locate_value(err, start, start))
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct IndirectT {
     num: usize,
@@ -625,8 +659,7 @@ impl IndirectP<'_> {
         }
         ws.parse(buf)?;
 
-        let mut p = PDFObjP::new(&mut self.ctxt);
-        let o = p.parse(buf)?;
+        let o = parse_pdf_obj(&mut self.ctxt, buf)?;
 
         // If we parsed a dictionary, check whether this could be a
         // stream object.
@@ -714,48 +747,48 @@ mod test_pdf_obj {
     };
     use super::super::pdf_prim::{IntegerT, NameT, RealT, StreamContentT};
     use super::{
-        ArrayT, DictT, IndirectP, IndirectT, PDFObjContext, PDFObjP, PDFObjT, ReferenceT, StreamT,
+        parse_pdf_obj, ArrayT, DictT, IndirectP, IndirectT, PDFObjContext, PDFObjT, ReferenceT,
+        StreamT,
     };
     use std::borrow::Borrow;
     use std::collections::BTreeMap;
     use std::rc::Rc;
 
+    fn mk_new_context() -> PDFObjContext { PDFObjContext::new(10) }
+
     #[test]
     fn empty() {
-        let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut ctxt = mk_new_context();
 
         let v = Vec::from("".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let e = locate_value(ErrorKind::EndOfBuffer, 0, 0);
-        assert_eq!(p.parse(&mut pb), Err(e));
+        assert_eq!(parse_pdf_obj(&mut ctxt, &mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
     }
 
     #[test]
     fn comment() {
-        let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut ctxt = mk_new_context();
 
         // Comments are essentially whitespace.
         let v = Vec::from("\r\n %PDF-1.0 \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let e = locate_value(ErrorKind::EndOfBuffer, 0, 14);
-        assert_eq!(p.parse(&mut pb), Err(e));
+        assert_eq!(parse_pdf_obj(&mut ctxt, &mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 14);
     }
 
     #[test]
     #[rustfmt::skip]
     fn reference() {
-        let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut ctxt = mk_new_context();
 
         //                  0 12345678 9 0
         let v = Vec::from("\r\n 1 0 R \r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = PDFObjT::Reference(ReferenceT::new(1, 0));
-        assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 3, 8)));
+        assert_eq!(parse_pdf_obj(&mut ctxt, &mut pb), Ok(LocatedVal::new(val, 3, 8)));
         assert_eq!(pb.get_cursor(), 8);
 
         //                  0 123456789 0 1
@@ -766,7 +799,7 @@ mod test_pdf_obj {
             5,
             7,
         );
-        assert_eq!(p.parse(&mut pb), Err(e));
+        assert_eq!(parse_pdf_obj(&mut ctxt, &mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 3);
 
         //                  0 123456789 0 1
@@ -777,57 +810,73 @@ mod test_pdf_obj {
             7,
             9,
         );
-        assert_eq!(p.parse(&mut pb), Err(e));
+        assert_eq!(parse_pdf_obj(&mut ctxt, &mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 5);
     }
 
     #[test]
     fn numbers() {
-        let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut ctxt = mk_new_context();
 
         let v = Vec::from("1\r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = PDFObjT::Integer(IntegerT::new(1));
-        assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 0, 1)));
+        assert_eq!(
+            parse_pdf_obj(&mut ctxt, &mut pb),
+            Ok(LocatedVal::new(val, 0, 1))
+        );
         assert_eq!(pb.get_cursor(), 1);
 
         let v = Vec::from("-1\r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = PDFObjT::Integer(IntegerT::new(-1));
-        assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 0, 2)));
+        assert_eq!(
+            parse_pdf_obj(&mut ctxt, &mut pb),
+            Ok(LocatedVal::new(val, 0, 2))
+        );
         assert_eq!(pb.get_cursor(), 2);
 
         let v = Vec::from("0.1\r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = PDFObjT::Real(RealT::new(1, 10));
-        assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 0, 3)));
+        assert_eq!(
+            parse_pdf_obj(&mut ctxt, &mut pb),
+            Ok(LocatedVal::new(val, 0, 3))
+        );
         assert_eq!(pb.get_cursor(), 3);
 
         let v = Vec::from("-0.1\r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = PDFObjT::Real(RealT::new(-1, 10));
-        assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 0, 4)));
+        assert_eq!(
+            parse_pdf_obj(&mut ctxt, &mut pb),
+            Ok(LocatedVal::new(val, 0, 4))
+        );
         assert_eq!(pb.get_cursor(), 4);
 
         let v = Vec::from(".1\r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = PDFObjT::Real(RealT::new(1, 10));
-        assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 0, 2)));
+        assert_eq!(
+            parse_pdf_obj(&mut ctxt, &mut pb),
+            Ok(LocatedVal::new(val, 0, 2))
+        );
         assert_eq!(pb.get_cursor(), 2);
 
         let v = Vec::from("-.1\r\n".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let val = PDFObjT::Real(RealT::new(-1, 10));
-        assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 0, 3)));
+        assert_eq!(
+            parse_pdf_obj(&mut ctxt, &mut pb),
+            Ok(LocatedVal::new(val, 0, 3))
+        );
         assert_eq!(pb.get_cursor(), 3);
     }
 
     #[test]
     #[rustfmt::skip]
     fn array() {
-        let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut ctxt = mk_new_context();
 
         //                 0123456789 0 1
         let v = Vec::from("[ 1 0 R ] \r\n".as_bytes());
@@ -839,7 +888,7 @@ mod test_pdf_obj {
             7,
         )));
         let val = PDFObjT::Array(ArrayT::new(objs));
-        assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 0, 9)));
+        assert_eq!(parse_pdf_obj(&mut ctxt, &mut pb), Ok(LocatedVal::new(val, 0, 9)));
         assert_eq!(pb.get_cursor(), 9);
 
         //                 0123 4567 890123 4 5
@@ -852,7 +901,7 @@ mod test_pdf_obj {
             11,
         )));
         let val = PDFObjT::Array(ArrayT::new(objs));
-        assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 0, 13)));
+        assert_eq!(parse_pdf_obj(&mut ctxt, &mut pb), Ok(LocatedVal::new(val, 0, 13)));
         assert_eq!(pb.get_cursor(), 13);
 
         let v = Vec::from("[ -1 0 R ] \r\n".as_bytes());
@@ -862,15 +911,40 @@ mod test_pdf_obj {
             2,
             4,
         );
-        assert_eq!(p.parse(&mut pb), Err(e));
+        assert_eq!(parse_pdf_obj(&mut ctxt, &mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 2);
     }
 
     #[test]
     #[rustfmt::skip]
+    fn array_recursion() {
+        let mut ctxt = PDFObjContext::new(2);
+
+        let v = Vec::from("[[]]".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb);
+        let inner = PDFObjT::Array(ArrayT::new(Vec::new()));
+        let mut objs = Vec::new();
+        objs.push(Rc::new(LocatedVal::new(inner, 1, 3)));
+        let outer = PDFObjT::Array(ArrayT::new(objs));
+        assert_eq!(obj, Ok(LocatedVal::new(outer, 0, 4)));
+
+        let v = Vec::from("[[[]]]".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let val = parse_pdf_obj(&mut ctxt, &mut pb);
+        let e = locate_value(
+            ErrorKind::GuardError("max recursion bound 2 exceeded".to_string()),
+            2,
+            2,
+        );
+        assert_eq!(val, Err(e));
+    }
+
+    #[test]
+    #[rustfmt::skip]
     fn dict() {
-        let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut ctxt = mk_new_context();
+
         //                          1         2
         //                012345678901234567890 1 2345
         let v = Vec::from("<< /Entry [ 1 0 R ] \r\n >>".as_bytes());
@@ -886,7 +960,7 @@ mod test_pdf_obj {
         let mut map = BTreeMap::new();
         map.insert(Vec::from("Entry".as_bytes()), Rc::new(entval));
         let val = PDFObjT::Dict(DictT::new(map));
-        assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 0, 25)));
+        assert_eq!(parse_pdf_obj(&mut ctxt, &mut pb), Ok(LocatedVal::new(val, 0, 25)));
         assert_eq!(pb.get_cursor(), vlen);
 
         // version with minimal whitespace
@@ -909,7 +983,7 @@ mod test_pdf_obj {
             Rc::new(entval),
         );
         let val = PDFObjT::Dict(DictT::new(map));
-        assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(val, 0, 18)));
+        assert_eq!(parse_pdf_obj(&mut ctxt, &mut pb), Ok(LocatedVal::new(val, 0, 18)));
         assert_eq!(pb.get_cursor(), vlen);
 
         //                           1         2         3
@@ -921,7 +995,38 @@ mod test_pdf_obj {
             20,
             26,
         );
-        assert_eq!(p.parse(&mut pb), Err(e));
+        assert_eq!(parse_pdf_obj(&mut ctxt, &mut pb), Err(e));
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn dict_recursion() {
+        let mut ctxt = PDFObjContext::new(2);
+
+        //                 01234567890123456
+        let v = Vec::from("<</Inner << >>>>".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb);
+        let inner = PDFObjT::Dict(DictT::new(BTreeMap::new()));
+        let mut map = BTreeMap::new();
+        let key = NameT::new(Vec::from("Inner".as_bytes()));
+        map.insert(
+            LocatedVal::new(key, 2, 8).val().normalize(),
+            Rc::new(LocatedVal::new(inner, 9, 14)),
+        );
+        let outer = PDFObjT::Dict(DictT::new(map));
+        assert_eq!(obj, Ok(LocatedVal::new(outer, 0, 16)));
+
+        //                 0123456789012345678901234
+        let v = Vec::from("<</Mid <</Inner <<>>>>>>".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let val = parse_pdf_obj(&mut ctxt, &mut pb);
+        let e = locate_value(
+            ErrorKind::GuardError("max recursion bound 2 exceeded".to_string()),
+            16,
+            16,
+        );
+        assert_eq!(val, Err(e));
     }
 
     #[test]
@@ -984,7 +1089,7 @@ mod test_pdf_obj {
     #[test]
     #[rustfmt::skip]
     fn indirect() {
-        let mut ctxt = PDFObjContext::new();
+        let mut ctxt = mk_new_context();
         let mut p = IndirectP::new(&mut ctxt);
         //                           1         2         3         4
         //                 012345678901234567890123456789012345678901
@@ -1014,7 +1119,7 @@ mod test_pdf_obj {
     #[test]
     #[rustfmt::skip]
     fn stream() {
-        let mut ctxt = PDFObjContext::new();
+        let mut ctxt = mk_new_context();
         let mut p = IndirectP::new(&mut ctxt);
         //             1         2         3         4         5         6
         //   0123456789012345678901234567890123456 7890123 4567890123 4567890123
@@ -1052,7 +1157,7 @@ mod test_pdf_obj {
     #[test]
     #[rustfmt::skip]
     fn test_obj_no_embedded_comment() {
-        let mut ctxt = PDFObjContext::new();
+        let mut ctxt = mk_new_context();
         let mut p = IndirectP::new(&mut ctxt);
         //                           1         2         3         4         5
         //                 0123456789012345678901234567890123456789012345678901234567
@@ -1087,7 +1192,7 @@ mod test_pdf_obj {
     #[test]
     #[rustfmt::skip]
     fn test_dict_null_value() {
-        let mut ctxt = PDFObjContext::new();
+        let mut ctxt = mk_new_context();
         let mut p = IndirectP::new(&mut ctxt);
         //                            1         2          3         4           5
         //                 012345678 9012345678901234567 89012345678901 234 5678901
@@ -1113,7 +1218,7 @@ mod test_pdf_obj {
     #[test]
     #[rustfmt::skip]
     fn test_obj_embedded_comment() {
-        let mut ctxt = PDFObjContext::new();
+        let mut ctxt = mk_new_context();
         let mut p = IndirectP::new(&mut ctxt);
         //             1         2          3         4          5           6         7
         //   0123456789012345678901 2345678901234567890 123456789012345 678 901234567890
@@ -1150,7 +1255,7 @@ mod test_pdf_obj {
     #[test]
     #[rustfmt::skip]
     fn test_nested_indirect() {
-        let mut ctxt = PDFObjContext::new();
+        let mut ctxt = mk_new_context();
         let mut p = IndirectP::new(&mut ctxt);
         //                            1         2         3         4
         //                 012345678 90123456789012345678901234567890 1234567
@@ -1169,7 +1274,7 @@ mod test_pdf_obj {
     #[rustfmt::skip]
     // Tests extracted from Peter Wyatt's webinar slides.
     fn test_pdf_expert_dict() {
-        let mut ctxt = PDFObjContext::new();
+        let mut ctxt = mk_new_context();
         let mut p = IndirectP::new(&mut ctxt);
         //                            1         2         3          4
         //                 01234567 890123456789012345678901234 56789012
@@ -1234,7 +1339,7 @@ mod test_pdf_obj {
         assert_eq!(val, Ok(LocatedVal::new(o, 0, vlen)));
         assert_eq!(ctxt.lookup_obj((10, 0)), Some(a.borrow()));
 
-        let mut ctxt = PDFObjContext::new();
+        let mut ctxt = mk_new_context();
         let mut p = IndirectP::new(&mut ctxt);
         //                 012345678901234567890
         let v = Vec::from("10 0 obj<<//>>endobj");
@@ -1257,7 +1362,7 @@ mod test_pdf_obj {
         assert_eq!(val, Ok(LocatedVal::new(o, 0, vlen)));
         assert_eq!(ctxt.lookup_obj((10, 0)), Some(d.borrow()));
 
-        let mut ctxt = PDFObjContext::new();
+        let mut ctxt = mk_new_context();
         let mut p = IndirectP::new(&mut ctxt);
         //                 0123456789012345678901
         let v = Vec::from("11 0 obj<</<>>>endobj");
@@ -1281,7 +1386,7 @@ mod test_pdf_obj {
         assert_eq!(ctxt.lookup_obj((11, 0)), Some(d.borrow()));
 
         // TODO: handle empty values
-        let mut ctxt = PDFObjContext::new();
+        let mut ctxt = mk_new_context();
         let mut p = IndirectP::new(&mut ctxt);
         let v = Vec::from("12 0 obj/ endobj");
         let mut pb = ParseBuffer::new(v);

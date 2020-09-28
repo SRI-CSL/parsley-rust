@@ -24,7 +24,7 @@ use super::super::pcore::parsebuffer::{
 use super::super::pcore::transforms::{BufferTransformT, RestrictView, RestrictViewFrom};
 
 use super::pdf_filters::FlateDecode;
-use super::pdf_obj::{DictT, Filter, IndirectT, PDFObjContext, PDFObjP, PDFObjT, StreamT};
+use super::pdf_obj::{parse_pdf_obj, DictT, Filter, IndirectT, PDFObjContext, PDFObjT, StreamT};
 use super::pdf_prim::{IntegerP, WhitespaceEOL};
 
 type ObjStreamMetadata = Vec<(usize, usize)>; // (object#, offset) pairs
@@ -174,9 +174,8 @@ impl ObjStreamP<'_> {
             }
             ws.parse(buf)?;
 
-            let mut p = PDFObjP::new(&mut self.ctxt);
             let start = buf.get_cursor();
-            let o = p.parse(buf)?;
+            let o = parse_pdf_obj(&mut self.ctxt, buf)?;
             let obj = Rc::new(o);
             let ind = IndirectT::new(*onum, 0, Rc::clone(&obj));
             // Register the object into the context so that it can be
@@ -604,23 +603,25 @@ mod test_object_stream {
     };
     use super::{ObjStreamP, ObjStreamT, XrefStreamP};
 
-    fn make_dict_buf(n: usize, first: usize) -> Vec<u8> {
+    fn mk_new_context() -> PDFObjContext { PDFObjContext::new(10) }
+
+    fn mk_dict_buf(n: usize, first: usize) -> Vec<u8> {
         let v = format!("<</Type /ObjStm /N {} /First {}>>", n, first);
         Vec::from(v.as_bytes())
     }
-    fn make_dict(n: usize, first: usize) -> Rc<LocatedVal<DictT>> {
-        let v = make_dict_buf(n, first);
+    fn mk_dict(n: usize, first: usize) -> Rc<LocatedVal<DictT>> {
+        let v = mk_dict_buf(n, first);
         let len = v.len();
         let mut buf = ParseBuffer::new(v);
-        let mut ctxt = PDFObjContext::new();
+        let mut ctxt = mk_new_context();
         let mut dp = DictP::new(&mut ctxt);
         Rc::new(LocatedVal::new(dp.parse(&mut buf).unwrap(), 0, len))
     }
 
     #[test]
     fn test_dict_info() {
-        let d = make_dict(3, 10);
-        let mut ctxt = PDFObjContext::new();
+        let d = mk_dict(3, 10);
+        let mut ctxt = mk_new_context();
         let osp = ObjStreamP::new(&mut ctxt, d);
         let chk = osp.get_dict_info();
         assert_eq!(chk, Ok((3, 10)));
@@ -628,8 +629,8 @@ mod test_object_stream {
 
     #[test]
     fn test_metadata() {
-        let d = make_dict(3, 10);
-        let mut ctxt = PDFObjContext::new();
+        let d = mk_dict(3, 10);
+        let mut ctxt = mk_new_context();
         let mut osp = ObjStreamP::new(&mut ctxt, d);
 
         // valid
@@ -674,8 +675,8 @@ mod test_object_stream {
         let content = "<<>> [] ()";
         let mut cbuf = ParseBuffer::new(Vec::from(content));
 
-        let d = make_dict(3, 14);
-        let mut ctxt = PDFObjContext::new();
+        let d = mk_dict(3, 14);
+        let mut ctxt = mk_new_context();
         let mut osp = ObjStreamP::new(&mut ctxt, d);
 
         let md = osp.parse_metadata(&mut mbuf, 3).unwrap();
@@ -705,8 +706,8 @@ mod test_object_stream {
         buf.append(&mut Vec::from(content));
         let mut buf = ParseBuffer::new(buf);
 
-        let d = make_dict(3, 14);
-        let mut ctxt = PDFObjContext::new();
+        let d = mk_dict(3, 14);
+        let mut ctxt = mk_new_context();
         let mut osp = ObjStreamP::new(&mut ctxt, Rc::clone(&d));
 
         let val = osp.parse(&mut buf).unwrap();
@@ -812,7 +813,7 @@ stream
 endstream
 endobj");
         let mut pb = ParseBuffer::new(v);
-        let mut ctxt = PDFObjContext::new();
+        let mut ctxt = mk_new_context();
         let mut p = IndirectP::new(&mut ctxt);
         let io = p.parse(&mut pb).expect("unable to parse stream");
         let io = io.val();
@@ -845,7 +846,7 @@ endobj");
     fn test_xref_stream() {
         let v = get_test_data("tests/test_files/xref_stm.obj");
         let mut pb = ParseBuffer::new(v);
-        let mut ctxt = PDFObjContext::new();
+        let mut ctxt = mk_new_context();
         let mut p = IndirectP::new(&mut ctxt);
         let io = p.parse(&mut pb).expect("unable to parse stream");
         let io = io.val();
@@ -866,7 +867,7 @@ endobj");
     fn test_xref_stream_flate() {
         let v = get_test_data("tests/test_files/xref_stm_flate.obj");
         let mut pb = ParseBuffer::new(v);
-        let mut ctxt = PDFObjContext::new();
+        let mut ctxt = mk_new_context();
         let mut p = IndirectP::new(&mut ctxt);
         let io = p.parse(&mut pb).expect("unable to parse stream");
         let io = io.val();
