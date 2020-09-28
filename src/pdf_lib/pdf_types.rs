@@ -14,6 +14,7 @@ pub enum PDFPrimType {
     Integer,
     Real,
     Comment,
+    Indirect
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
@@ -25,9 +26,9 @@ pub enum DictKeySpec {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DictEntry {
-    key: Vec<u8>,
-    chk: Rc<TypeCheck>,
-    opt: DictKeySpec,
+    pub key: Vec<u8>,
+    pub chk: Rc<TypeCheck>,
+    pub opt: DictKeySpec,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
