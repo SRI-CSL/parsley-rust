@@ -1,21 +1,25 @@
 use std::collections::VecDeque;
 use super::super::pcore::parsebuffer::{LocatedVal, ParseBuffer, ParsleyParser};
-use super::pdf_obj::{PDFObjContext, PDFObjP, PDFObjT, ReferenceT};
+use super::pdf_obj::{PDFObjContext, PDFObjT, ReferenceT, parse_pdf_obj};
 use super::pdf_prim::NameT;
-use super::pdf_types::{
+use super::pdf_type_check::{
     check_type, DictEntry, DictKeySpec, PDFPrimType, PDFType, TypeCheck, TypeCheckError,
 };
 use std::rc::Rc;
 
 #[cfg(test)]
+
+
 mod test_page_tree {
     use super::super::super::pcore::parsebuffer::{LocatedVal, ParseBuffer, ParsleyParser};
-    use super::super::pdf_obj::{PDFObjContext, PDFObjP, PDFObjT};
+    use super::super::pdf_obj::{PDFObjContext, PDFObjT, parse_pdf_obj};
     use super::super::pdf_prim::NameT;
-    use super::super::pdf_types::{
+    use super::super::pdf_type_check::{
         check_type, DictEntry, DictKeySpec, PDFPrimType, PDFType, TypeCheck, TypeCheckError
     };
     use std::rc::Rc;
+
+    fn mk_new_context() -> PDFObjContext { PDFObjContext::new(10) }
 
     fn mk_pages_check() -> Rc<TypeCheck> {
         Rc::new(TypeCheck::choiced_new(
@@ -50,13 +54,12 @@ mod test_page_tree {
     // Page Tree Non-Root Node Tests
     #[test]
     fn test_non_root_page_tree() {
-        let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut ctxt = mk_new_context();
         //let v = Vec::from("<</Type /Pages /Kids [4 0 R  10 0 R 24 0 R ] /Count 3 >>".as_bytes());
         let v = Vec::from("<</Type /Pages /Kids [4 0 R  10 0 R 24 0 R ] /Count 3 >>".as_bytes());
         //let v = Vec::from("<< /Count 3 >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = p.parse(&mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let pages = DictEntry {
             key: Vec::from("Type"),
             chk: mk_pages_check(), // this must be a NameT
@@ -85,13 +88,12 @@ mod test_page_tree {
     }
     #[test]
     fn test_non_root_page_tree_not_wrong() {
-        let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut ctxt = mk_new_context();
         //let v = Vec::from("<</Type /Pages /Kids [4 0 R  10 0 R 24 0 R ] /Count 3 >>".as_bytes());
         let v = Vec::from("<</Type /Pages /Parent [4 0 R] /Kids [4 0 R  10 0 R 24 0 R ] /Count 3 >>".as_bytes());
         //let v = Vec::from("<< /Count 3 >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = p.parse(&mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let pages = DictEntry {
             key: Vec::from("Type"),
             chk: mk_pages_check(), // this must be a NameT
@@ -123,12 +125,11 @@ mod test_page_tree {
     // Page Tree Root Node Tests
     #[test]
     fn test_page_tree() {
-        let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut ctxt = mk_new_context();
         //let v = Vec::from("<</Type /Pages /Kids [4 0 R  10 0 R 24 0 R ] /Count 3 >>".as_bytes());
         let v = Vec::from("<< /Count 3 >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = p.parse(&mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
 
         let pages = DictEntry {
             key: Vec::from("Type"),
@@ -154,12 +155,11 @@ mod test_page_tree {
     }
     #[test]
     fn test_page_tree_not_wrong() {
-        let mut ctxt = PDFObjContext::new();
-        let mut p = PDFObjP::new(&mut ctxt);
+        let mut ctxt = mk_new_context();
         let v = Vec::from("<</Type /Pages /Kids [4 0 R  10 0 R 24 0 R ] /Count 3 >>".as_bytes());
         //let v = Vec::from("<< /Count 3 >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = p.parse(&mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let pages = DictEntry {
             key: Vec::from("Type"),
             chk: mk_pages_check(), // this must be a NameT
