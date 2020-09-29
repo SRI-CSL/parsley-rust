@@ -4,17 +4,31 @@ use std::collections::VecDeque;
 use std::rc::Rc;
 
 /* Basic type structure of PDF objects */
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Char {
+    Int,
+}
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PDFPrimType {
     Bool,
     String,
+    ASCIIString(Char),
     Name,
     Null,
     Integer,
     Real,
     Comment,
 }
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum PDFComplexType {
+    ASCIIString(PDFPrimType),
+    TextString,
+    ByteString,
+    DateString,
+}
+
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum DictKeySpec {
@@ -277,9 +291,9 @@ pub fn check_type(
 mod test_pdf_types {
     use super::super::super::pcore::parsebuffer::{LocatedVal, ParseBuffer};
     use super::super::pdf_obj::{parse_pdf_obj, PDFObjContext, PDFObjT};
-    use super::super::pdf_prim::NameT;
+    use super::super::pdf_prim::{NameT, IntegerT};
     use super::{
-        check_type, DictEntry, DictKeySpec, PDFPrimType, PDFType, TypeCheck, TypeCheckError,
+        check_type, DictEntry, DictKeySpec, PDFPrimType, PDFType, PDFComplexType, Char, TypeCheck, TypeCheckError,
     };
     use std::rc::Rc;
 
@@ -451,6 +465,7 @@ mod test_pdf_types {
             0,
             0,
         ));
+
         let typ = TypeCheck::new(Rc::new(PDFType::Dict(vec![ent])));
         assert_eq!(
             check_type(&ctxt, Rc::new(obj), Rc::new(typ)),
@@ -459,5 +474,28 @@ mod test_pdf_types {
                 String::from("Invalid PageMode")
             ))
         );
+    }
+
+    pub fn mk_pdfasciistring_typchk() -> Rc<TypeCheck> {
+        Rc::new(TypeCheck::choiced_new(
+            Rc::new(PDFType::PrimType(
+                PDFPrimType::ASCIIString(Char::Int))), 
+            vec![
+                PDFObjT::Integer(IntegerT::new(65)),
+            ],
+            String::from("invalid char in string"),
+        ))
+    }
+
+    #[test]
+    fn test_pdf_types() {
+        let mut ctxt = mk_new_context();
+        let v = Vec::from("(AAAAA)".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        
+        let typ = mk_pdfasciistring_typchk();
+
+        assert_eq!(check_type(&ctxt, Rc::new(obj), typ), None);
     }
 }

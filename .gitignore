@@ -2,3 +2,6 @@
 **/*.rs.bk
 /src/**/*~
 Cargo.lock
+Vagrantfile
+*.log
+.vagrant
