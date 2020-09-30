@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 /* Basic type structure of PDF objects */
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum PDFPrimType {
     Bool,
     String,
@@ -17,21 +17,21 @@ pub enum PDFPrimType {
     Indirect
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum DictKeySpec {
     Required,
     Optional,
     Forbidden,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq)]
 pub struct DictEntry {
     pub key: Vec<u8>,
     pub chk: Rc<TypeCheck>,
     pub opt: DictKeySpec,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq)]
 pub enum PDFType {
     Any,
     PrimType(PDFPrimType),
@@ -44,7 +44,7 @@ pub enum PDFType {
 }
 
 /* Errors reported by the type-checker */
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub enum TypeCheckError {
     RefNotFound(ReferenceT),
     ArraySizeMismatch(/* expected */ usize, /* found */ usize),
@@ -52,33 +52,43 @@ pub enum TypeCheckError {
     ForbiddenKey(Vec<u8>),
     TypeMismatch(/* expected */ Rc<PDFType>, /* found */ PDFType),
     ValueMismatch(/* found */ Rc<LocatedVal<PDFObjT>>, String),
+    PredicateError(String),
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+// trait wrapper around predicate function
+pub trait Predicate {
+    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError>;
+}
+
 pub struct TypeCheck {
-    typ:     Rc<PDFType>,
-    choices: Option<(String, Vec<PDFObjT>)>,
+    typ:  Rc<PDFType>,
+    pred: Option<Box<dyn Predicate>>,
 }
 
 impl TypeCheck {
     // the most commonly used constructor
-    pub fn new(typ: Rc<PDFType>) -> Self { Self { typ, choices: None } }
+    pub fn new(typ: Rc<PDFType>) -> Self { Self { typ, pred: None } }
 
-    // this specifies a check with a specified set of allowed 'choices'.
-    // Note: it's up to the caller to ensure that the types of the
-    // choices matches the specified 'typ'.  If 'typ' is Any, choices
-    // are not currently checked.
-    // The msg is displayed in the error message to identify the
-    // failing choice check, instead of listing the allowed choice set.
-    pub fn choiced_new(typ: Rc<PDFType>, choices: Vec<PDFObjT>, msg: String) -> Self {
+    // the constructor with a refinement predicate
+    pub fn new_refined(typ: Rc<PDFType>, pred: Box<dyn Predicate>) -> Self {
         Self {
             typ,
-            choices: Some((msg, choices)),
+            pred: Some(pred),
         }
     }
 
     pub fn typ(&self) -> &PDFType { self.typ.as_ref() }
-    pub fn choices(&self) -> &Option<(String, Vec<PDFObjT>)> { &self.choices }
+    pub fn pred(&self) -> &Option<Box<dyn Predicate>> { &self.pred }
+}
+
+impl PartialEq for TypeCheck {
+    fn eq(&self, other: &Self) -> bool { *self.typ == *other.typ }
+}
+
+impl std::fmt::Debug for TypeCheck {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TypeCheck").field("typ", &self.typ).finish()
+    }
 }
 
 /* computes the top-most general type of an object without descending into it */
@@ -104,20 +114,12 @@ fn type_of(obj: &PDFObjT) -> PDFType {
     }
 }
 
-/* checks if a PDF object belongs to the optionally specified set of allowed
- * values */
-fn check_allowed_set(
-    obj: &Rc<LocatedVal<PDFObjT>>, choices: &Option<(String, Vec<PDFObjT>)>,
+fn check_predicate(
+    obj: &Rc<LocatedVal<PDFObjT>>, pred: &Option<Box<dyn Predicate>>,
 ) -> Option<TypeCheckError> {
-    match choices {
+    match pred {
         None => None,
-        Some((msg, vec)) => {
-            if vec.into_iter().any(|c| obj.val() == c) {
-                None
-            } else {
-                Some(TypeCheckError::ValueMismatch(Rc::clone(obj), msg.clone()))
-            }
-        },
+        Some(pred) => pred.check(obj),
     }
 }
 
@@ -147,7 +149,7 @@ pub fn check_type(
                 }
             },
             (PDFObjT::Boolean(_), PDFType::PrimType(PDFPrimType::Bool)) => {
-                let invalid = check_allowed_set(&o, c.choices());
+                let invalid = check_predicate(&o, c.pred());
                 if let None = invalid {
                     continue
                 } else {
@@ -155,7 +157,7 @@ pub fn check_type(
                 }
             },
             (PDFObjT::String(_), PDFType::PrimType(PDFPrimType::String)) => {
-                let invalid = check_allowed_set(&o, c.choices());
+                let invalid = check_predicate(&o, c.pred());
                 if let None = invalid {
                     continue
                 } else {
@@ -163,7 +165,7 @@ pub fn check_type(
                 }
             },
             (PDFObjT::Name(_), PDFType::PrimType(PDFPrimType::Name)) => {
-                let invalid = check_allowed_set(&o, c.choices());
+                let invalid = check_predicate(&o, c.pred());
                 if let None = invalid {
                     continue
                 } else {
@@ -171,7 +173,7 @@ pub fn check_type(
                 }
             },
             (PDFObjT::Null(_), PDFType::PrimType(PDFPrimType::Null)) => {
-                let invalid = check_allowed_set(&o, c.choices());
+                let invalid = check_predicate(&o, c.pred());
                 if let None = invalid {
                     continue
                 } else {
@@ -179,7 +181,7 @@ pub fn check_type(
                 }
             },
             (PDFObjT::Integer(_), PDFType::PrimType(PDFPrimType::Integer)) => {
-                let invalid = check_allowed_set(&o, c.choices());
+                let invalid = check_predicate(&o, c.pred());
                 if let None = invalid {
                     continue
                 } else {
@@ -187,7 +189,7 @@ pub fn check_type(
                 }
             },
             (PDFObjT::Real(_), PDFType::PrimType(PDFPrimType::Real)) => {
-                let invalid = check_allowed_set(&o, c.choices());
+                let invalid = check_predicate(&o, c.pred());
                 if let None = invalid {
                     continue
                 } else {
@@ -195,7 +197,7 @@ pub fn check_type(
                 }
             },
             (PDFObjT::Comment(_), PDFType::PrimType(PDFPrimType::Comment)) => {
-                let invalid = check_allowed_set(&o, c.choices());
+                let invalid = check_predicate(&o, c.pred());
                 if let None = invalid {
                     continue
                 } else {
@@ -213,7 +215,7 @@ pub fn check_type(
                 };
                 /* optimize PDFType::Any */
                 if let PDFType::Any = elem.typ() {
-                    let invalid = check_allowed_set(&o, c.choices());
+                    let invalid = check_predicate(&o, c.pred());
                     if let None = invalid {
                         continue
                     } else {
@@ -274,13 +276,31 @@ pub fn check_type(
     return None
 }
 
+// One common predicate is to allow a value in a set.
+pub struct ChoicePred(String, Vec<PDFObjT>);
+
+impl Predicate for ChoicePred {
+    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
+        let vec = &self.1;
+        if vec.into_iter().any(|c| obj.val() == c) {
+            None
+        } else {
+            Some(TypeCheckError::ValueMismatch(
+                Rc::clone(obj),
+                self.0.clone(),
+            ))
+        }
+    }
+}
+
 #[cfg(test)]
 mod test_pdf_types {
     use super::super::super::pcore::parsebuffer::{LocatedVal, ParseBuffer};
     use super::super::pdf_obj::{parse_pdf_obj, PDFObjContext, PDFObjT};
     use super::super::pdf_prim::NameT;
     use super::{
-        check_type, DictEntry, DictKeySpec, PDFPrimType, PDFType, TypeCheck, TypeCheckError,
+        check_type, ChoicePred, DictEntry, DictKeySpec, PDFPrimType, PDFType, Predicate, TypeCheck,
+        TypeCheckError,
     };
     use std::rc::Rc;
 
@@ -293,17 +313,6 @@ mod test_pdf_types {
             )))),
             size: Some(4),
         })))
-    }
-
-    fn mk_pagemode_typchk() -> Rc<TypeCheck> {
-        Rc::new(TypeCheck::choiced_new(
-            Rc::new(PDFType::PrimType(PDFPrimType::Name)),
-            vec![
-                PDFObjT::Name(NameT::new(Vec::from("UseNone"))),
-                PDFObjT::Name(NameT::new(Vec::from("UseOutlines"))),
-            ],
-            String::from("Invalid PageMode"),
-        ))
     }
 
     #[test]
@@ -378,6 +387,20 @@ mod test_pdf_types {
             check_type(&ctxt, Rc::new(obj), Rc::new(typ)),
             Some(TypeCheckError::ForbiddenKey(Vec::from("Entry")))
         );
+    }
+
+    fn mk_pagemode_typchk() -> Rc<TypeCheck> {
+        let pred = ChoicePred(
+            String::from("Invalid PageMode"),
+            vec![
+                PDFObjT::Name(NameT::new(Vec::from("UseNone"))),
+                PDFObjT::Name(NameT::new(Vec::from("UseOutlines"))),
+            ],
+        );
+        Rc::new(TypeCheck::new_refined(
+            Rc::new(PDFType::PrimType(PDFPrimType::Name)),
+            Box::new(pred),
+        ))
     }
 
     #[test]
@@ -460,5 +483,46 @@ mod test_pdf_types {
                 String::from("Invalid PageMode")
             ))
         );
+    }
+
+    struct AsciiStringPredicate;
+    impl Predicate for AsciiStringPredicate {
+        fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
+            if let PDFObjT::String(ref s) = obj.val() {
+                for c in s {
+                    if *c >= 128 {
+                        return Some(TypeCheckError::PredicateError(
+                            "Not an ASCII string.".to_string(),
+                        ))
+                    }
+                }
+            }
+            None
+        }
+    }
+
+    fn mk_ascii_typchk() -> Rc<TypeCheck> {
+        Rc::new(TypeCheck::new_refined(
+            Rc::new(PDFType::PrimType(PDFPrimType::String)),
+            Box::new(AsciiStringPredicate),
+        ))
+    }
+
+    #[test]
+    fn test_ascii_string() {
+        let mut ctxt = mk_new_context();
+        let v = Vec::from("(ascii)".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let chk = mk_ascii_typchk();
+        assert_eq!(check_type(&ctxt, Rc::new(obj), chk), None);
+
+        //                     (                )
+        let v: Vec<u8> = vec![40, 129, 255, 0, 41];
+        let mut pb = ParseBuffer::new(v);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let chk = mk_ascii_typchk();
+        let err = TypeCheckError::PredicateError("Not an ASCII string.".to_string());
+        assert_eq!(check_type(&ctxt, Rc::new(obj), chk), Some(err));
     }
 }
