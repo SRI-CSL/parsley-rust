@@ -277,7 +277,7 @@ pub fn check_type(
 }
 
 // One common predicate is to allow a value in a set.
-pub struct ChoicePred(String, Vec<PDFObjT>);
+pub struct ChoicePred(pub String, pub Vec<PDFObjT>);
 
 impl Predicate for ChoicePred {
     fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {

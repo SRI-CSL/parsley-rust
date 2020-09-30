@@ -15,19 +15,22 @@ mod test_page_tree {
     use super::super::pdf_obj::{PDFObjContext, PDFObjT, parse_pdf_obj};
     use super::super::pdf_prim::NameT;
     use super::super::pdf_type_check::{
-        check_type, DictEntry, DictKeySpec, PDFPrimType, PDFType, TypeCheck, TypeCheckError
+        check_type, DictEntry, DictKeySpec, PDFPrimType, PDFType, TypeCheck, TypeCheckError, ChoicePred
     };
     use std::rc::Rc;
 
     fn mk_new_context() -> PDFObjContext { PDFObjContext::new(10) }
 
     fn mk_pages_check() -> Rc<TypeCheck> {
-        Rc::new(TypeCheck::choiced_new(
-            Rc::new(PDFType::PrimType(PDFPrimType::Name)),
+        let pred = ChoicePred(
+            String::from("Pages not present."),
             vec![
                 PDFObjT::Name(NameT::new(Vec::from("Pages"))),
             ],
-            String::from("Pages not present."),
+        );
+        Rc::new(TypeCheck::new_refined(
+            Rc::new(PDFType::PrimType(PDFPrimType::Name)),
+            Box::new(pred),
         ))
     }
 
@@ -36,7 +39,7 @@ mod test_page_tree {
             elem: Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
                 PDFPrimType::Integer,
             )))),
-            size: Some(4),
+            size: None,
         })))
     }
 
