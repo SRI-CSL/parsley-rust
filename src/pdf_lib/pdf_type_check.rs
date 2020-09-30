@@ -495,8 +495,12 @@ mod test_pdf_types {
                         ))
                     }
                 }
+                None
+            } else {
+                return Some(TypeCheckError::PredicateError(
+                    "Not an ASCII string.".to_string(),
+                ))
             }
-            None
         }
     }
 
@@ -523,5 +527,18 @@ mod test_pdf_types {
         let chk = mk_ascii_typchk();
         let err = TypeCheckError::PredicateError("Not an ASCII string.".to_string());
         assert_eq!(check_type(&ctxt, Rc::new(obj), chk), Some(err));
+    }
+
+    #[test]
+    fn test_ascii_pred() {
+        let pred = AsciiStringPredicate;
+
+        let v = Vec::from("(ascii)".as_bytes());
+        let obj = LocatedVal::new(PDFObjT::String(v), 0, 0);
+        assert_eq!(pred.check(&Rc::new(obj)), None);
+
+        let obj = LocatedVal::new(PDFObjT::Null(()), 0, 0);
+        let err = TypeCheckError::PredicateError("Not an ASCII string.".to_string());
+        assert_eq!(pred.check(&Rc::new(obj)), Some(err));
     }
 }
