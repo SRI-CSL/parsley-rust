@@ -14,7 +14,6 @@ pub enum PDFPrimType {
     Integer,
     Real,
     Comment,
-    Indirect
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -116,7 +115,7 @@ fn type_of(obj: &PDFObjT) -> PDFType {
 
 fn check_predicate(
     obj: &Rc<LocatedVal<PDFObjT>>, pred: &Option<Box<dyn Predicate>>,
-) -> Option<TypeCheckError> {
+    ) -> Option<TypeCheckError> {
     match pred {
         None => None,
         Some(pred) => pred.check(obj),
@@ -126,7 +125,7 @@ fn check_predicate(
 /* checks a parsed PDF object against its expected type */
 pub fn check_type(
     ctxt: &PDFObjContext, obj: Rc<LocatedVal<PDFObjT>>, chk: Rc<TypeCheck>,
-) -> Option<TypeCheckError> {
+    ) -> Option<TypeCheckError> {
     /* use a queue to avoid recursion-induced stack overflows */
     let mut q = VecDeque::new();
     q.push_back((Rc::clone(&obj), Rc::clone(&chk)));
@@ -267,9 +266,9 @@ pub fn check_type(
             },
             (obj, _) => {
                 return Some(TypeCheckError::TypeMismatch(
-                    Rc::clone(&c.typ),
-                    type_of(obj),
-                ))
+                        Rc::clone(&c.typ),
+                        type_of(obj),
+                        ))
             },
         }
     }
@@ -286,9 +285,9 @@ impl Predicate for ChoicePred {
             None
         } else {
             Some(TypeCheckError::ValueMismatch(
-                Rc::clone(obj),
-                self.0.clone(),
-            ))
+                    Rc::clone(obj),
+                    self.0.clone(),
+                    ))
         }
     }
 }
@@ -309,9 +308,9 @@ mod test_pdf_types {
     fn mk_rectangle_typchk() -> Rc<TypeCheck> {
         Rc::new(TypeCheck::new(Rc::new(PDFType::Array {
             elem: Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
-                PDFPrimType::Integer,
-            )))),
-            size: Some(4),
+                                  PDFPrimType::Integer,
+                                  )))),
+                                  size: Some(4),
         })))
     }
 
@@ -367,7 +366,7 @@ mod test_pdf_types {
         assert_eq!(
             check_type(&ctxt, Rc::new(obj), Rc::new(typ)),
             Some(TypeCheckError::MissingKey(Vec::from("Dummy")))
-        );
+            );
     }
 
     #[test]
@@ -386,21 +385,21 @@ mod test_pdf_types {
         assert_eq!(
             check_type(&ctxt, Rc::new(obj), Rc::new(typ)),
             Some(TypeCheckError::ForbiddenKey(Vec::from("Entry")))
-        );
+            );
     }
 
     fn mk_pagemode_typchk() -> Rc<TypeCheck> {
         let pred = ChoicePred(
             String::from("Invalid PageMode"),
             vec![
-                PDFObjT::Name(NameT::new(Vec::from("UseNone"))),
-                PDFObjT::Name(NameT::new(Vec::from("UseOutlines"))),
+            PDFObjT::Name(NameT::new(Vec::from("UseNone"))),
+            PDFObjT::Name(NameT::new(Vec::from("UseOutlines"))),
             ],
-        );
+            );
         Rc::new(TypeCheck::new_refined(
-            Rc::new(PDFType::PrimType(PDFPrimType::Name)),
-            Box::new(pred),
-        ))
+                Rc::new(PDFType::PrimType(PDFPrimType::Name)),
+                Box::new(pred),
+                ))
     }
 
     #[test]
@@ -458,7 +457,7 @@ mod test_pdf_types {
         assert_eq!(
             check_type(&ctxt, Rc::new(obj), Rc::new(typ)),
             Some(TypeCheckError::ForbiddenKey(Vec::from("PageMode")))
-        );
+            );
 
         // invalid value for optional key
         let mut ctxt = mk_new_context();
@@ -471,18 +470,18 @@ mod test_pdf_types {
             opt: DictKeySpec::Optional,
         };
         let val = Rc::new(LocatedVal::new(
-            PDFObjT::Name(NameT::new(Vec::from("Dummy"))),
-            0,
-            0,
-        ));
+                PDFObjT::Name(NameT::new(Vec::from("Dummy"))),
+                0,
+                0,
+                ));
         let typ = TypeCheck::new(Rc::new(PDFType::Dict(vec![ent])));
         assert_eq!(
             check_type(&ctxt, Rc::new(obj), Rc::new(typ)),
             Some(TypeCheckError::ValueMismatch(
-                val,
-                String::from("Invalid PageMode")
-            ))
-        );
+                    val,
+                    String::from("Invalid PageMode")
+                    ))
+            );
     }
 
     struct AsciiStringPredicate;
@@ -492,24 +491,24 @@ mod test_pdf_types {
                 for c in s {
                     if *c >= 128 {
                         return Some(TypeCheckError::PredicateError(
-                            "Not an ASCII string.".to_string(),
-                        ))
+                                "Not an ASCII string.".to_string(),
+                                ))
                     }
                 }
                 None
             } else {
                 return Some(TypeCheckError::PredicateError(
-                    "Not an ASCII string.".to_string(),
-                ))
+                        "Not an ASCII string.".to_string(),
+                        ))
             }
         }
     }
 
     fn mk_ascii_typchk() -> Rc<TypeCheck> {
         Rc::new(TypeCheck::new_refined(
-            Rc::new(PDFType::PrimType(PDFPrimType::String)),
-            Box::new(AsciiStringPredicate),
-        ))
+                Rc::new(PDFType::PrimType(PDFPrimType::String)),
+                Box::new(AsciiStringPredicate),
+                ))
     }
 
     #[test]
