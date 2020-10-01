@@ -6,12 +6,39 @@ use crate::pdf_lib::pdf_type_check::{
 use std::rc::Rc;
 fn mk_new_context() -> PDFObjContext { PDFObjContext::new(10) }
 
+struct ReferencePredicate;
+
+impl Predicate for ReferencePredicate {
+
+    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
+        if let PDFObjT::Array(ref s) = obj.val() {
+            for c in s.objs() {
+                if let PDFObjT::Reference(ref s2) = c.val() {
+                }
+                else {
+                    return Some(TypeCheckError::PredicateError(
+                            "Reference expected".to_string(),
+                            ))
+                }
+            }
+            None
+        }
+        else {
+            return Some(TypeCheckError::PredicateError(
+                    "Reference wasn't an Array".to_string(),
+                    ))
+        }
+    }
+}
 fn mk_kids_typchk() -> Rc<TypeCheck> {
-    Rc::new(TypeCheck::new(Rc::new(PDFType::Array {
-        elem: Rc::new(TypeCheck::new(Rc::new(PDFType::Any
-                                            ))),
-                                            size: None
-    })))
+    Rc::new(TypeCheck::new_refined(
+            Rc::new(PDFType::Array {
+                elem: Rc::new(TypeCheck::new(Rc::new(PDFType::Any,
+                                                    ))),
+                                                    size: None,
+            }),
+            Box::new(ReferencePredicate),
+            ))
 }
 
 fn mk_limits_typchk() -> Rc<TypeCheck> {
