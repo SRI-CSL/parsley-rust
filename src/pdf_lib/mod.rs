@@ -22,4 +22,6 @@ pub mod pdf_obj;
 pub mod pdf_prim;
 pub mod pdf_streams;
 pub mod page_tree;
+pub mod name_tree;
+//pub mod number_tree;
 pub mod pdf_type_check;

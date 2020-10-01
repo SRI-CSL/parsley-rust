@@ -1,17 +1,8 @@
-use std::collections::VecDeque;
-use super::super::pcore::parsebuffer::{LocatedVal, ParseBuffer, ParsleyParser};
-use super::pdf_obj::{PDFObjContext, PDFObjT, ReferenceT, parse_pdf_obj};
-use super::pdf_prim::NameT;
-use super::pdf_type_check::{
-    check_type, DictEntry, DictKeySpec, PDFPrimType, PDFType, TypeCheck, TypeCheckError,
-};
-use std::rc::Rc;
-
 #[cfg(test)]
 
 
 mod test_page_tree {
-    use super::super::super::pcore::parsebuffer::{LocatedVal, ParseBuffer, ParsleyParser};
+    use super::super::super::pcore::parsebuffer::{ParseBuffer};
     use super::super::pdf_obj::{PDFObjContext, PDFObjT, parse_pdf_obj};
     use super::super::pdf_prim::NameT;
     use super::super::pdf_type_check::{
@@ -32,15 +23,6 @@ mod test_page_tree {
             Rc::new(PDFType::PrimType(PDFPrimType::Name)),
             Box::new(pred),
         ))
-    }
-
-    fn mk_rectangle_typchk() -> Rc<TypeCheck> {
-        Rc::new(TypeCheck::new(Rc::new(PDFType::Array {
-            elem: Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
-                PDFPrimType::Integer,
-            )))),
-            size: None,
-        })))
     }
 
     fn mk_count_typchk() -> Rc<TypeCheck> {
@@ -139,7 +121,7 @@ mod test_page_tree {
             chk: mk_pages_check(), // this must be a NameT
             opt: DictKeySpec::Required,
         };
-        let kids = DictEntry {
+        let _kids = DictEntry {
             key: Vec::from("Kids"),
             chk: mk_indirect_typchk(), 
             opt: DictKeySpec::Required,
@@ -178,7 +160,7 @@ mod test_page_tree {
             chk: mk_indirect_typchk(), 
             opt: DictKeySpec::Required,
         };
-        let parent = DictEntry {
+        let _parent = DictEntry {
             key: Vec::from("Parent"),
             chk: mk_pages_check(), // this must be a NameT
             opt: DictKeySpec::Forbidden,
