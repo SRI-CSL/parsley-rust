@@ -523,8 +523,7 @@ mod test_pdf_types {
         //                     (                )
         let v: Vec<u8> = vec![40, 129, 255, 0, 41];
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
-        let chk = mk_ascii_typchk();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap(); let chk = mk_ascii_typchk();
         let err = TypeCheckError::PredicateError("Not an ASCII string.".to_string());
         assert_eq!(check_type(&ctxt, Rc::new(obj), chk), Some(err));
     }
@@ -540,5 +539,55 @@ mod test_pdf_types {
         let obj = LocatedVal::new(PDFObjT::Null(()), 0, 0);
         let err = TypeCheckError::PredicateError("Not an ASCII string.".to_string());
         assert_eq!(pred.check(&Rc::new(obj)), Some(err));
+    }
+
+    struct DateStringPredicate;
+    impl Predicate for DateStringPredicate {
+        fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
+            /*
+             * PDF spec 7.9.4 defines the date format like: 
+             *  (D:YYYYMMDDHHmmSSOHH'mm)
+             */
+            if let PDFObjT::String(ref s) = obj.val() {
+                    // regex for Date
+                let re = regex::Regex::new(r"^D:\d{4}([0][1-9]|[1][0-2])([0][1-9]|[1-2][0-9]|[3][0-1])([0-1][0-9]|[2][0-3])([0-5][0-9]){2}[+\-Z][0-5][0-9]'[0-5][0-9]$").unwrap();
+                let date_string = std::str::from_utf8(s).unwrap_or("");
+                println!("{}", date_string);
+                if !re.is_match(date_string) {
+                    return Some(TypeCheckError::PredicateError(
+                        "Not a Date string.".to_string(),
+                    ))
+                }
+                None
+            } else {
+                return Some(TypeCheckError::PredicateError(
+                    "Not an Date string.".to_string(),
+                ))
+            }
+        }
+    }
+
+    fn mk_date_typchk() -> Rc<TypeCheck> {
+        Rc::new(TypeCheck::new_refined(
+            Rc::new(PDFType::PrimType(PDFPrimType::String)),
+            Box::new(DateStringPredicate),
+        ))
+    }
+
+    #[test]
+    fn test_date_string() {
+        let mut ctxt = mk_new_context();
+        let v = Vec::from("(D:19921223195200-08'00)".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let typ_chk = mk_date_typchk();
+        assert_eq!(check_type(&ctxt, Rc::new(obj), typ_chk), None);
+
+        let v: Vec<u8> = vec![40, 129, 255, 0, 41];
+        let mut pb = ParseBuffer::new(v);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let chk = mk_ascii_typchk();
+        let err = TypeCheckError::PredicateError("Not an ASCII string.".to_string());
+        assert_eq!(check_type(&ctxt, Rc::new(obj), chk), Some(err));
     }
 }
