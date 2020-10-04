@@ -523,7 +523,8 @@ mod test_pdf_types {
         //                     (                )
         let v: Vec<u8> = vec![40, 129, 255, 0, 41];
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap(); let chk = mk_ascii_typchk();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let chk = mk_ascii_typchk();
         let err = TypeCheckError::PredicateError("Not an ASCII string.".to_string());
         assert_eq!(check_type(&ctxt, Rc::new(obj), chk), Some(err));
     }
