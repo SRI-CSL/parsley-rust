@@ -1,54 +1,12 @@
 use super::super::pcore::parsebuffer::{LocatedVal};
 use super::pdf_obj::{PDFObjContext, PDFObjT};
+use crate::pdf_lib::common_data_structures::structures::{mk_reference_typchk};
 use crate::pdf_lib::pdf_type_check::{
     DictEntry, DictKeySpec, PDFPrimType, PDFType, TypeCheck, TypeCheckError, Predicate
 };
 use std::rc::Rc;
 
 fn mk_new_context() -> PDFObjContext { PDFObjContext::new(10) }
-
-struct ReferencePredicate;
-
-impl Predicate for ReferencePredicate {
-
-    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
-        if let PDFObjT::Array(ref s) = obj.val() {
-            for c in s.objs() {
-                if let PDFObjT::Reference(ref s2) = c.val() {
-                }
-                else {
-                    return Some(TypeCheckError::PredicateError(
-                            "Reference expected".to_string(),
-                            ))
-                }
-            }
-            None
-        }
-        else {
-            return Some(TypeCheckError::PredicateError(
-                    "Reference wasn't an Array".to_string(),
-                    ))
-        }
-    }
-}
-fn mk_kids_typchk() -> Rc<TypeCheck> {
-    Rc::new(TypeCheck::new_refined(
-            Rc::new(PDFType::Array {
-                elem: Rc::new(TypeCheck::new(Rc::new(PDFType::Any,
-                                                    ))),
-                                                    size: None,
-            }),
-            Box::new(ReferencePredicate),
-            ))
-}
-
-//fn mk_kids_typchk() -> Rc<TypeCheck> {
-//Rc::new(TypeCheck::new(Rc::new(PDFType::Array {
-//elem: Rc::new(TypeCheck::new(Rc::new(PDFType::Any
-//))),
-//size: None
-//})))
-//}
 
 fn mk_limits_typchk() -> Rc<TypeCheck> {
     Rc::new(TypeCheck::new(Rc::new(PDFType::Array {
@@ -129,7 +87,7 @@ fn root_names_type() -> TypeCheck {
     };
     let kids = DictEntry {
         key: Vec::from("Kids"),
-        chk: mk_kids_typchk(), 
+        chk: mk_reference_typchk(), 
         opt: DictKeySpec::Forbidden,
     };
     let typ = TypeCheck::new(Rc::new(PDFType::Dict(vec![names, limits, kids])));
@@ -148,7 +106,7 @@ fn root_kids_type() -> TypeCheck {
     };
     let kids = DictEntry {
         key: Vec::from("Kids"),
-        chk: mk_kids_typchk(), 
+        chk: mk_reference_typchk(), 
         opt: DictKeySpec::Required,
     };
     let typ = TypeCheck::new(Rc::new(PDFType::Dict(vec![names, limits, kids])));
@@ -169,7 +127,7 @@ fn intermediate_type() -> TypeCheck {
     };
     let kids = DictEntry {
         key: Vec::from("Kids"),
-        chk: mk_kids_typchk(), 
+        chk: mk_reference_typchk(), 
         opt: DictKeySpec::Required,
     };
     let typ = TypeCheck::new(Rc::new(PDFType::Dict(vec![names, limits, kids])));
@@ -188,7 +146,7 @@ fn leaves_type() -> TypeCheck {
     };
     let kids = DictEntry {
         key: Vec::from("Kids"),
-        chk: mk_kids_typchk(), 
+        chk: mk_reference_typchk(), 
         opt: DictKeySpec::Forbidden,
     };
     let typ = TypeCheck::new(Rc::new(PDFType::Dict(vec![names, limits, kids])));

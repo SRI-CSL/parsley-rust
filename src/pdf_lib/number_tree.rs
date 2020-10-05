@@ -13,7 +13,7 @@ impl Predicate for ReferencePredicate {
     fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
         if let PDFObjT::Array(ref s) = obj.val() {
             for c in s.objs() {
-                if let PDFObjT::Reference(ref s2) = c.val() {
+                if let PDFObjT::Reference(ref _s2) = c.val() {
                 }
                 else {
                     return Some(TypeCheckError::PredicateError(
@@ -104,6 +104,8 @@ fn mk_nums_check() -> Rc<TypeCheck> {
 // Permutations possible for root
 // Root with names
 // Root with kids
+
+// ChoicePred
 
 fn root_nums_type() -> TypeCheck {
     let names = DictEntry {

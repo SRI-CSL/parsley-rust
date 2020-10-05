@@ -26,3 +26,5 @@ pub mod name_tree;
 pub mod number_tree;
 pub mod pdf_type_check;
 pub mod common_data_structures;
+pub mod catalog;
+pub mod page;

@@ -34,7 +34,7 @@ impl Predicate for ReferencePredicate {
     fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
         if let PDFObjT::Array(ref s) = obj.val() {
             for c in s.objs() {
-                if let PDFObjT::Reference(ref s2) = c.val() {
+                if let PDFObjT::Reference(ref _s2) = c.val() {
                 }
                 else {
                     return Some(TypeCheckError::PredicateError(
@@ -63,28 +63,7 @@ fn mk_indirect_typchk() -> Rc<TypeCheck> {
             ))
 }
 
-#[cfg(test)]
-
-mod test_page_tree {
-    use super::super::super::pcore::parsebuffer::{ParseBuffer};
-    use super::super::pdf_obj::{PDFObjContext, PDFObjT, parse_pdf_obj};
-    use crate::pdf_lib::pdf_prim::NameT;
-    use super::super::pdf_type_check::{
-        check_type, DictEntry, DictKeySpec, PDFPrimType, PDFType, TypeCheck, TypeCheckError, ChoicePred
-    };
-    use std::rc::Rc;
-    use super::{mk_new_context, mk_pages_check, mk_count_typchk, mk_indirect_typchk};
-
-
-    // Page Tree Non-Root Node Tests
-    #[test]
-    fn test_non_root_page_tree() {
-        let mut ctxt = mk_new_context();
-        //let v = Vec::from("<</Type /Pages /Kids [4 0 R  10 0 R 24 0 R ] /Count 3 >>".as_bytes());
-        let v = Vec::from("<</Type /Pages /Kids [4 0 R  10 0 R 24 0 R ] /Count 3 >>".as_bytes());
-        //let v = Vec::from("<< /Count 3 >>".as_bytes());
-        let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+fn make_non_root_page_tree () -> TypeCheck {
         let pages = DictEntry {
             key: Vec::from("Type"),
             chk: mk_pages_check(), // this must be a NameT
@@ -105,7 +84,55 @@ mod test_page_tree {
             chk: mk_indirect_typchk(),
             opt: DictKeySpec::Required,
         };
-        let typ = TypeCheck::new(Rc::new(PDFType::Dict(vec![pages, count, kids, parent])));
+     return TypeCheck::new(Rc::new(PDFType::Dict(vec![pages, count, kids, parent])));
+}
+
+fn make_root_page_tree () -> TypeCheck {
+        let pages = DictEntry {
+            key: Vec::from("Type"),
+            chk: mk_pages_check(), // this must be a NameT
+            opt: DictKeySpec::Required,
+        };
+        let count = DictEntry {
+            key: Vec::from("Count"),
+            chk: mk_count_typchk(),
+            opt: DictKeySpec::Required,
+        };
+        let kids = DictEntry {
+            key: Vec::from("Kids"),
+            chk: mk_indirect_typchk(), 
+            opt: DictKeySpec::Required,
+        };
+        let parent = DictEntry {
+            key: Vec::from("Parent"),
+            chk: mk_indirect_typchk(),
+            opt: DictKeySpec::Forbidden,
+        };
+     return TypeCheck::new(Rc::new(PDFType::Dict(vec![pages, count, kids, parent])));
+}
+
+#[cfg(test)]
+
+mod test_page_tree {
+    use super::super::super::pcore::parsebuffer::{ParseBuffer};
+    use super::super::pdf_obj::{parse_pdf_obj};
+    use super::super::pdf_type_check::{
+        check_type, DictEntry, DictKeySpec, PDFType, TypeCheck, TypeCheckError
+    };
+    use std::rc::Rc;
+    use super::{mk_new_context, mk_pages_check, mk_count_typchk, mk_indirect_typchk, make_non_root_page_tree, make_root_page_tree};
+
+
+    // Page Tree Non-Root Node Tests
+    #[test]
+    fn test_non_root_page_tree() {
+        let mut ctxt = mk_new_context();
+        //let v = Vec::from("<</Type /Pages /Kids [4 0 R  10 0 R 24 0 R ] /Count 3 >>".as_bytes());
+        let v = Vec::from("<</Type /Pages /Kids [4 0 R  10 0 R 24 0 R ] /Count 3 >>".as_bytes());
+        //let v = Vec::from("<< /Count 3 >>".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let typ = make_non_root_page_tree();
         assert_eq!(
             check_type(&ctxt, Rc::new(obj), Rc::new(typ)),
             Some(TypeCheckError::MissingKey([80, 97, 114, 101, 110, 116].to_vec()))
@@ -119,27 +146,7 @@ mod test_page_tree {
         //let v = Vec::from("<< /Count 3 >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
-        let pages = DictEntry {
-            key: Vec::from("Type"),
-            chk: mk_pages_check(), // this must be a NameT
-            opt: DictKeySpec::Required,
-        };
-        let count = DictEntry {
-            key: Vec::from("Count"),
-            chk: mk_count_typchk(),
-            opt: DictKeySpec::Required,
-        };
-        let kids = DictEntry {
-            key: Vec::from("Kids"),
-            chk: mk_indirect_typchk(), 
-            opt: DictKeySpec::Required,
-        };
-        let parent = DictEntry {
-            key: Vec::from("Parent"),
-            chk: mk_indirect_typchk(),
-            opt: DictKeySpec::Required,
-        };
-        let typ = TypeCheck::new(Rc::new(PDFType::Dict(vec![pages, count, kids, parent])));
+        let typ = make_non_root_page_tree();
         assert_eq!(
             check_type(&ctxt, Rc::new(obj), Rc::new(typ)),
             None
@@ -185,27 +192,7 @@ mod test_page_tree {
         //let v = Vec::from("<< /Count 3 >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
-        let pages = DictEntry {
-            key: Vec::from("Type"),
-            chk: mk_pages_check(), // this must be a NameT
-            opt: DictKeySpec::Required,
-        };
-        let count = DictEntry {
-            key: Vec::from("Count"),
-            chk: mk_count_typchk(),
-            opt: DictKeySpec::Required,
-        };
-        let kids = DictEntry {
-            key: Vec::from("Kids"),
-            chk: mk_indirect_typchk(), 
-            opt: DictKeySpec::Required,
-        };
-        let _parent = DictEntry {
-            key: Vec::from("Parent"),
-            chk: mk_pages_check(), // this must be a NameT
-            opt: DictKeySpec::Forbidden,
-        };
-        let typ = TypeCheck::new(Rc::new(PDFType::Dict(vec![pages, count, kids])));
+        let typ = make_root_page_tree();
         assert_eq!(
             check_type(&ctxt, Rc::new(obj), Rc::new(typ)),
             None
