@@ -4,6 +4,36 @@ use std::collections::VecDeque;
 use std::rc::Rc;
 
 /* Basic type structure of PDF objects */
+pub fn mk_date_typchk() -> Rc<TypeCheck> {
+    Rc::new(TypeCheck::new_refined(
+            Rc::new(PDFType::PrimType(PDFPrimType::String)),
+            Box::new(DateStringPredicate),
+            ))
+}
+struct DateStringPredicate;
+impl Predicate for DateStringPredicate {
+    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
+        /*
+         * PDF spec 7.9.4 defines the date format like: 
+         *  (D:YYYYMMDDHHmmSSOHH'mm)
+         */
+        if let PDFObjT::String(ref s) = obj.val() {
+            // regex for Date
+            let re = regex::Regex::new(r"^D:\d{4}(([0][1-9]|[1][0-2])(([0][1-9]|[1-2][0-9]|[3][0-1])(([0-1][0-9]|[2][0-3])(([0-5][0-9])(([0-5][0-9])([+\-Z](([0-1][0-9]'|[2][0-3]')([0-5][0-9])?)?)?)?)?)?)?)?$").unwrap();
+            let date_string = std::str::from_utf8(s).unwrap_or("");
+            if !re.is_match(date_string) {
+                return Some(TypeCheckError::PredicateError(
+                        "Not a Date string.".to_string(),
+                        ))
+            }
+            None
+        } else {
+            return Some(TypeCheckError::PredicateError(
+                    "Not an Date string.".to_string(),
+                    ))
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum PDFPrimType {
@@ -313,7 +343,7 @@ mod test_pdf_types {
             elem: Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
                                   PDFPrimType::Integer,
                                   )))),
-                                  size: Some(4),
+            size: Some(4),
         })))
     }
 
@@ -553,28 +583,28 @@ mod test_pdf_types {
              *  (D:YYYYMMDDHHmmSSOHH'mm)
              */
             if let PDFObjT::String(ref s) = obj.val() {
-                    // regex for Date
+                // regex for Date
                 let re = regex::Regex::new(r"^D:\d{4}(([0][1-9]|[1][0-2])(([0][1-9]|[1-2][0-9]|[3][0-1])(([0-1][0-9]|[2][0-3])(([0-5][0-9])(([0-5][0-9])([+\-Z](([0-1][0-9]'|[2][0-3]')([0-5][0-9])?)?)?)?)?)?)?)?$").unwrap();
                 let date_string = std::str::from_utf8(s).unwrap_or("");
                 if !re.is_match(date_string) {
                     return Some(TypeCheckError::PredicateError(
-                        "Not a Date string.".to_string(),
-                    ))
+                            "Not a Date string.".to_string(),
+                            ))
                 }
                 None
             } else {
                 return Some(TypeCheckError::PredicateError(
-                    "Not an Date string.".to_string(),
-                ))
+                        "Not an Date string.".to_string(),
+                        ))
             }
         }
     }
 
     fn mk_date_typchk() -> Rc<TypeCheck> {
         Rc::new(TypeCheck::new_refined(
-            Rc::new(PDFType::PrimType(PDFPrimType::String)),
-            Box::new(DateStringPredicate),
-        ))
+                Rc::new(PDFType::PrimType(PDFPrimType::String)),
+                Box::new(DateStringPredicate),
+                ))
     }
 
     #[test]
@@ -589,30 +619,30 @@ mod test_pdf_types {
         }
 
         let correct_test_cases = ["(D:1992)",
-                                  "(D:199212)",
-                                  "(D:19921223)",
-                                  "(D:1992122319)",
-                                  "(D:199212231952)",
-                                  "(D:19921223195200)",
-                                  "(D:19921223195200-)",
-                                  "(D:19921223195200-08')",
-                                  "(D:19921223195200-08'00)"];
+        "(D:199212)",
+        "(D:19921223)",
+        "(D:1992122319)",
+        "(D:199212231952)",
+        "(D:19921223195200)",
+        "(D:19921223195200-)",
+        "(D:19921223195200-08')",
+        "(D:19921223195200-08'00)"];
         for d in correct_test_cases.iter() {
             assert_eq!(run_date_type_check(d), None);
         }
 
         let incorrect_test_cases = ["(D1992)",
-                                    "(D:199213)",
-                                    "(D:19921243)",
-                                    "(D:1992122349)",
-                                    "(D:199212231972)",
-                                    "(D:19921223195280)",
-                                    "(D:19921223195290-)",
-                                    "(D:199212231952-)",
-                                    "(D:19921223195200-58')",
-                                    "(D:19921223195200-08)",
-                                    "(D:19921223195200-08'0099)",
-                                    "(D:19921223195200-08'60)"];
+        "(D:199213)",
+        "(D:19921243)",
+        "(D:1992122349)",
+        "(D:199212231972)",
+        "(D:19921223195280)",
+        "(D:19921223195290-)",
+        "(D:199212231952-)",
+        "(D:19921223195200-58')",
+        "(D:19921223195200-08)",
+        "(D:19921223195200-08'0099)",
+        "(D:19921223195200-08'60)"];
         for d in incorrect_test_cases.iter() {
             match run_date_type_check(d) {
                 None => {

@@ -22,7 +22,7 @@ fn page_type() -> TypeCheck {
     };
     let lastmodified =  DictEntry {
         key: Vec::from("LastModified"),
-        chk: mk_date_typchk,
+        chk: mk_date_typchk(),
         opt: DictKeySpec::Optional,
     };
     let resources =  DictEntry {
