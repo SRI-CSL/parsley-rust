@@ -6,15 +6,15 @@ use std::rc::Rc;
 /* Basic type structure of PDF objects */
 pub fn mk_date_typchk() -> Rc<TypeCheck> {
     Rc::new(TypeCheck::new_refined(
-            Rc::new(PDFType::PrimType(PDFPrimType::String)),
-            Box::new(DateStringPredicate),
-            ))
+        Rc::new(PDFType::PrimType(PDFPrimType::String)),
+        Rc::new(DateStringPredicate),
+    ))
 }
 struct DateStringPredicate;
 impl Predicate for DateStringPredicate {
     fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
         /*
-         * PDF spec 7.9.4 defines the date format like: 
+         * PDF spec 7.9.4 defines the date format like:
          *  (D:YYYYMMDDHHmmSSOHH'mm)
          */
         if let PDFObjT::String(ref s) = obj.val() {
@@ -23,14 +23,14 @@ impl Predicate for DateStringPredicate {
             let date_string = std::str::from_utf8(s).unwrap_or("");
             if !re.is_match(date_string) {
                 return Some(TypeCheckError::PredicateError(
-                        "Not a Date string.".to_string(),
-                        ))
+                    "Not a Date string.".to_string(),
+                ))
             }
             None
         } else {
             return Some(TypeCheckError::PredicateError(
-                    "Not an Date string.".to_string(),
-                    ))
+                "Not an Date string.".to_string(),
+            ))
         }
     }
 }
@@ -182,7 +182,7 @@ fn check_predicate(
 /* checks a parsed PDF object against its expected type */
 pub fn check_type(
     ctxt: &PDFObjContext, obj: Rc<LocatedVal<PDFObjT>>, chk: Rc<TypeCheck>,
-    ) -> Option<TypeCheckError> {
+) -> Option<TypeCheckError> {
     /* use a queue to avoid recursion-induced stack overflows */
     let mut q = VecDeque::new();
     q.push_back((Rc::clone(&obj), Rc::clone(&chk)));
@@ -312,7 +312,7 @@ pub fn check_type(
                     q.push_back((Rc::clone(e), Rc::clone(elem)))
                 }
             },
-            (PDFObjT::Dict(d), PDFType::Dict(ents)) => {
+            (PDFObjT::Dict(d), PDFType::Dict(ents), _) => {
                 if ents.len() == 0 {
                     continue
                 }
@@ -356,9 +356,9 @@ pub fn check_type(
             },
             (obj, _, _) => {
                 return Some(TypeCheckError::TypeMismatch(
-                        Rc::clone(&c.typ),
-                        type_of(obj),
-                        ))
+                    Rc::clone(&c.typ),
+                    type_of(obj),
+                ))
             },
         }
     }
@@ -375,9 +375,9 @@ impl Predicate for ChoicePred {
             None
         } else {
             Some(TypeCheckError::ValueMismatch(
-                    Rc::clone(obj),
-                    self.0.clone(),
-                    ))
+                Rc::clone(obj),
+                self.0.clone(),
+            ))
         }
     }
 }
@@ -398,8 +398,8 @@ mod test_pdf_types {
     fn mk_rectangle_typchk() -> Rc<TypeCheck> {
         Rc::new(TypeCheck::new(Rc::new(PDFType::Array {
             elem: Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
-                                  PDFPrimType::Integer,
-                                  )))),
+                PDFPrimType::Integer,
+            )))),
             size: Some(4),
         })))
     }
@@ -523,7 +523,7 @@ mod test_pdf_types {
         assert_eq!(
             check_type(&ctxt, Rc::new(obj), Rc::new(typ)),
             Some(TypeCheckError::MissingKey(Vec::from("Dummy")))
-            );
+        );
     }
 
     #[test]
@@ -542,17 +542,17 @@ mod test_pdf_types {
         assert_eq!(
             check_type(&ctxt, Rc::new(obj), Rc::new(typ)),
             Some(TypeCheckError::ForbiddenKey(Vec::from("Entry")))
-            );
+        );
     }
 
     fn mk_pagemode_typchk() -> Rc<TypeCheck> {
         let pred = ChoicePred(
             String::from("Invalid PageMode"),
             vec![
-            PDFObjT::Name(NameT::new(Vec::from("UseNone"))),
-            PDFObjT::Name(NameT::new(Vec::from("UseOutlines"))),
+                PDFObjT::Name(NameT::new(Vec::from("UseNone"))),
+                PDFObjT::Name(NameT::new(Vec::from("UseOutlines"))),
             ],
-            );
+        );
         Rc::new(TypeCheck::new_refined(
             Rc::new(PDFType::PrimType(PDFPrimType::Name)),
             Rc::new(pred),
@@ -614,7 +614,7 @@ mod test_pdf_types {
         assert_eq!(
             check_type(&ctxt, Rc::new(obj), Rc::new(typ)),
             Some(TypeCheckError::ForbiddenKey(Vec::from("PageMode")))
-            );
+        );
 
         // invalid value for optional key
         let mut ctxt = mk_new_context();
@@ -627,18 +627,18 @@ mod test_pdf_types {
             opt: DictKeySpec::Optional,
         };
         let val = Rc::new(LocatedVal::new(
-                PDFObjT::Name(NameT::new(Vec::from("Dummy"))),
-                0,
-                0,
-                ));
+            PDFObjT::Name(NameT::new(Vec::from("Dummy"))),
+            0,
+            0,
+        ));
         let typ = TypeCheck::new(Rc::new(PDFType::Dict(vec![ent])));
         assert_eq!(
             check_type(&ctxt, Rc::new(obj), Rc::new(typ)),
             Some(TypeCheckError::ValueMismatch(
-                    val,
-                    String::from("Invalid PageMode")
-                    ))
-            );
+                val,
+                String::from("Invalid PageMode")
+            ))
+        );
     }
 
     struct AsciiStringPredicate;
@@ -648,15 +648,15 @@ mod test_pdf_types {
                 for c in s {
                     if *c >= 128 {
                         return Some(TypeCheckError::PredicateError(
-                                "Not an ASCII string.".to_string(),
-                                ))
+                            "Not an ASCII string.".to_string(),
+                        ))
                     }
                 }
                 None
             } else {
                 return Some(TypeCheckError::PredicateError(
-                        "Not an ASCII string.".to_string(),
-                        ))
+                    "Not an ASCII string.".to_string(),
+                ))
             }
         }
     }
@@ -703,7 +703,7 @@ mod test_pdf_types {
     impl Predicate for DateStringPredicate {
         fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
             /*
-             * PDF spec 7.9.4 defines the date format like: 
+             * PDF spec 7.9.4 defines the date format like:
              *  (D:YYYYMMDDHHmmSSOHH'mm)
              */
             if let PDFObjT::String(ref s) = obj.val() {
@@ -712,14 +712,18 @@ mod test_pdf_types {
                 let date_string = std::str::from_utf8(s).unwrap_or("");
                 if !re.is_match(date_string) {
                     return Some(TypeCheckError::PredicateError(
-                            "Not a Date string.".to_string(),
-                            ))
+                        "Not a Date string.".to_string(),
+                    ))
                 }
                 None
             } else {
                 return Some(TypeCheckError::PredicateError(
-                        "Not an Date string.".to_string(),
-                        ))
+                    "Not an Date string.".to_string(),
+                ))
+            }
+        }
+    }
+
     #[test]
     fn test_any() {
         let mut ctxt = mk_new_context();
@@ -759,59 +763,6 @@ mod test_pdf_types {
             }
         }
     }
-
-    fn mk_date_typchk() -> Rc<TypeCheck> {
-        Rc::new(TypeCheck::new_refined(
-                Rc::new(PDFType::PrimType(PDFPrimType::String)),
-                Box::new(DateStringPredicate),
-                ))
-    }
-
-    #[test]
-    fn test_date_string() {
-        fn run_date_type_check(raw_pdf_date_string : &str) -> Option<TypeCheckError> {
-            let mut ctxt = mk_new_context();
-            let v = Vec::from(raw_pdf_date_string.as_bytes());
-            let mut pb = ParseBuffer::new(v);
-            let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
-            let typ_chk = mk_date_typchk();
-            return check_type(&ctxt, Rc::new(obj), typ_chk);
-        }
-
-        let correct_test_cases = ["(D:1992)",
-        "(D:199212)",
-        "(D:19921223)",
-        "(D:1992122319)",
-        "(D:199212231952)",
-        "(D:19921223195200)",
-        "(D:19921223195200-)",
-        "(D:19921223195200-08')",
-        "(D:19921223195200-08'00)"];
-        for d in correct_test_cases.iter() {
-            assert_eq!(run_date_type_check(d), None);
-        }
-
-        let incorrect_test_cases = ["(D1992)",
-        "(D:199213)",
-        "(D:19921243)",
-        "(D:1992122349)",
-        "(D:199212231972)",
-        "(D:19921223195280)",
-        "(D:19921223195290-)",
-        "(D:199212231952-)",
-        "(D:19921223195200-58')",
-        "(D:19921223195200-08)",
-        "(D:19921223195200-08'0099)",
-        "(D:19921223195200-08'60)"];
-        for d in incorrect_test_cases.iter() {
-            match run_date_type_check(d) {
-                None => {
-                    println!("failed: {}", d);
-                    assert!(false);
-                },
-                _    => ()
-            }
-        }
     #[test]
     fn test_or_type() {
         let mut ctxt = mk_new_context();
@@ -826,5 +777,63 @@ mod test_pdf_types {
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let chk = TypeCheck::new_refined(Rc::new(PDFType::Any), Rc::new(OrTestPredicate));
         assert_eq!(check_type(&ctxt, Rc::new(obj), Rc::new(chk)), None);
+    }
+
+    fn mk_date_typchk() -> Rc<TypeCheck> {
+        Rc::new(TypeCheck::new_refined(
+            Rc::new(PDFType::PrimType(PDFPrimType::String)),
+            Rc::new(DateStringPredicate),
+        ))
+    }
+
+    #[test]
+    fn test_date_string() {
+        fn run_date_type_check(raw_pdf_date_string: &str) -> Option<TypeCheckError> {
+            let mut ctxt = mk_new_context();
+            let v = Vec::from(raw_pdf_date_string.as_bytes());
+            let mut pb = ParseBuffer::new(v);
+            let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+            let typ_chk = mk_date_typchk();
+            return check_type(&ctxt, Rc::new(obj), typ_chk)
+        }
+
+        let correct_test_cases = [
+            "(D:1992)",
+            "(D:199212)",
+            "(D:19921223)",
+            "(D:1992122319)",
+            "(D:199212231952)",
+            "(D:19921223195200)",
+            "(D:19921223195200-)",
+            "(D:19921223195200-08')",
+            "(D:19921223195200-08'00)",
+        ];
+        for d in correct_test_cases.iter() {
+            assert_eq!(run_date_type_check(d), None);
+        }
+
+        let incorrect_test_cases = [
+            "(D1992)",
+            "(D:199213)",
+            "(D:19921243)",
+            "(D:1992122349)",
+            "(D:199212231972)",
+            "(D:19921223195280)",
+            "(D:19921223195290-)",
+            "(D:199212231952-)",
+            "(D:19921223195200-58')",
+            "(D:19921223195200-08)",
+            "(D:19921223195200-08'0099)",
+            "(D:19921223195200-08'60)",
+        ];
+        for d in incorrect_test_cases.iter() {
+            match run_date_type_check(d) {
+                None => {
+                    println!("failed: {}", d);
+                    assert!(false);
+                },
+                _ => (),
+            }
+        }
     }
 }
