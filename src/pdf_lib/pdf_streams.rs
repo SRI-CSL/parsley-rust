@@ -176,11 +176,13 @@ impl ObjStreamP<'_> {
 
             let start = buf.get_cursor();
             let o = parse_pdf_obj(&mut self.ctxt, buf)?;
+            let end = buf.get_cursor();
             let obj = Rc::new(o);
             let ind = IndirectT::new(*onum, 0, Rc::clone(&obj));
+            let ind = LocatedVal::new(ind, start, end);
             // Register the object into the context so that it can be
             // looked up by its id.
-            match self.ctxt.register_obj(&ind, Rc::clone(&obj)) {
+            match self.ctxt.register_obj(&ind) {
                 None => (),
                 Some(old) => {
                     let loc = old.start();
@@ -193,8 +195,7 @@ impl ObjStreamP<'_> {
                     return Err(locate_value(err, start, end))
                 },
             }
-            let end = buf.get_cursor();
-            objs.push(LocatedVal::new(ind, start, end))
+            objs.push(ind)
         }
         Ok(objs)
     }
