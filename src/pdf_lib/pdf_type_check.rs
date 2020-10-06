@@ -682,4 +682,43 @@ mod test_pdf_types {
         let err = TypeCheckError::PredicateError("Not an ASCII string.".to_string());
         assert_eq!(check_type(&ctxt, Rc::new(obj), Rc::new(chk)), Some(err));
     }
+
+    struct OrTestPredicate;
+    impl Predicate for OrTestPredicate {
+        fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
+            if let PDFObjT::String(ref s) = obj.val() {
+                for c in s {
+                    if *c >= 128 {
+                        return Some(TypeCheckError::PredicateError(
+                            "Not an ASCII string.".to_string(),
+                        ))
+                    }
+                }
+                return None
+            }
+            if let PDFObjT::Integer(_) = obj.val() {
+                None
+            } else {
+                Some(TypeCheckError::PredicateError(
+                    "Not an ASCII string or an integer.".to_string(),
+                ))
+            }
+        }
+    }
+
+    #[test]
+    fn test_or_type() {
+        let mut ctxt = mk_new_context();
+        let v = Vec::from("(ascii)".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let chk = TypeCheck::new_refined(Rc::new(PDFType::Any), Rc::new(OrTestPredicate));
+        assert_eq!(check_type(&ctxt, Rc::new(obj), Rc::new(chk)), None);
+
+        let v = Vec::from("10".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let chk = TypeCheck::new_refined(Rc::new(PDFType::Any), Rc::new(OrTestPredicate));
+        assert_eq!(check_type(&ctxt, Rc::new(obj), Rc::new(chk)), None);
+    }
 }
