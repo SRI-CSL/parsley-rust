@@ -141,7 +141,7 @@ fn page_type() -> TypeCheck {
         opt: DictKeySpec::Optional,
     };
     let templateinstantiated =  DictEntry {
-        key: Vec::from("Tabs"),
+        key: Vec::from("TemplateInstantiated"),
         chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))),
         opt: DictKeySpec::Optional,
     };
@@ -176,8 +176,36 @@ fn page_type() -> TypeCheck {
         opt: DictKeySpec::Optional,
     };
     TypeCheck::new(Rc::new(PDFType::Dict(vec![typ, parent, lastmodified, resources, mediabox, cropbox, 
-                                        bleedbox, trimbox, artbox, boxcolorinfo, contents, rotate, group, thumb, 
-                                        b, dur, trans, annots, aa, metadata, pieceinfo, structparents, id, pz, separationinfo, 
-                                        tabs, templateinstantiated, pressteps, userunit, vp, af, outputintents, dpart])))
+                                         bleedbox, trimbox, artbox, boxcolorinfo, contents, rotate, group, thumb, 
+                                         b, dur, trans, annots, aa, metadata, pieceinfo, structparents, id, pz, separationinfo, 
+                                         tabs, templateinstantiated, pressteps, userunit, vp, af, outputintents, dpart])))
 
+}
+#[cfg(test)]
+
+mod test_page {
+    use super::super::pdf_obj::{parse_pdf_obj, PDFObjContext};
+    use super::super::pdf_type_check::{
+        check_type, DictEntry, DictKeySpec, PDFType, TypeCheck, TypeCheckError
+    };
+    use std::rc::Rc;
+    use super::page_type;
+    use super::super::super::pcore::parsebuffer::{ParseBuffer};
+
+    fn mk_new_context() -> PDFObjContext { PDFObjContext::new(10) }
+
+    #[test]
+    fn test_page() {
+        let mut ctxt = mk_new_context();
+        //let v = Vec::from("<</Type /Pages /Kids [4 0 R  10 0 R 24 0 R ] /Count 3 >>".as_bytes());
+        let v = Vec::from("<</Type /Page /Parent 4 0 R /MediaBox [0 0 612 792] /Resources  <</Font <</F3 7 0 R /F5 9 0 R /F7 11 0 R >>   >>          /Contents 12 0 R /Annots [23 0 R 24 0 R ]       >> ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+
+        let typ = page_type();
+        assert_eq!(
+            check_type(&ctxt, Rc::new(obj), Rc::new(typ)),
+            None
+        );
+    }
 }
