@@ -19,7 +19,7 @@ fn page_type() -> TypeCheck {
     };
     let parent = DictEntry {
         key: Vec::from("Parent"),
-        chk: mk_reference_typchk(),
+        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))),
         opt: DictKeySpec::Required,
     };
     let lastmodified = DictEntry {
@@ -226,8 +226,10 @@ fn page_type() -> TypeCheck {
 #[cfg(test)]
 
 mod test_page {
-    use super::super::super::pcore::parsebuffer::ParseBuffer;
-    use super::super::pdf_obj::{parse_pdf_obj, PDFObjContext};
+    use super::super::super::pcore::parsebuffer::{LocatedVal, ParseBuffer};
+    use super::super::pdf_obj::{parse_pdf_obj, IndirectT, PDFObjContext, PDFObjT};
+    use super::super::pdf_prim::IntegerT;
+
     use super::super::pdf_type_check::{
         check_type, DictEntry, DictKeySpec, PDFType, TypeCheck, TypeCheckError,
     };
@@ -243,6 +245,13 @@ mod test_page {
         // >>".as_bytes());
         let v = Vec::from("<</Type /Page /Parent 4 0 R /MediaBox [0 0 612 792] /Resources  <</Font <</F3 7 0 R /F5 9 0 R /F7 11 0 R >>   >>          /Contents 12 0 R /Annots [23 0 R 24 0 R ]       >> ".as_bytes());
         let mut pb = ParseBuffer::new(v);
+        let i = IndirectT::new(
+            4,
+            0,
+            Rc::new(LocatedVal::new(PDFObjT::Integer(IntegerT::new(5)), 0, 1)),
+        );
+        let l = LocatedVal::new(i, 0, 4);
+        ctxt.register_obj(&l);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
 
         let typ = page_type();
