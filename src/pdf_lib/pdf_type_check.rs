@@ -670,7 +670,7 @@ mod test_pdf_types {
     impl Predicate for DateStringPredicate {
         fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
             /*
-             * PDF spec 7.9.4 defines the date format like: 
+             * PDF spec 7.9.4 defines the date format like:
              *  (D:YYYYMMDDHHmmSSOHH'mm)
              */
             if let PDFObjT::String(ref s) = obj.val() {
@@ -691,50 +691,10 @@ mod test_pdf_types {
         }
     }
 
-    #[test]
-    fn test_any() {
-        let mut ctxt = mk_new_context();
-        let v = Vec::from("(ascii)".as_bytes());
-        let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
-        let chk = TypeCheck::new_refined(Rc::new(PDFType::Any), Rc::new(AsciiStringPredicate));
-        assert_eq!(check_type(&ctxt, Rc::new(obj), Rc::new(chk)), None);
-
-        let v = Vec::from("10".as_bytes());
-        let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
-        let chk = TypeCheck::new_refined(Rc::new(PDFType::Any), Rc::new(AsciiStringPredicate));
-        let err = TypeCheckError::PredicateError("Not an ASCII string.".to_string());
-        assert_eq!(check_type(&ctxt, Rc::new(obj), Rc::new(chk)), Some(err));
-    }
-
-    struct OrTestPredicate;
-    impl Predicate for OrTestPredicate {
-        fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
-            if let PDFObjT::String(ref s) = obj.val() {
-                for c in s {
-                    if *c >= 128 {
-                        return Some(TypeCheckError::PredicateError(
-                            "Not an ASCII string.".to_string(),
-                        ))
-                    }
-                }
-                return None
-            }
-            if let PDFObjT::Integer(_) = obj.val() {
-                None
-            } else {
-                Some(TypeCheckError::PredicateError(
-                    "Not an ASCII string or an integer.".to_string(),
-                ))
-            }
-        }
-    }
-
     fn mk_date_typchk() -> Rc<TypeCheck> {
         Rc::new(TypeCheck::new_refined(
             Rc::new(PDFType::PrimType(PDFPrimType::String)),
-            Box::new(DateStringPredicate),
+            Rc::new(DateStringPredicate),
         ))
     }
 
@@ -783,6 +743,48 @@ mod test_pdf_types {
                 _    => ()
             }
         }
+    }
+
+
+    #[test]
+    fn test_any() {
+        let mut ctxt = mk_new_context();
+        let v = Vec::from("(ascii)".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let chk = TypeCheck::new_refined(Rc::new(PDFType::Any), Rc::new(AsciiStringPredicate));
+        assert_eq!(check_type(&ctxt, Rc::new(obj), Rc::new(chk)), None);
+
+        let v = Vec::from("10".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let chk = TypeCheck::new_refined(Rc::new(PDFType::Any), Rc::new(AsciiStringPredicate));
+        let err = TypeCheckError::PredicateError("Not an ASCII string.".to_string());
+        assert_eq!(check_type(&ctxt, Rc::new(obj), Rc::new(chk)), Some(err));
+    }
+
+    struct OrTestPredicate;
+    impl Predicate for OrTestPredicate {
+        fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
+            if let PDFObjT::String(ref s) = obj.val() {
+                for c in s {
+                    if *c >= 128 {
+                        return Some(TypeCheckError::PredicateError(
+                            "Not an ASCII string.".to_string(),
+                        ))
+                    }
+                }
+                return None
+            }
+            if let PDFObjT::Integer(_) = obj.val() {
+                None
+            } else {
+                Some(TypeCheckError::PredicateError(
+                    "Not an ASCII string or an integer.".to_string(),
+                ))
+            }
+        }
+    }
 
     #[test]
     fn test_or_type() {
