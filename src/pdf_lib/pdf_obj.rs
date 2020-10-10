@@ -61,10 +61,9 @@ impl PDFObjContext {
             cur_depth: 0,
         }
     }
-    pub fn register_obj(
-        &mut self, p: &IndirectT, o: Rc<LocatedVal<PDFObjT>>,
-    ) -> Option<Rc<LocatedVal<PDFObjT>>> {
-        self.defns.insert((p.num(), p.gen()), o)
+    pub fn register_obj(&mut self, p: &LocatedVal<IndirectT>) -> Option<Rc<LocatedVal<PDFObjT>>> {
+        self.defns
+            .insert((p.val().num(), p.val().gen()), Rc::clone(p.val().obj()))
     }
     pub fn lookup_obj(&self, oid: (usize, usize)) -> Option<&Rc<LocatedVal<PDFObjT>>> {
         self.defns.get(&oid)
@@ -627,7 +626,7 @@ pub struct IndirectP<'a> {
 
 impl IndirectP<'_> {
     pub fn new<'a>(ctxt: &'a mut PDFObjContext) -> IndirectP<'a> { IndirectP { ctxt } }
-    fn parse_internal(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<IndirectT> {
+    fn parse_internal(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<LocatedVal<IndirectT>> {
         let mut int = IntegerP;
         let mut ws = WhitespaceEOL::new(true);
 
@@ -697,13 +696,15 @@ impl IndirectP<'_> {
             return Err(e.place(err))
         }
 
+        let end = buf.get_cursor();
         let obj = Rc::new(obj);
         let ind = IndirectT::new(
             num.val().usize_val(),
             gen.val().usize_val(),
             Rc::clone(&obj),
         );
-        match self.ctxt.register_obj(&ind, Rc::clone(&obj)) {
+        let ind = LocatedVal::new(ind, start, end);
+        match self.ctxt.register_obj(&ind) {
             None => Ok(ind),
             Some(old) => {
                 // Note that this location is inside any 'n g obj' prefix for the indirect
@@ -733,10 +734,8 @@ impl ParsleyParser for IndirectP<'_> {
         let mut ws = WhitespaceEOL::new(true);
         ws.parse(buf)?;
 
-        let start = buf.get_cursor();
         let val = self.parse_internal(buf)?;
-        let end = buf.get_cursor();
-        Ok(LocatedVal::new(val, start, end))
+        Ok(val)
     }
 }
 
