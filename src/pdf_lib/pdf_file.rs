@@ -324,7 +324,7 @@ impl XrefSectT {
                     },
                     XrefEntStatus::InStream { .. } => {
                         // This should never happen in xref tables.
-                        assert!(false)
+                        unreachable!()
                     },
                 }
             }
@@ -400,7 +400,7 @@ impl ParsleyParser for XrefSectP {
             if let Err(e) = sect {
                 // If this is an error on the first subsection, report
                 // this error as the result.
-                if sects.len() == 0 {
+                if sects.is_empty() {
                     return Err(e)
                 }
                 break
@@ -426,7 +426,7 @@ pub struct BodyP<'a> {
 }
 
 impl BodyP<'_> {
-    pub fn new<'a>(ctxt: &'a mut PDFObjContext) -> BodyP<'a> { BodyP { ctxt } }
+    pub fn new(ctxt: &mut PDFObjContext) -> BodyP { BodyP { ctxt } }
 }
 
 impl ParsleyParser for BodyP<'_> {
@@ -445,7 +445,7 @@ impl ParsleyParser for BodyP<'_> {
         // any more objects.
         loop {
             let o = op.parse(buf);
-            if let Err(_) = o {
+            if o.is_err() {
                 break
             }
             let o = o.unwrap();
@@ -470,7 +470,7 @@ pub struct TrailerP<'a> {
 }
 
 impl TrailerP<'_> {
-    pub fn new<'a>(ctxt: &'a mut PDFObjContext) -> TrailerP<'a> { TrailerP { ctxt } }
+    pub fn new(ctxt: &mut PDFObjContext) -> TrailerP { TrailerP { ctxt } }
 }
 
 impl ParsleyParser for TrailerP<'_> {

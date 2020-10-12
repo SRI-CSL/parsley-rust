@@ -70,10 +70,10 @@ impl PDFObjContext {
     }
     pub fn enter_obj(&mut self) -> bool {
         if self.cur_depth == self.max_depth {
-            return false
+            false
         } else {
             self.cur_depth += 1;
-            return true
+            true
         }
     }
     pub fn leave_obj(&mut self) {
@@ -98,7 +98,7 @@ struct ArrayP<'a> {
 }
 
 impl ArrayP<'_> {
-    pub fn new<'a>(ctxt: &'a mut PDFObjContext) -> ArrayP<'a> { ArrayP { ctxt } }
+    pub fn new(ctxt: &mut PDFObjContext) -> ArrayP { ArrayP { ctxt } }
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<LocatedVal<ArrayT>> {
         let start = buf.get_cursor();
         if let Err(e) = buf.exact(b"[") {
@@ -116,7 +116,7 @@ impl ArrayP<'_> {
             // for now in the handwritten case, just be close enough.
             let mut ws = WhitespaceEOL::new(true);
             ws.parse(buf)?;
-            if let Err(_) = buf.exact(b"]") {
+            if buf.exact(b"]").is_err() {
                 let o = parse_pdf_obj(&mut self.ctxt, buf)?;
                 objs.push(Rc::new(o));
             } else {
@@ -144,7 +144,7 @@ impl DictT {
         // TODO: the option return-type does not allow distinguishing
         // between a key that's not present, from one that is present
         // but with an invalid (non-usize) integer.
-        self.get(k).map_or(None, |lobj| match lobj.val() {
+        self.get(k).and_then(|lobj| match lobj.val() {
             PDFObjT::Integer(i) => {
                 if i.is_usize() {
                     Some(i.usize_val())
@@ -157,27 +157,27 @@ impl DictT {
     }
     // get the name value of a key
     pub fn get_name(&self, k: &[u8]) -> Option<&[u8]> {
-        self.get(k).map_or(None, |lobj| match lobj.val() {
+        self.get(k).and_then(|lobj| match lobj.val() {
             PDFObjT::Name(n) => Some(n.val()),
             _ => None,
         })
     }
     pub fn get_name_obj(&self, k: &[u8]) -> Option<NameT> {
-        self.get(k).map_or(None, |lobj| match lobj.val() {
+        self.get(k).and_then(|lobj| match lobj.val() {
             PDFObjT::Name(n) => Some(n.clone()),
             _ => None,
         })
     }
     // get the array value of a key
     pub fn get_array(&self, k: &[u8]) -> Option<&ArrayT> {
-        self.get(k).map_or(None, |lobj| match lobj.val() {
-            PDFObjT::Array(a) => Some(&a),
+        self.get(k).and_then(|lobj| match lobj.val() {
+            PDFObjT::Array(a) => Some(a),
             _ => None,
         })
     }
     // get the dictionary value of a key
     pub fn get_dict(&self, k: &[u8]) -> Option<&DictT> {
-        self.get(k).map_or(None, |lobj| match lobj.val() {
+        self.get(k).and_then(|lobj| match lobj.val() {
             PDFObjT::Dict(d) => Some(d),
             _ => None,
         })
@@ -189,7 +189,7 @@ pub struct DictP<'a> {
 }
 
 impl DictP<'_> {
-    pub fn new<'a>(ctxt: &'a mut PDFObjContext) -> DictP<'a> { DictP { ctxt } }
+    pub fn new(ctxt: &mut PDFObjContext) -> DictP { DictP { ctxt } }
     pub fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<DictT> {
         buf.exact(b"<<")?;
         let mut end = false;
@@ -203,7 +203,7 @@ impl DictP<'_> {
             let mut ws = WhitespaceEOL::new(true); // allow empty whitespace for now
             ws.parse(buf)?;
 
-            if let Err(_) = buf.exact(b">>") {
+            if buf.exact(b">>").is_err() {
                 let mut p = NameP;
                 let n = p.parse(buf)?;
                 // Construct a normalized name usable as a key.
@@ -248,7 +248,7 @@ pub struct Filter<'a> {
 }
 
 impl Filter<'_> {
-    fn new<'a>(name: NameT, options: Option<&'a DictT>) -> Filter<'a> { Filter { name, options } }
+    fn new(name: NameT, options: Option<&DictT>) -> Filter { Filter { name, options } }
     pub fn name(&self) -> &NameT { &self.name }
     pub fn options(&self) -> &Option<&DictT> { &self.options }
 }
@@ -264,8 +264,7 @@ impl StreamT {
         let mut filters = Vec::new();
         // check for the single filter case
         let f = self.dict.val().get_name_obj(b"Filter");
-        if f.is_some() {
-            let name = f.unwrap();
+        if let Some(name) = f {
             // There should be an optional single dictionary
             // value as filter param.
             match self.dict.val().get_dict(b"DecodeParms") {
@@ -273,7 +272,7 @@ impl StreamT {
                 None => {
                     // Ensure there is no array value.
                     if self.dict.val().get_array(b"DecodeParms").is_some() {
-                        let msg = format!("Mismatched Filter and DecodeParms in stream");
+                        let msg = "Mismatched Filter and DecodeParms in stream".to_string();
                         let err = ErrorKind::GuardError(msg);
                         return Err(self.dict.place(err))
                     }
@@ -283,14 +282,13 @@ impl StreamT {
             return Ok(filters)
         }
         // check the array case
-        let fa = self.dict.val().get_array(b"Filter");
-        if fa.is_some() {
-            let fa = fa.unwrap();
+        let fa_opt = self.dict.val().get_array(b"Filter");
+        if let Some(fa) = fa_opt {
             match self.dict.val().get_array(b"DecodeParms") {
                 Some(da) => {
                     if da.objs().len() != fa.objs().len() {
                         let msg =
-                            format!("Mismatched lengths for Filter and DecodeParms of stream");
+                            "Mismatched lengths for Filter and DecodeParms of stream".to_string();
                         let err = ErrorKind::GuardError(msg);
                         return Err(self.dict.place(err))
                     }
@@ -303,12 +301,12 @@ impl StreamT {
                                 filters.push(Filter::new(name.clone(), Some(d)))
                             },
                             (PDFObjT::Name(_), _) => {
-                                let msg = format!("Invalid objects in DecodeParms of stream");
+                                let msg = "Invalid objects in DecodeParms of stream".to_string();
                                 let err = ErrorKind::GuardError(msg);
                                 return Err(self.dict.place(err))
                             },
                             (_, _) => {
-                                let msg = format!("Invalid objects in Filter of stream");
+                                let msg = "Invalid objects in Filter of stream".to_string();
                                 let err = ErrorKind::GuardError(msg);
                                 return Err(self.dict.place(err))
                             },
@@ -321,7 +319,7 @@ impl StreamT {
                         match f.val() {
                             PDFObjT::Name(name) => filters.push(Filter::new(name.clone(), None)),
                             _ => {
-                                let msg = format!("Invalid objects in Filter of stream");
+                                let msg = "Invalid objects in Filter of stream".to_string();
                                 let err = ErrorKind::GuardError(msg);
                                 return Err(self.dict.place(err))
                             },
@@ -414,7 +412,7 @@ struct PDFObjP<'a> {
 }
 
 impl PDFObjP<'_> {
-    fn new<'a>(ctxt: &'a mut PDFObjContext) -> PDFObjP<'a> { PDFObjP { ctxt } }
+    fn new(ctxt: &mut PDFObjContext) -> PDFObjP { PDFObjP { ctxt } }
 
     // The top-level basic object parser, as an internal helper.  Note
     // that this does not parse streams, even though they are 'basic'
@@ -520,7 +518,7 @@ impl PDFObjP<'_> {
                 let n1_end_cursor = buf.get_cursor();
 
                 // Skip past non-empty whitespace.
-                if let Err(_) = ws.parse(buf) {
+                if ws.parse(buf).is_err() {
                     // We've already parsed a number, so set the
                     // cursor past that and return it.
                     buf.set_cursor(n1_end_cursor);
@@ -529,14 +527,14 @@ impl PDFObjP<'_> {
 
                 // Get the second integer.
                 let n2 = int.parse(buf);
-                if let Err(_) = n2 {
+                if n2.is_err() {
                     // See above comment.
                     buf.set_cursor(n1_end_cursor);
                     return Ok(PDFObjT::Integer(n1))
                 }
 
                 // Skip past non-empty whitespace.
-                if let Err(_) = ws.parse(buf) {
+                if ws.parse(buf).is_err() {
                     // We've already parsed the first number, so set the
                     // cursor past that and return it.
                     buf.set_cursor(n1_end_cursor);
@@ -546,7 +544,7 @@ impl PDFObjP<'_> {
                 // We have now seen two integers, so this could be an
                 // indirect reference.
                 let prefix = buf.check_prefix(b"R");
-                if let Err(_) = prefix {
+                if prefix.is_err() {
                     buf.set_cursor(n1_end_cursor);
                     return Ok(PDFObjT::Integer(n1))
                 }
@@ -600,7 +598,7 @@ pub fn parse_pdf_obj(
         let start = buf.get_cursor();
         let msg = format!("max recursion bound {} exceeded", ctxt.depth());
         let err = ErrorKind::GuardError(msg);
-        return Err(locate_value(err, start, start))
+        Err(locate_value(err, start, start))
     }
 }
 
@@ -625,7 +623,7 @@ pub struct IndirectP<'a> {
 }
 
 impl IndirectP<'_> {
-    pub fn new<'a>(ctxt: &'a mut PDFObjContext) -> IndirectP<'a> { IndirectP { ctxt } }
+    pub fn new(ctxt: &mut PDFObjContext) -> IndirectP { IndirectP { ctxt } }
     fn parse_internal(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<LocatedVal<IndirectT>> {
         let mut int = IntegerP;
         let mut ws = WhitespaceEOL::new(true);

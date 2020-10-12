@@ -381,11 +381,11 @@ impl ParseBufferT for ParseBuffer {
     }
     fn check_cursor(&self, ofs: usize) -> bool { ofs <= self.size }
 
-    fn incr_cursor(&mut self) -> () {
+    fn incr_cursor(&mut self) {
         assert!(self.ofs < self.size);
         self.ofs += 1;
     }
-    fn decr_cursor(&mut self) -> () {
+    fn decr_cursor(&mut self) {
         assert!(self.ofs > 0);
         self.ofs -= 1;
     }
@@ -427,7 +427,7 @@ impl ParseBufferT for ParseBuffer {
         let mut skip = 0;
         for w in self.buf[(self.start + self.ofs) .. (self.start + self.size)].windows(tag.len()) {
             if w.starts_with(tag) {
-                self.ofs = self.ofs + skip;
+                self.ofs += skip;
                 return Ok(skip)
             }
             skip += 1;
@@ -444,7 +444,7 @@ impl ParseBufferT for ParseBuffer {
         {
             if w.starts_with(tag) {
                 skip = skip + tag.len() - 1;
-                self.ofs = self.ofs - skip;
+                self.ofs -= skip;
                 return Ok(skip)
             }
             skip += 1;
@@ -455,7 +455,7 @@ impl ParseBufferT for ParseBuffer {
     fn exact(&mut self, tag: &[u8]) -> ParseResult<bool> {
         let start = self.get_cursor();
         if self.buf[(self.start + self.ofs) .. (self.start + self.size)].starts_with(tag) {
-            self.ofs = self.ofs + tag.len();
+            self.ofs += tag.len();
             Ok(true)
         } else {
             Err(locate_value(

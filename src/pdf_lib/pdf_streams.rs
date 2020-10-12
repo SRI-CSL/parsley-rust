@@ -56,7 +56,7 @@ impl ObjStreamP<'_> {
     fn get_dict_info(&self) -> ParseResult<(usize, usize)> {
         let stream_type = self.dict.val().get_name(b"Type");
         if stream_type.is_none() {
-            let msg = format!("No valid /Type in object stream dictionary.");
+            let msg = "No valid /Type in object stream dictionary.".to_string();
             let err = ErrorKind::GuardError(msg);
             return Err(locate_value(err, self.dict.start(), self.dict.end()))
         }
@@ -73,7 +73,7 @@ impl ObjStreamP<'_> {
 
         let num_objs = self.dict.val().get_usize(b"N");
         if num_objs.is_none() {
-            let msg = format!("No valid /N in object stream dictionary.");
+            let msg = "No valid /N in object stream dictionary.".to_string();
             let err = ErrorKind::GuardError(msg);
             return Err(locate_value(err, self.dict.start(), self.dict.end()))
         }
@@ -81,7 +81,7 @@ impl ObjStreamP<'_> {
 
         let first = self.dict.val().get_usize(b"First");
         if first.is_none() {
-            let msg = format!("No valid /First in object stream dictionary.");
+            let msg = "No valid /First in object stream dictionary.".to_string();
             let err = ErrorKind::GuardError(msg);
             return Err(locate_value(err, self.dict.start(), self.dict.end()))
         }
@@ -131,7 +131,7 @@ impl ObjStreamP<'_> {
             }
             // ensure that the offset is ordered.
             let ofs_val = ofs.val().usize_val();
-            if ofs_val <= last_ofs && obj_ofs.len() > 0 {
+            if ofs_val <= last_ofs && !obj_ofs.is_empty() {
                 let msg = format!(
                     "offset {} of object {} is not greater than previous offset {}",
                     ofs_val, obj, last_ofs
@@ -276,12 +276,7 @@ impl XrefEntT {
     }
     pub fn obj(&self) -> usize { self.obj }
     pub fn gen(&self) -> usize { self.gen }
-    pub fn in_use(&self) -> bool {
-        match self.status {
-            XrefEntStatus::Free { .. } => false,
-            _ => true,
-        }
-    }
+    pub fn in_use(&self) -> bool { !matches!(self.status, XrefEntStatus::Free { .. }) }
     pub fn status(&self) -> &XrefEntStatus { &self.status }
 }
 
@@ -325,7 +320,7 @@ impl XrefStreamP<'_> {
         let dict = self.stream.dict();
         let stream_type = dict.val().get_name(b"Type");
         if stream_type.is_none() {
-            let msg = format!("No /Type in xref stream dictionary.");
+            let msg = "No /Type in xref stream dictionary.".to_string();
             let err = ErrorKind::GuardError(msg);
             return Err(locate_value(err, dict.start(), dict.end()))
         }
@@ -342,7 +337,7 @@ impl XrefStreamP<'_> {
 
         let size = dict.val().get_usize(b"Size");
         if size.is_none() {
-            let msg = format!("No valid /Size in xref stream dictionary.");
+            let msg = "No valid /Size in xref stream dictionary.".to_string();
             let err = ErrorKind::GuardError(msg);
             return Err(locate_value(err, dict.start(), dict.end()))
         }
@@ -386,8 +381,8 @@ impl XrefStreamP<'_> {
                     }
                     index_ents.push((s.usize_val(), c.usize_val()))
                 } else {
-                    let msg =
-                        format!("Invalid non-integer entries in /Index in xref stream dictionary.");
+                    let msg = "Invalid non-integer entries in /Index in xref stream dictionary."
+                        .to_string();
                     let err = ErrorKind::GuardError(msg);
                     return Err(locate_value(err, dict.start(), dict.end()))
                 }
@@ -400,13 +395,13 @@ impl XrefStreamP<'_> {
 
         let w = dict.val().get_array(b"W");
         if w.is_none() {
-            let msg = format!("No valid /W in xref stream dictionary.");
+            let msg = "No valid /W in xref stream dictionary.".to_string();
             let err = ErrorKind::GuardError(msg);
             return Err(locate_value(err, dict.start(), dict.end()))
         }
         let w = w.unwrap();
         if w.objs().len() != 3 {
-            let msg = format!("Invalid length for /W in xref stream dictionary.");
+            let msg = "Invalid length for /W in xref stream dictionary.".to_string();
             let err = ErrorKind::GuardError(msg);
             return Err(locate_value(err, dict.start(), dict.end()))
         }
@@ -434,12 +429,12 @@ impl XrefStreamP<'_> {
                 w_array.push(sz);
                 continue
             }
-            let msg = format!("Invalid length for /W in xref stream dictionary.");
+            let msg = "Invalid length for /W in xref stream dictionary.".to_string();
             let err = ErrorKind::GuardError(msg);
             return Err(locate_value(err, dict.start(), dict.end()))
         }
         if w_array[1] == 0 {
-            let msg = format!("Invalid zero-width field #2 in /W in xref stream dictionary.");
+            let msg = "Invalid zero-width field #2 in /W in xref stream dictionary.".to_string();
             let err = ErrorKind::GuardError(msg);
             return Err(locate_value(err, dict.start(), dict.end()))
         }
@@ -510,7 +505,7 @@ impl XrefStreamP<'_> {
                     if typ == 2 {
                         // There is no default value for Type 2 entries.
                         let cur = buf.get_cursor();
-                        let msg = format!("No Type 2 default for field #3 in xref stream.");
+                        let msg = "No Type 2 default for field #3 in xref stream.".to_string();
                         let err = ErrorKind::GuardError(msg);
                         return Err(locate_value(err, start, cur))
                     }

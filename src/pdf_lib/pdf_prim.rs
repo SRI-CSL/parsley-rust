@@ -41,7 +41,7 @@ impl ParsleyParser for WhitespaceNoEOL {
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let ws = buf.parse_allowed_bytes(b" \0\t\r\x0c")?;
-        if ws.len() == 0 && !self.empty_ok {
+        if ws.is_empty() && !self.empty_ok {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not at whitespace-noeol".to_string());
             return Err(LocatedVal::new(err, start, end))
@@ -67,7 +67,7 @@ impl ParsleyParser for Comment {
     // and including end-of-line or upto end-of-buffer.
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
-        if !(buf.peek() == Some(37)) {
+        if buf.peek() != Some(37) {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not at comment".to_string());
             return Err(LocatedVal::new(err, start, end))
@@ -102,7 +102,7 @@ impl ParsleyParser for WhitespaceEOL {
         let mut is_empty = true;
         loop {
             let v = buf.parse_allowed_bytes(b" \0\t\r\n\x0c")?;
-            if v.len() > 0 {
+            if !v.is_empty() {
                 is_empty = false
             }
             // Check if we are at a comment.
@@ -137,9 +137,9 @@ impl ParsleyParser for Boolean {
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let mut b = buf.exact(b"true");
-        if let Err(_) = b {
+        if b.is_err() {
             b = buf.exact(b"false");
-            if let Err(_) = b {
+            if b.is_err() {
                 let end = buf.get_cursor();
                 let err = ErrorKind::GuardError("not at boolean".to_string());
                 Err(LocatedVal::new(err, start, end))
@@ -163,7 +163,7 @@ impl ParsleyParser for Null {
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let null = buf.exact(b"null");
-        if let Err(_) = null {
+        if null.is_err() {
             let end = buf.get_cursor();
             Err(locate_value(
                 ErrorKind::GuardError("not at null".to_string()),
@@ -187,11 +187,7 @@ impl IntegerT {
     pub fn int_val(&self) -> i64 { self.0 }
     pub fn is_usize(&self) -> bool {
         let u = <usize as TryFrom<i64>>::try_from(self.0);
-        if let Err(_) = u {
-            false
-        } else {
-            true
-        }
+        u.is_ok()
     }
     pub fn usize_val(&self) -> usize {
         let u = <usize as TryFrom<i64>>::try_from(self.0);
@@ -220,7 +216,7 @@ impl ParsleyParser for IntegerP {
             false
         };
         let num_str = buf.parse_allowed_bytes(b"0123456789")?;
-        if (num_str.len() == 0) && (buf.peek() != Some(46)) {
+        if num_str.is_empty() && (buf.peek() != Some(46)) {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not at number".to_string());
             buf.set_cursor(start);
@@ -229,7 +225,7 @@ impl ParsleyParser for IntegerP {
         let mut num: i64 = 0;
         for c in num_str.iter() {
             let tmp = i64::checked_mul(num, 10);
-            if let None = tmp {
+            if tmp.is_none() {
                 let end = buf.get_cursor();
                 let err = ErrorKind::GuardError("numerical overflow".to_string());
                 buf.set_cursor(start);
@@ -237,7 +233,7 @@ impl ParsleyParser for IntegerP {
             }
             num = tmp.unwrap();
             let tmp = i64::checked_add(num, i64::from(c - 48));
-            if let None = tmp {
+            if tmp.is_none() {
                 let end = buf.get_cursor();
                 let err = ErrorKind::GuardError("numerical overflow".to_string());
                 buf.set_cursor(start);
@@ -302,7 +298,7 @@ impl ParsleyParser for RealP {
             false
         };
         let num_str = buf.parse_allowed_bytes(b"0123456789")?;
-        if (num_str.len() == 0) && (buf.peek() != Some(46)) {
+        if num_str.is_empty() && (buf.peek() != Some(46)) {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not at number".to_string());
             buf.set_cursor(start);
@@ -311,7 +307,7 @@ impl ParsleyParser for RealP {
         let mut num: i128 = 0;
         for c in num_str.iter() {
             let tmp = i128::checked_mul(num, 10);
-            if let None = tmp {
+            if tmp.is_none() {
                 let end = buf.get_cursor();
                 let err = ErrorKind::GuardError("numerical overflow".to_string());
                 buf.set_cursor(start);
@@ -319,7 +315,7 @@ impl ParsleyParser for RealP {
             }
             num = tmp.unwrap();
             let tmp = i128::checked_add(num, i128::from(c - 48));
-            if let None = tmp {
+            if tmp.is_none() {
                 let end = buf.get_cursor();
                 let err = ErrorKind::GuardError("numerical overflow".to_string());
                 buf.set_cursor(start);
@@ -335,7 +331,7 @@ impl ParsleyParser for RealP {
             if let Ok(den_str) = s {
                 for c in den_str.iter() {
                     let tmp = i128::checked_mul(num, 10);
-                    if let None = tmp {
+                    if tmp.is_none() {
                         let end = buf.get_cursor();
                         let err = ErrorKind::GuardError("numerical overflow".to_string());
                         buf.set_cursor(start);
@@ -343,7 +339,7 @@ impl ParsleyParser for RealP {
                     }
                     num = tmp.unwrap();
                     let tmp = i128::checked_add(num, i128::from(c - 48));
-                    if let None = tmp {
+                    if tmp.is_none() {
                         let end = buf.get_cursor();
                         let err = ErrorKind::GuardError("numerical overflow".to_string());
                         buf.set_cursor(start);
@@ -351,7 +347,7 @@ impl ParsleyParser for RealP {
                     }
                     num = tmp.unwrap();
                     let tmp = i128::checked_mul(den, 10);
-                    if let None = tmp {
+                    if tmp.is_none() {
                         let end = buf.get_cursor();
                         let err = ErrorKind::GuardError("numerical overflow".to_string());
                         buf.set_cursor(start);
@@ -562,6 +558,7 @@ impl NameT {
     }
     // TODO: allow dereferencing to Vec
     pub fn len(&self) -> usize { self.raw_bytes.len() }
+    pub fn is_empty(&self) -> bool { self.raw_bytes.is_empty() }
     pub fn as_string(&self) -> String {
         match std::str::from_utf8(&self.raw_bytes) {
             Ok(v) => v.to_string(),
@@ -609,9 +606,9 @@ impl ParsleyParser for NameP {
                 if triple[0] == 35  // '#'
                         && triple[1].is_ascii_hexdigit() && triple[2].is_ascii_hexdigit()
                 {
-                    let h = from_hex(triple[1].to_ascii_lowercase());
-                    let l = from_hex(triple[2].to_ascii_lowercase());
-                    let ch = 16 * h + l;
+                    let hi = from_hex(triple[1].to_ascii_lowercase());
+                    let lo = from_hex(triple[2].to_ascii_lowercase());
+                    let ch = 16 * hi + lo;
                     if ch == 0 {
                         let err = ErrorKind::GuardError("null char in name".to_string());
                         buf.set_cursor(start);
@@ -684,7 +681,7 @@ impl ParsleyParser for StreamContentP {
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let is_stream = buf.exact(b"stream");
-        if let Err(_) = is_stream {
+        if is_stream.is_err() {
             let err = ErrorKind::GuardError("not at stream content".to_string());
             return Err(locate_value(err, start, start))
         }
@@ -732,7 +729,7 @@ impl ParsleyParser for StreamContentP {
 
         // Go back to the end of the content
         buf.set_cursor(stream_end_cursor);
-        if let Err(_) = buf.exact(b"endstream") {
+        if buf.exact(b"endstream").is_err() {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("invalid endstream".to_string());
             buf.set_cursor(start);

@@ -127,8 +127,7 @@ fn type_of(obj: &PDFObjT) -> PDFType {
         },
         PDFObjT::Stream(_) => PDFType::Stream(Vec::new()),
         PDFObjT::Reference(_) => {
-            assert!(false); // we should never get a raw reference
-            PDFType::Any
+            unreachable!(); // we should never get a raw reference
         },
         PDFObjT::Boolean(_) => PDFType::PrimType(PDFPrimType::Bool),
         PDFObjT::String(_) => PDFType::PrimType(PDFPrimType::String),
@@ -156,7 +155,7 @@ pub fn check_type(
     /* use a queue to avoid recursion-induced stack overflows */
     let mut q = VecDeque::new();
     q.push_back((Rc::clone(&obj), Rc::clone(&chk)));
-    while q.len() > 0 {
+    while !q.is_empty() {
         let next = q.pop_front();
         if next.is_none() {
             break
@@ -164,10 +163,10 @@ pub fn check_type(
         let (o, c) = next.unwrap();
         match (o.val(), c.typ(), c.indirect()) {
             // Indirects are best handled first.
-            (PDFObjT::Reference(r), _, IndirectSpec::Allowed)
-            | (PDFObjT::Reference(r), _, IndirectSpec::Required) => {
+            (PDFObjT::Reference(refnc), _, IndirectSpec::Allowed)
+            | (PDFObjT::Reference(refnc), _, IndirectSpec::Required) => {
                 // lookup referenced object and add it to the queue
-                match ctxt.lookup_obj(r.id()) {
+                match ctxt.lookup_obj(refnc.id()) {
                     Some(obj) => {
                         // Remove any Required indirect from the check.
                         let pred = match c.pred() {
@@ -179,7 +178,7 @@ pub fn check_type(
                         q.push_back((Rc::clone(obj), Rc::new(chk)));
                         continue
                     },
-                    None => return Some(TypeCheckError::RefNotFound(*r)),
+                    None => return Some(TypeCheckError::RefNotFound(*refnc)),
                 }
             },
             (PDFObjT::Reference(_), _, IndirectSpec::Forbidden) => {
@@ -197,7 +196,7 @@ pub fn check_type(
 
             (_, PDFType::Any, _) => {
                 let invalid = check_predicate(&o, c.pred());
-                if let None = invalid {
+                if invalid.is_none() {
                     continue
                 } else {
                     return invalid
@@ -206,7 +205,7 @@ pub fn check_type(
 
             (PDFObjT::Boolean(_), PDFType::PrimType(PDFPrimType::Bool), _) => {
                 let invalid = check_predicate(&o, c.pred());
-                if let None = invalid {
+                if invalid.is_none() {
                     continue
                 } else {
                     return invalid
@@ -214,7 +213,7 @@ pub fn check_type(
             },
             (PDFObjT::String(_), PDFType::PrimType(PDFPrimType::String), _) => {
                 let invalid = check_predicate(&o, c.pred());
-                if let None = invalid {
+                if invalid.is_none() {
                     continue
                 } else {
                     return invalid
@@ -222,7 +221,7 @@ pub fn check_type(
             },
             (PDFObjT::Name(_), PDFType::PrimType(PDFPrimType::Name), _) => {
                 let invalid = check_predicate(&o, c.pred());
-                if let None = invalid {
+                if invalid.is_none() {
                     continue
                 } else {
                     return invalid
@@ -230,7 +229,7 @@ pub fn check_type(
             },
             (PDFObjT::Null(_), PDFType::PrimType(PDFPrimType::Null), _) => {
                 let invalid = check_predicate(&o, c.pred());
-                if let None = invalid {
+                if invalid.is_none() {
                     continue
                 } else {
                     return invalid
@@ -238,7 +237,7 @@ pub fn check_type(
             },
             (PDFObjT::Integer(_), PDFType::PrimType(PDFPrimType::Integer), _) => {
                 let invalid = check_predicate(&o, c.pred());
-                if let None = invalid {
+                if invalid.is_none() {
                     continue
                 } else {
                     return invalid
@@ -246,7 +245,7 @@ pub fn check_type(
             },
             (PDFObjT::Real(_), PDFType::PrimType(PDFPrimType::Real), _) => {
                 let invalid = check_predicate(&o, c.pred());
-                if let None = invalid {
+                if invalid.is_none() {
                     continue
                 } else {
                     return invalid
@@ -254,7 +253,7 @@ pub fn check_type(
             },
             (PDFObjT::Comment(_), PDFType::PrimType(PDFPrimType::Comment), _) => {
                 let invalid = check_predicate(&o, c.pred());
-                if let None = invalid {
+                if invalid.is_none() {
                     continue
                 } else {
                     return invalid
@@ -272,7 +271,7 @@ pub fn check_type(
                 /* optimize PDFType::Any */
                 if let PDFType::Any = elem.typ() {
                     let invalid = check_predicate(&o, c.pred());
-                    if let None = invalid {
+                    if invalid.is_none() {
                         continue
                     } else {
                         return invalid
@@ -282,19 +281,19 @@ pub fn check_type(
                     q.push_back((Rc::clone(e), Rc::clone(elem)))
                 }
             },
-            (PDFObjT::Dict(d), PDFType::Dict(ents), _) => {
+            (PDFObjT::Dict(dict), PDFType::Dict(ents), _) => {
                 for ent in ents {
-                    let val = d.get(&ent.key);
+                    let val = dict.get(&ent.key);
                     match (val, ent.opt, ent.chk.typ()) {
                         (None, DictKeySpec::Optional, _) => continue,
                         (None, DictKeySpec::Forbidden, _) => continue,
                         (None, DictKeySpec::Required, _) => {
-                            let k = ent.key.clone();
-                            return Some(TypeCheckError::MissingKey(k))
+                            let key = ent.key.clone();
+                            return Some(TypeCheckError::MissingKey(key))
                         },
                         (Some(_), DictKeySpec::Forbidden, _) => {
-                            let k = ent.key.clone();
-                            return Some(TypeCheckError::ForbiddenKey(k))
+                            let key = ent.key.clone();
+                            return Some(TypeCheckError::ForbiddenKey(key))
                         },
                         (Some(_), _, PDFType::Any) => continue,
                         (Some(v), _, _) => q.push_back((Rc::clone(v), Rc::clone(&ent.chk))),
@@ -309,12 +308,12 @@ pub fn check_type(
                         (None, DictKeySpec::Optional, _) => continue,
                         (None, DictKeySpec::Forbidden, _) => continue,
                         (None, DictKeySpec::Required, _) => {
-                            let k = ent.key.clone();
-                            return Some(TypeCheckError::MissingKey(k))
+                            let key = ent.key.clone();
+                            return Some(TypeCheckError::MissingKey(key))
                         },
                         (Some(_), DictKeySpec::Forbidden, _) => {
-                            let k = ent.key.clone();
-                            return Some(TypeCheckError::ForbiddenKey(k))
+                            let key = ent.key.clone();
+                            return Some(TypeCheckError::ForbiddenKey(key))
                         },
                         (Some(_), _, PDFType::Any) => continue,
                         (Some(v), _, _) => q.push_back((Rc::clone(v), Rc::clone(&ent.chk))),
@@ -329,7 +328,7 @@ pub fn check_type(
             },
         }
     }
-    return None
+    None
 }
 
 // One common predicate is to allow a value in a set.
@@ -338,7 +337,7 @@ pub struct ChoicePred(String, Vec<PDFObjT>);
 impl Predicate for ChoicePred {
     fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
         let vec = &self.1;
-        if vec.into_iter().any(|c| obj.val() == c) {
+        if vec.iter().any(|c| obj.val() == c) {
             None
         } else {
             Some(TypeCheckError::ValueMismatch(

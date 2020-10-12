@@ -168,7 +168,7 @@ where
         let end = buf.get_cursor();
         buf.set_cursor(start);
 
-        if let Ok(_) = r {
+        if r.is_ok() {
             Err(locate_value(
                 ErrorKind::GuardError("not".to_string()),
                 start,
