@@ -284,7 +284,7 @@ pub trait ParseBufferT {
     fn exact(&mut self, tag: &[u8]) -> ParseResult<bool>;
 
     // Extract binary stream of specified length.
-    fn extract<'a>(&'a mut self, len: usize) -> ParseResult<&'a [u8]>;
+    fn extract(&mut self, len: usize) -> ParseResult<&[u8]>;
 }
 
 // The basic parsing buffer.  This implements a (possibly restricted)
@@ -466,7 +466,7 @@ impl ParseBufferT for ParseBuffer {
         }
     }
 
-    fn extract<'a>(&'a mut self, len: usize) -> ParseResult<&'a [u8]> {
+    fn extract(&mut self, len: usize) -> ParseResult<&[u8]> {
         if self.remaining() < len {
             let start = self.get_cursor();
             Err(locate_value(ErrorKind::EndOfBuffer, start, start))

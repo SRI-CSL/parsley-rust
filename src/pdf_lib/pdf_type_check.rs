@@ -153,10 +153,10 @@ pub fn check_type(
     ctxt: &PDFObjContext, obj: Rc<LocatedVal<PDFObjT>>, chk: Rc<TypeCheck>,
 ) -> Option<TypeCheckError> {
     /* use a queue to avoid recursion-induced stack overflows */
-    let mut q = VecDeque::new();
-    q.push_back((Rc::clone(&obj), Rc::clone(&chk)));
-    while !q.is_empty() {
-        let next = q.pop_front();
+    let mut pending = VecDeque::new();
+    pending.push_back((Rc::clone(&obj), Rc::clone(&chk)));
+    while !pending.is_empty() {
+        let next = pending.pop_front();
         if next.is_none() {
             break
         }
@@ -175,7 +175,7 @@ pub fn check_type(
                         };
                         let chk =
                             TypeCheck::new_all(Rc::clone(c.typ_rc()), pred, IndirectSpec::Allowed);
-                        q.push_back((Rc::clone(obj), Rc::new(chk)));
+                        pending.push_back((Rc::clone(obj), Rc::new(chk)));
                         continue
                     },
                     None => return Some(TypeCheckError::RefNotFound(*refnc)),
@@ -278,7 +278,7 @@ pub fn check_type(
                     }
                 }
                 for e in ao.objs() {
-                    q.push_back((Rc::clone(e), Rc::clone(elem)))
+                    pending.push_back((Rc::clone(e), Rc::clone(elem)))
                 }
             },
             (PDFObjT::Dict(dict), PDFType::Dict(ents), _) => {
@@ -296,7 +296,7 @@ pub fn check_type(
                             return Some(TypeCheckError::ForbiddenKey(key))
                         },
                         (Some(_), _, PDFType::Any) => continue,
-                        (Some(v), _, _) => q.push_back((Rc::clone(v), Rc::clone(&ent.chk))),
+                        (Some(v), _, _) => pending.push_back((Rc::clone(v), Rc::clone(&ent.chk))),
                     }
                 }
             },
@@ -316,7 +316,7 @@ pub fn check_type(
                             return Some(TypeCheckError::ForbiddenKey(key))
                         },
                         (Some(_), _, PDFType::Any) => continue,
-                        (Some(v), _, _) => q.push_back((Rc::clone(v), Rc::clone(&ent.chk))),
+                        (Some(v), _, _) => pending.push_back((Rc::clone(v), Rc::clone(&ent.chk))),
                     }
                 }
             },

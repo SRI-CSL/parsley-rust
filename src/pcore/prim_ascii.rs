@@ -66,6 +66,10 @@ impl AsciiChar {
     }
 }
 
+impl Default for AsciiChar {
+    fn default() -> Self { AsciiChar::new() }
+}
+
 impl ParsleyParser for AsciiChar {
     type T = LocatedVal<char>;
 

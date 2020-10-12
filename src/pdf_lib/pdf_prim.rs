@@ -583,15 +583,15 @@ impl ParsleyParser for NameP {
 
         // terminated by whitespace or delimiter characters.  empty
         // names are considered valid.
-        let v = buf.parse_bytes_until(b" \0\t\r\n\x0c()<>[]{}/%")?;
+        let span = buf.parse_bytes_until(b" \0\t\r\n\x0c()<>[]{}/%")?;
         let end = buf.get_cursor();
 
         // Normalize hex-codes if length permits.
-        let ret = if v.len() < 3 {
-            v
+        let ret = if span.len() < 3 {
+            span
         } else {
             let mut r = Vec::new();
-            let mut iter = v.windows(3);
+            let mut iter = span.windows(3);
             let mut w = iter.next();
 
             while w.is_some() {

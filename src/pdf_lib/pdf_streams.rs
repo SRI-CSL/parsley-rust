@@ -49,7 +49,7 @@ pub struct ObjStreamP<'a> {
 }
 
 impl ObjStreamP<'_> {
-    pub fn new<'a>(ctxt: &'a mut PDFObjContext, dict: Rc<LocatedVal<DictT>>) -> ObjStreamP<'a> {
+    pub fn new(ctxt: &mut PDFObjContext, dict: Rc<LocatedVal<DictT>>) -> ObjStreamP {
         ObjStreamP { ctxt, dict }
     }
 
