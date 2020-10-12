@@ -117,7 +117,7 @@ fn paeth(a: u8, b: u8, c: u8) -> u8 {
     let p = a + b - c;
     let pa = if p > a { p - a } else { a - p };
     let pb = if p > b { p - b } else { b - p };
-    let pc = if p > c { p - c } else { p - c };
+    let pc = if p > c { p - c } else { c - p };
 
     // algorithm
     if pa <= pb && pa <= pc {
