@@ -674,7 +674,7 @@ mod test_pdf_types {
              *  (D:YYYYMMDDHHmmSSOHH'mm)
              */
             if let PDFObjT::String(ref s) = obj.val() {
-                    // regex for Date
+                // regex for Date
                 let re = regex::Regex::new(r"^D:\d{4}(([0][1-9]|[1][0-2])(([0][1-9]|[1-2][0-9]|[3][0-1])(([0-1][0-9]|[2][0-3])(([0-5][0-9])(([0-5][0-9])([+\-Z](([0-1][0-9]'|[2][0-3]')([0-5][0-9])?)?)?)?)?)?)?)?$").unwrap();
                 let date_string = std::str::from_utf8(s).unwrap_or("");
                 if !re.is_match(date_string) {
@@ -700,51 +700,54 @@ mod test_pdf_types {
 
     #[test]
     fn test_date_string() {
-        fn run_date_type_check(raw_pdf_date_string : &str) -> Option<TypeCheckError> {
+        fn run_date_type_check(raw_pdf_date_string: &str) -> Option<TypeCheckError> {
             let mut ctxt = mk_new_context();
             let v = Vec::from(raw_pdf_date_string.as_bytes());
             let mut pb = ParseBuffer::new(v);
             let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
             let typ_chk = mk_date_typchk();
-            return check_type(&ctxt, Rc::new(obj), typ_chk);
+            return check_type(&ctxt, Rc::new(obj), typ_chk)
         }
 
-        let correct_test_cases = ["(D:1992)",
-                                  "(D:199212)",
-                                  "(D:19921223)",
-                                  "(D:1992122319)",
-                                  "(D:199212231952)",
-                                  "(D:19921223195200)",
-                                  "(D:19921223195200-)",
-                                  "(D:19921223195200-08')",
-                                  "(D:19921223195200-08'00)"];
+        let correct_test_cases = [
+            "(D:1992)",
+            "(D:199212)",
+            "(D:19921223)",
+            "(D:1992122319)",
+            "(D:199212231952)",
+            "(D:19921223195200)",
+            "(D:19921223195200-)",
+            "(D:19921223195200-08')",
+            "(D:19921223195200-08'00)",
+        ];
         for d in correct_test_cases.iter() {
             assert_eq!(run_date_type_check(d), None);
         }
 
-        let incorrect_test_cases = ["(D1992)",
-                                    "(D:199213)",
-                                    "(D:19921243)",
-                                    "(D:1992122349)",
-                                    "(D:199212231972)",
-                                    "(D:19921223195280)",
-                                    "(D:19921223195290-)",
-                                    "(D:199212231952-)",
-                                    "(D:19921223195200-58')",
-                                    "(D:19921223195200-08)",
-                                    "(D:19921223195200-08'0099)",
-                                    "(D:19921223195200-08'60)"];
+        let incorrect_test_cases = [
+            "(D1992)",
+            "(D:199213)",
+            "(D:19921243)",
+            "(D:1992122349)",
+            "(D:199212231972)",
+            "(D:19921223195280)",
+            "(D:19921223195290-)",
+            "(D:199212231952-)",
+            "(D:19921223195200-58')",
+            "(D:19921223195200-08)",
+            "(D:19921223195200-08'0099)",
+            "(D:19921223195200-08'60)",
+        ];
         for d in incorrect_test_cases.iter() {
             match run_date_type_check(d) {
                 None => {
                     println!("failed: {}", d);
                     assert!(false);
                 },
-                _    => ()
+                _ => (),
             }
         }
     }
-
 
     #[test]
     fn test_any() {
