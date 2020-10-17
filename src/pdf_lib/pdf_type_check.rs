@@ -323,9 +323,6 @@ pub fn check_type(
                 }
             },
             (PDFObjT::Dict(d), PDFType::Dict(ents), _, _) => {
-                if ents.len() == 0 {
-                    continue
-                }
                 for ent in ents {
                     let val = d.get(&ent.key);
                     match (val, ent.opt, ent.chk.typ()) {

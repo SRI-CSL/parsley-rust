@@ -16,9 +16,26 @@ fn mk_af_typchk() -> Rc<TypeCheck> {
         size: None,
     })))
 }
+fn mk_pagelayout_typchk() -> Rc<TypeCheck> {
+        let pred = ChoicePred(
+            String::from("Invalid PageLayout"),
+            vec![
+                PDFObjT::Name(NameT::new(Vec::from("SinglePage"))),
+                PDFObjT::Name(NameT::new(Vec::from("OneColumn"))),
+                PDFObjT::Name(NameT::new(Vec::from("TwoColumnLeft"))),
+                PDFObjT::Name(NameT::new(Vec::from("TwoColumnRight"))),
+                PDFObjT::Name(NameT::new(Vec::from("TwoPageLeft"))),
+                PDFObjT::Name(NameT::new(Vec::from("TwoPageRight"))),
+            ],
+        );
+        Rc::new(TypeCheck::new_refined(
+            Rc::new(PDFType::PrimType(PDFPrimType::Name)),
+            Rc::new(pred),
+        ))
+}
 // Errata: extensions, af, dpartroot, dss
 
-fn catalog_type() -> TypeCheck {
+pub fn catalog_type() -> TypeCheck {
     // Row 1
     //TypeCheck::new(Rc::new(PDFType::Dict(vec![typ, version, extensions, pages,
     // pagelabels, names, dests, viewerpreferences, pagelayout,
@@ -66,7 +83,7 @@ fn catalog_type() -> TypeCheck {
     };
     let pagelayout = DictEntry {
         key: Vec::from("PageLayout"),
-        chk: mk_af_typchk(),
+        chk: mk_pagelayout_typchk(),
         opt: DictKeySpec::Optional,
     };
     //Row 2
