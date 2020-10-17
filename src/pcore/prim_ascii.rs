@@ -31,7 +31,7 @@ impl ParsleyPrimitive for AsciiCharPrimitive {
     fn name() -> &'static str { "ascii-prim" }
 
     fn parse(buf: &[u8]) -> ParseResult<(Self::T, usize)> {
-        if buf.len() < 1 {
+        if buf.is_empty() {
             return Err(LocatedVal::new(ErrorKind::EndOfBuffer, 0, 0))
         }
         let c = char::try_from(buf[0]);
@@ -64,6 +64,10 @@ impl AsciiChar {
     pub fn new_guarded(g: Box<dyn FnMut(&char) -> bool>) -> AsciiChar {
         AsciiChar { guard: Some(g) }
     }
+}
+
+impl Default for AsciiChar {
+    fn default() -> Self { AsciiChar::new() }
 }
 
 impl ParsleyParser for AsciiChar {

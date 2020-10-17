@@ -24,7 +24,6 @@ extern crate env_logger;
 extern crate log_panics;
 
 use std::collections::{BTreeSet, VecDeque};
-use std::convert::TryInto;
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
@@ -185,7 +184,7 @@ fn parse_xref_with_trailer(
         // There is no Prev, so this was the last xref table.
         break
     }
-    return Some((xrefs, trlr.unwrap().unwrap()))
+    Some((xrefs, trlr.unwrap().unwrap()))
 }
 
 // This assumes that the parse cursor is set at the startxref location.
@@ -270,7 +269,7 @@ fn parse_xref_stream(
         );
         return None
     }
-    return Some(xrefs)
+    Some(xrefs)
 }
 
 // This assumes that the parse cursor is set at the startxref
@@ -281,8 +280,7 @@ fn get_xref_info(
 ) -> (Vec<LocatedVal<XrefEntT>>, Rc<LocatedVal<PDFObjT>>) {
     let cursor = pb.get_cursor();
     let info = parse_xref_with_trailer(fi, ctxt, pb);
-    if info.is_some() {
-        let (xrsects, trailer) = info.unwrap();
+    if let Some((xrsects, trailer)) = info {
         // Collect the entries from possibly multiple xref tables,
         // keeping the newest ones.
         let mut xrents = Vec::new();
@@ -332,9 +330,8 @@ fn get_xref_info(
             }
         }
         if root.is_none() {
-            match xrstrm.dict().get(b"Root") {
-                Some(rt) => root = Some(Rc::clone(rt)),
-                None => {},
+            if let Some(rt) = xrstrm.dict().get(b"Root") {
+                root = Some(Rc::clone(rt))
             }
         }
     }
@@ -345,7 +342,7 @@ fn get_xref_info(
         );
     };
     let root = root.unwrap();
-    return (xrents, root)
+    (xrents, root)
 }
 
 // Get the in-use object locations from the xref entries.
@@ -377,7 +374,7 @@ fn info_from_xref_entries(fi: &FileInfo, xref_ents: &[LocatedVal<XrefEntT>]) -> 
                 id_offsets.push(ObjInfo::InFile {
                     id:  ent.obj(),
                     gen: ent.gen(),
-                    ofs: (*file_ofs).try_into().unwrap(),
+                    ofs: *file_ofs,
                 })
             },
             XrefEntStatus::InStream {
@@ -437,7 +434,7 @@ fn parse_objects(
                 }
 
                 let mut p = IndirectP::new(ctxt);
-                let ofs = (*ofs).try_into().unwrap();
+                let ofs = *ofs;
                 ta3_log!(
                     Level::Info,
                     fi.file_offset(ofs),
@@ -578,7 +575,7 @@ fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFOb
     obj_queue.push_back((Rc::clone(root_obj), 0)); // depth 0
     let mut processed = BTreeSet::new();
     processed.insert(Rc::clone(root_obj));
-    while obj_queue.len() > 0 {
+    while !obj_queue.is_empty() {
         let o = obj_queue.pop_front();
         if o.is_none() {
             break
@@ -647,7 +644,7 @@ fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFOb
 fn parse_file(test_file: &str) {
     // Print current path
     let path = env::current_dir();
-    if let Err(_) = path {
+    if path.is_err() {
         exit_log!(0, "Cannot get current dir!");
     }
     let mut path = path.unwrap();
@@ -664,11 +661,8 @@ fn parse_file(test_file: &str) {
 
     // Read the file contents into a string, returns `io::Result<usize>`
     let mut v = Vec::new();
-    match file.read_to_end(&mut v) {
-        Err(why) => {
-            exit_log!(0, "Couldn't read {}: {}", display, why.to_string());
-        },
-        Ok(_) => (),
+    if let Err(why) = file.read_to_end(&mut v) {
+        exit_log!(0, "Couldn't read {}: {}", display, why.to_string());
     };
 
     let mut pb = ParseBuffer::new(v);
@@ -774,7 +768,7 @@ fn parse_file(test_file: &str) {
         fi.file_offset(sxref.loc_end())
     );
     let sxref = sxref.unwrap();
-    let sxref_offset: usize = sxref.offset().try_into().unwrap();
+    let sxref_offset = sxref.offset();
     ta3_log!(
         Level::Info,
         fi.file_offset(sxref_loc_start),
@@ -849,13 +843,11 @@ fn main() {
                 .format(move |buf, record| {
                     if record.level() == Level::Trace {
                         writeln!(buf, "{} - {}", record.level(), record.args())
+                    } else if format!("{}", record.args()).contains("panicked") {
+                        // hacking a panic! log message (usually at level Error)
+                        writeln!(buf, "CRITICAL - {} at NaN - {}", filename, record.args())
                     } else {
-                        if format!("{}", record.args()).contains("panicked") {
-                            // hacking a panic! log message (usually at level Error)
-                            writeln!(buf, "CRITICAL - {} at NaN - {}", filename, record.args())
-                        } else {
-                            writeln!(buf, "{:8} - {} {}", record.level(), filename, record.args())
-                        }
+                        writeln!(buf, "{:8} - {} {}", record.level(), filename, record.args())
                     }
                 })
                 .filter(None, LevelFilter::Trace)

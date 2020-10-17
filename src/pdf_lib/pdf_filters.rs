@@ -87,33 +87,27 @@ impl BufferTransformT for FlateDecode<'_> {
         // an internal consuming loop, we could rely on it to consume
         // all relevant bytes in a single call.
 
-        match decoder.write(buf.buf()) {
-            Err(e) => {
-                let err = ErrorKind::TransformError(format!("flatedecode write error: {}", e));
-                let loc = buf.get_location();
-                return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
-            },
-            Ok(_) => {
-                // all bytes consumed
-            },
-        }
+        if let Err(e) = decoder.write(buf.buf()) {
+            let err = ErrorKind::TransformError(format!("flatedecode write error: {}", e));
+            let loc = buf.get_location();
+            return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+        };
+        // otherwise, all bytes were consumed.
 
         match decoder.finish() {
             Err(e) => {
                 let err = ErrorKind::TransformError(format!("flatedecode finish error: {}", e));
                 let loc = buf.get_location();
-                return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+                Err(locate_value(err, loc.loc_start(), loc.loc_end()))
             },
-            Ok(decoded) => {
-                return flate_lzw_filter(
-                    decoded,
-                    &buf.get_location(),
-                    predictor as usize,
-                    colors as usize,
-                    columns as usize,
-                    bitspercolumn as usize,
-                )
-            },
+            Ok(decoded) => flate_lzw_filter(
+                decoded,
+                &buf.get_location(),
+                predictor as usize,
+                colors as usize,
+                columns as usize,
+                bitspercolumn as usize,
+            ),
         }
     }
 }
@@ -123,15 +117,15 @@ fn paeth(a: u8, b: u8, c: u8) -> u8 {
     let p = a + b - c;
     let pa = if p > a { p - a } else { a - p };
     let pb = if p > b { p - b } else { b - p };
-    let pc = if p > c { p - c } else { p - c };
+    let pc = if p > c { p - c } else { c - p };
 
     // algorithm
     if pa <= pb && pa <= pc {
-        return a
+        a
     } else if pb <= pc {
-        return b
+        b
     } else {
-        return c
+        c
     }
 }
 
@@ -230,7 +224,7 @@ fn decode_bytes_lzw(buf: &dyn ParseBufferT, earlyexchange: i64) -> Vec<u8> {
             out.extend(bytes.iter().copied());
         }
     }
-    return out
+    out
 }
 
 fn flate_lzw_filter(
@@ -283,9 +277,9 @@ fn flate_lzw_filter(
             let bytes_per_pixel = bitspercolumn / 8;
 
             if row_length > decoded.len() {
-                let err = ErrorKind::TransformError(format!(
-                    "PNG filter: decoded size too small for specified columns"
-                ));
+                let err = ErrorKind::TransformError(
+                    "PNG filter: decoded size too small for specified columns".to_string(),
+                );
                 return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
             }
             if decoded.len() % row_length != 0 {
@@ -297,10 +291,7 @@ fn flate_lzw_filter(
                 return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
             }
 
-            let mut prev_row = Vec::<u8>::new();
-            for _ in 0 .. row_length {
-                prev_row.push(0);
-            }
+            let mut prev_row = vec![0; row_length];
             for r in 0 .. rows {
                 row_data.clear();
                 for j in row_length * r .. row_length * (r + 1) {
@@ -373,7 +364,7 @@ fn flate_lzw_filter(
                         let mut c = 0;
                         for j in 1 .. row_length {
                             let b = prev_row[j];
-                            if j >= bytes_per_pixel + 1 {
+                            if j > bytes_per_pixel {
                                 a = row_data[j - bytes_per_pixel];
                                 c = prev_row[j - bytes_per_pixel];
                             }
@@ -403,5 +394,5 @@ fn flate_lzw_filter(
         let err = ErrorKind::TransformError(format!("PNG filter: unknown predictor {}", predictor));
         return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
     }
-    return Ok(ParseBuffer::new(decoded))
+    Ok(ParseBuffer::new(decoded))
 }
