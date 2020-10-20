@@ -92,6 +92,19 @@ pub mod structures {
         ]))));
         typ
     }
+    struct SingleReferencePredicate;
+
+    impl Predicate for SingleReferencePredicate {
+        fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
+                    if let PDFObjT::Reference(ref _s2) = obj.val() {
+                    } else {
+                        return Some(TypeCheckError::PredicateError(
+                            "Reference expected".to_string(),
+                        ))
+                    }
+                    None
+                }
+            }
     struct ReferencePredicate;
 
     impl Predicate for ReferencePredicate {
@@ -119,6 +132,12 @@ pub mod structures {
                 elem: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))),
                 size: None,
             }),
+            Rc::new(ReferencePredicate),
+        ))
+    }
+    pub fn mk_single_reference_typchk() -> Rc<TypeCheck> {
+        Rc::new(TypeCheck::new_refined(
+            Rc::new(PDFType::Any),
             Rc::new(ReferencePredicate),
         ))
     }

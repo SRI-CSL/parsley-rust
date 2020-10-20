@@ -1,6 +1,6 @@
 use super::super::pcore::parsebuffer::LocatedVal;
 use super::pdf_obj::{PDFObjContext, PDFObjT};
-use crate::pdf_lib::common_data_structures::structures::{mk_name_check, mk_reference_typchk};
+use crate::pdf_lib::common_data_structures::structures::{mk_name_check, mk_reference_typchk, mk_single_reference_typchk};
 use crate::pdf_lib::pdf_prim::NameT;
 use crate::pdf_lib::pdf_type_check::{
     ChoicePred, DictEntry, DictKeySpec, PDFPrimType, PDFType, Predicate, TypeCheck, TypeCheckError,
@@ -17,6 +17,23 @@ fn mk_af_typchk() -> Rc<TypeCheck> {
         elem: Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![])))),
         size: None,
     })))
+}
+fn mk_pagemode_typchk() -> Rc<TypeCheck> {
+    let pred = ChoicePred(
+        String::from("Invalid PageLayout"),
+        vec![
+            PDFObjT::Name(NameT::new(Vec::from("UseNone"))),
+            PDFObjT::Name(NameT::new(Vec::from("UseOutlines"))),
+            PDFObjT::Name(NameT::new(Vec::from("UseThumbs"))),
+            PDFObjT::Name(NameT::new(Vec::from("FullScreen"))),
+            PDFObjT::Name(NameT::new(Vec::from("UseOC"))),
+            PDFObjT::Name(NameT::new(Vec::from("UseAttachments"))),
+        ],
+    );
+    Rc::new(TypeCheck::new_refined(
+        Rc::new(PDFType::PrimType(PDFPrimType::Name)),
+        Rc::new(pred),
+    ))
 }
 fn mk_pagelayout_typchk() -> Rc<TypeCheck> {
     let pred = ChoicePred(
@@ -37,7 +54,7 @@ fn mk_pagelayout_typchk() -> Rc<TypeCheck> {
 }
 // Errata: extensions, af, dpartroot, dss
 
-pub fn catalog_type() -> TypeCheck {
+pub fn catalog_type() -> Rc<TypeCheck> {
     // Row 1
     //TypeCheck::new(Rc::new(PDFType::Dict(vec![typ, version, extensions, pages,
     // pagelabels, names, dests, viewerpreferences, pagelayout,
@@ -60,7 +77,7 @@ pub fn catalog_type() -> TypeCheck {
     };
     let pages = DictEntry {
         key: Vec::from("Pages"),
-        chk: mk_reference_typchk(),
+        chk: mk_single_reference_typchk(),
         opt: DictKeySpec::Optional,
     };
     let pagelabels = DictEntry {
@@ -92,12 +109,12 @@ pub fn catalog_type() -> TypeCheck {
     //pagemode, outlines, threads, openaction, aa, uri, acroform,
     let pagemode = DictEntry {
         key: Vec::from("PageMode"),
-        chk: mk_af_typchk(),
+        chk: mk_pagemode_typchk(),
         opt: DictKeySpec::Optional,
     };
     let outlines = DictEntry {
         key: Vec::from("Outlines"),
-        chk: mk_af_typchk(),
+        chk: mk_single_reference_typchk(),
         opt: DictKeySpec::Optional,
     };
     let threads = DictEntry {
@@ -239,7 +256,7 @@ pub fn catalog_type() -> TypeCheck {
         chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![])))),
         opt: DictKeySpec::Optional,
     };
-    TypeCheck::new(Rc::new(PDFType::Dict(vec![
+    Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![
         typ,
         version,
         extensions,
@@ -272,5 +289,49 @@ pub fn catalog_type() -> TypeCheck {
         dss,
         af,
         dpartroot,
-    ])))
+    ]))))
 }
+#[cfg(test)]
+mod test_name_tree {
+    use super::super::super::pcore::parsebuffer::{LocatedVal, ParseBuffer};
+    use super::super::pdf_obj::{parse_pdf_obj, IndirectT, PDFObjContext, PDFObjT};
+    use super::super::pdf_type_check::{check_type, PDFPrimType, PDFType, TypeCheckError};
+    use super::super::pdf_prim::IntegerT;
+    use std::rc::Rc;
+    use super::{catalog_type, mk_new_context};
+    #[test]
+    fn test_catalog() {
+        let mut ctxt = mk_new_context();
+        let i1 = IndirectT::new(
+            2,
+            0,
+            Rc::new(LocatedVal::new(PDFObjT::Integer(IntegerT::new(5)), 0, 1)),
+        );
+        let l1 = LocatedVal::new(i1, 0, 4);
+
+        let i2 = IndirectT::new(
+            3,
+            0,
+            Rc::new(LocatedVal::new(PDFObjT::Integer(IntegerT::new(5)), 0, 1)),
+        );
+        let l2 = LocatedVal::new(i2, 0, 4);
+        ctxt.register_obj(&l1);
+        ctxt.register_obj(&l2);
+        let v = Vec::from(
+            "<</Type /Catalog
+  /Pages 2 0 R
+  /PageMode /UseOutlines
+  /Outlines 3 0 R
+  >>"
+            .as_bytes(),
+        );
+        let mut pb = ParseBuffer::new(v);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let typ = catalog_type();
+        assert_eq!(
+            check_type(&ctxt, Rc::new(obj), typ),
+            None
+        );
+    }
+}
+
