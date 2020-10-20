@@ -5,7 +5,9 @@ use crate::pdf_lib::pdf_prim::NameT;
 use crate::pdf_lib::pdf_type_check::{
     ChoicePred, DictEntry, DictKeySpec, PDFPrimType, PDFType, Predicate, TypeCheck, TypeCheckError,
 };
-//use crate::pdf_lib::number_tree::{}
+use crate::pdf_lib::common_data_structures::structures::name_dictionary;
+use crate::pdf_lib::number_tree::{number_tree};
+use crate::pdf_lib::name_tree::{name_tree};
 use std::rc::Rc;
 
 fn mk_new_context() -> PDFObjContext { PDFObjContext::new(10) }
@@ -63,12 +65,12 @@ pub fn catalog_type() -> TypeCheck {
     };
     let pagelabels = DictEntry {
         key: Vec::from("PageLabels"),
-        chk: mk_af_typchk(),
+        chk: number_tree(),
         opt: DictKeySpec::Optional,
     };
     let names = DictEntry {
         key: Vec::from("Names"),
-        chk: mk_af_typchk(),
+        chk: name_dictionary(),
         opt: DictKeySpec::Optional,
     };
     let dests = DictEntry {

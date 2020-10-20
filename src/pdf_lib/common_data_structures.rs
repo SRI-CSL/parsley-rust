@@ -28,7 +28,7 @@ pub mod structures {
         })))
     }
 
-    fn name_dictionary() -> TypeCheck {
+    pub fn name_dictionary() -> Rc<TypeCheck> {
         let Dests = DictEntry {
             key: Vec::from("Dests"),
             chk: name_tree(), // this must be a NameT
@@ -79,7 +79,7 @@ pub mod structures {
             chk: name_tree(), // this must be a NameT
             opt: DictKeySpec::Optional,
         };
-        let typ = TypeCheck::new(Rc::new(PDFType::Dict(vec![
+        let typ = Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![
             Dests,
             AP,
             JavaScript,
@@ -89,7 +89,7 @@ pub mod structures {
             URLS,
             EmbeddedFiles,
             Renditions,
-        ])));
+        ]))));
         typ
     }
     struct ReferencePredicate;
