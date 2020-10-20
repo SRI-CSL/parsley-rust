@@ -30,6 +30,9 @@ test:
 fmt:
 	cargo +nightly fmt
 
+clippy:
+	cargo +nightly clippy
+
 clean:
 	cargo clean
 
