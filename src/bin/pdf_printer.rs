@@ -38,6 +38,7 @@ use parsley_rust::pcore::parsebuffer::{
     LocatedVal, Location, ParseBuffer, ParseBufferT, ParsleyParser,
 };
 use parsley_rust::pcore::transforms::{BufferTransformT, RestrictView};
+use parsley_rust::pdf_lib::catalog::catalog_type;
 use parsley_rust::pdf_lib::pdf_file::{
     HeaderP, StartXrefP, TrailerP, TrailerT, XrefSectP, XrefSectT,
 };
@@ -45,6 +46,7 @@ use parsley_rust::pdf_lib::pdf_obj::{IndirectP, PDFObjContext, PDFObjT};
 use parsley_rust::pdf_lib::pdf_streams::{
     ObjStreamP, XrefEntStatus, XrefEntT, XrefStreamP, XrefStreamT,
 };
+use parsley_rust::pdf_lib::pdf_type_check::check_type;
 
 /* from: https://osr.jpl.nasa.gov/wiki/pages/viewpage.action?spaceKey=SD&title=TA2+PDF+Safe+Parser+Evaluation
 
@@ -821,6 +823,10 @@ fn parse_file(test_file: &str) {
     };
 
     dump_root(&fi, &ctxt, &root_obj);
+    println!(
+        "{:?}",
+        check_type(&ctxt, Rc::clone(root_obj), catalog_type())
+    );
 }
 
 fn print_usage(code: i32) {
