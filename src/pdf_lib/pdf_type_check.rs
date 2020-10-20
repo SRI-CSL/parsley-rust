@@ -209,8 +209,12 @@ pub fn check_type(
                             None => None,
                             Some(p) => Some(Rc::clone(p)),
                         };
-                        let chk =
-                            TypeCheck::new_all(Rc::clone(c.typ_rc()), pred, IndirectSpec::Allowed, vec![]);
+                        let chk = TypeCheck::new_all(
+                            Rc::clone(c.typ_rc()),
+                            pred,
+                            IndirectSpec::Allowed,
+                            vec![],
+                        );
                         pending.push_back((Rc::clone(obj), Rc::new(chk)));
                         continue
                     },

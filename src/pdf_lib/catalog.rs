@@ -17,21 +17,21 @@ fn mk_af_typchk() -> Rc<TypeCheck> {
     })))
 }
 fn mk_pagelayout_typchk() -> Rc<TypeCheck> {
-        let pred = ChoicePred(
-            String::from("Invalid PageLayout"),
-            vec![
-                PDFObjT::Name(NameT::new(Vec::from("SinglePage"))),
-                PDFObjT::Name(NameT::new(Vec::from("OneColumn"))),
-                PDFObjT::Name(NameT::new(Vec::from("TwoColumnLeft"))),
-                PDFObjT::Name(NameT::new(Vec::from("TwoColumnRight"))),
-                PDFObjT::Name(NameT::new(Vec::from("TwoPageLeft"))),
-                PDFObjT::Name(NameT::new(Vec::from("TwoPageRight"))),
-            ],
-        );
-        Rc::new(TypeCheck::new_refined(
-            Rc::new(PDFType::PrimType(PDFPrimType::Name)),
-            Rc::new(pred),
-        ))
+    let pred = ChoicePred(
+        String::from("Invalid PageLayout"),
+        vec![
+            PDFObjT::Name(NameT::new(Vec::from("SinglePage"))),
+            PDFObjT::Name(NameT::new(Vec::from("OneColumn"))),
+            PDFObjT::Name(NameT::new(Vec::from("TwoColumnLeft"))),
+            PDFObjT::Name(NameT::new(Vec::from("TwoColumnRight"))),
+            PDFObjT::Name(NameT::new(Vec::from("TwoPageLeft"))),
+            PDFObjT::Name(NameT::new(Vec::from("TwoPageRight"))),
+        ],
+    );
+    Rc::new(TypeCheck::new_refined(
+        Rc::new(PDFType::PrimType(PDFPrimType::Name)),
+        Rc::new(pred),
+    ))
 }
 // Errata: extensions, af, dpartroot, dss
 
