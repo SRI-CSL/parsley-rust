@@ -96,15 +96,15 @@ pub mod structures {
 
     impl Predicate for SingleReferencePredicate {
         fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
-                    if let PDFObjT::Reference(ref _s2) = obj.val() {
-                    } else {
-                        return Some(TypeCheckError::PredicateError(
-                            "Reference expected".to_string(),
-                        ))
-                    }
-                    None
-                }
+            if let PDFObjT::Reference(ref _s2) = obj.val() {
+            } else {
+                return Some(TypeCheckError::PredicateError(
+                    "Reference expected".to_string(),
+                ))
             }
+            None
+        }
+    }
     struct ReferencePredicate;
 
     impl Predicate for ReferencePredicate {
