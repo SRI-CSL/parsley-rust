@@ -32,24 +32,51 @@ impl Predicate for PageTreePredicate {
         println!("Checking");
         if let PDFObjT::Dict(ref s) = obj.val() {
             let mappings = s.map();
-            match mappings.get(&Vec::from("Type")) {
+            match mappings.get(&Vec::from("Count")) {
                 Some(a) => {
-                    if let PDFObjT::Name(ref s) = a.val() {
-                        println!("Reached Page {:?}", s);
+                    if let PDFObjT::Integer(ref s) = a.val() {}
+                    return Some(TypeCheckError::PredicateError(
+                        "Integer expected".to_string(),
+                    ))
+                },
+                None => {},
+            }
+            match mappings.get(&Vec::from("Kids")) {
+                Some(a) => {
+                    if let PDFObjT::Array(ref s) = obj.val() {
+                        for c in s.objs() {
+                            if let PDFObjT::Reference(ref _s2) = c.val() {
+                            } else {
+                                return Some(TypeCheckError::PredicateError(
+                                    "Reference expected".to_string(),
+                                ))
+                            }
+                        }
+                    } else {
+                        return Some(TypeCheckError::PredicateError(
+                            "Reference wasn't an Array".to_string(),
+                        ))
                     }
                 },
                 None => {},
             }
-            match mappings.get(&Vec::from("Count")) {
-                Some(a) => {},
-                None => {},
-            }
-            match mappings.get(&Vec::from("Kids")) {
-                Some(a) => {},
-                None => {},
-            }
             match mappings.get(&Vec::from("Parent")) {
-                Some(a) => {},
+                Some(a) => {
+                    if let PDFObjT::Array(ref s) = obj.val() {
+                        for c in s.objs() {
+                            if let PDFObjT::Reference(ref _s2) = c.val() {
+                            } else {
+                                return Some(TypeCheckError::PredicateError(
+                                    "Reference expected".to_string(),
+                                ))
+                            }
+                        }
+                    } else {
+                        return Some(TypeCheckError::PredicateError(
+                            "Reference wasn't an Array".to_string(),
+                        ))
+                    }
+                },
                 None => {},
             }
             if (mappings.contains_key(&Vec::from("Parent"))
