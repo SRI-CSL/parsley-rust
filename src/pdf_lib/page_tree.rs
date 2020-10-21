@@ -26,6 +26,74 @@ fn mk_count_typchk() -> Rc<TypeCheck> {
     ))))
 }
 
+struct PageTreePredicate;
+impl Predicate for PageTreePredicate {
+    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
+        println!("Checking");
+        if let PDFObjT::Dict(ref s) = obj.val() {
+            let mappings = s.map();
+            match mappings.get(&Vec::from("Type")) {
+                Some(a) => {
+                    if let PDFObjT::Name(ref s) = a.val() {
+                        println!("Reached Page {:?}", s);
+                    }
+                },
+                None => {},
+            }
+            match mappings.get(&Vec::from("Count")) {
+                Some(a) => {},
+                None => {},
+            }
+            match mappings.get(&Vec::from("Kids")) {
+                Some(a) => {},
+                None => {},
+            }
+            match mappings.get(&Vec::from("Parent")) {
+                Some(a) => {},
+                None => {},
+            }
+            if (mappings.contains_key(&Vec::from("Parent"))
+                && mappings.contains_key(&Vec::from("Kids"))
+                && mappings.contains_key(&Vec::from("Count"))
+                && mappings.contains_key(&Vec::from("Parent")))
+            {
+            } else if (mappings.contains_key(&Vec::from("Parent"))
+                && mappings.contains_key(&Vec::from("Kids"))
+                && mappings.contains_key(&Vec::from("Count"))
+                && mappings.contains_key(&Vec::from("Parent")))
+            {
+            } else if (mappings.contains_key(&Vec::from("Parent"))
+                && mappings.contains_key(&Vec::from("Kids"))
+                && mappings.contains_key(&Vec::from("Count"))
+                && mappings.contains_key(&Vec::from("Parent")))
+            {
+            } else if (mappings.contains_key(&Vec::from("Parent"))
+                && mappings.contains_key(&Vec::from("Kids"))
+                && mappings.contains_key(&Vec::from("Count"))
+                && mappings.contains_key(&Vec::from("Parent")))
+            {
+            } else {
+                return Some(TypeCheckError::PredicateError(
+                    "Missing field or Forbidden field".to_string(),
+                ))
+            }
+            None
+        } else {
+            // Not a dictionary
+            return Some(TypeCheckError::PredicateError(
+                "No Dictionary, no Page Tree".to_string(),
+            ))
+        }
+    }
+}
+
+pub fn page_tree() -> Rc<TypeCheck> {
+    Rc::new(TypeCheck::new_refined(
+        Rc::new(PDFType::Any),
+        Rc::new(PageTreePredicate),
+    ))
+}
+
 struct ReferencePredicate;
 
 impl Predicate for ReferencePredicate {

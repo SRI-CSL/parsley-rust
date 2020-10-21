@@ -56,7 +56,6 @@ impl Predicate for NameTreePredicate {
             match mappings.get(&Vec::from("Limits")) {
                 Some(a) => {
                     if let PDFObjT::Array(ref s) = a.val() {
-                        println!("Limits {:?}", s);
                         for c in s.objs() {
                             if let PDFObjT::String(ref _s1) = c.val() {
                             } else {
@@ -78,7 +77,6 @@ impl Predicate for NameTreePredicate {
                 Some(a) => {
                     if let PDFObjT::Array(ref s) = a.val() {
                         for c in s.objs() {
-                            println!("{:?}", c);
                             if let PDFObjT::Reference(ref _s2) = c.val() {
                             } else {
                                 return Some(TypeCheckError::PredicateError(
@@ -87,7 +85,6 @@ impl Predicate for NameTreePredicate {
                             }
                         }
                     } else {
-                        println!("{:?}", a);
                         return Some(TypeCheckError::PredicateError(
                             "Reference wasn't an Array".to_string(),
                         ))

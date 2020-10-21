@@ -6,6 +6,7 @@ use crate::pdf_lib::common_data_structures::structures::{
 };
 use crate::pdf_lib::name_tree::name_tree;
 use crate::pdf_lib::number_tree::number_tree;
+use crate::pdf_lib::page_tree::page_tree;
 use crate::pdf_lib::pdf_prim::NameT;
 use crate::pdf_lib::pdf_type_check::{
     ChoicePred, DictEntry, DictKeySpec, PDFPrimType, PDFType, Predicate, TypeCheck, TypeCheckError,
@@ -79,7 +80,7 @@ pub fn catalog_type() -> Rc<TypeCheck> {
     };
     let pages = DictEntry {
         key: Vec::from("Pages"),
-        chk: mk_single_reference_typchk(),
+        chk: page_tree(),
         opt: DictKeySpec::Optional,
     };
     let pagelabels = DictEntry {
