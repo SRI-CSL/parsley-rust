@@ -830,7 +830,7 @@ fn parse_file(test_file: &str) {
 }
 
 fn print_usage(code: i32) {
-    println!("Usage:\n\t{} <pdf-file>", env::args().nth(0).unwrap());
+    println!("Usage:\n\t{} <pdf-file>", env::args().next().unwrap());
     process::exit(code)
 }
 

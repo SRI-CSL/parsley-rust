@@ -30,7 +30,7 @@ impl Predicate for DateStringPredicate {
             }
             None
         } else {
-            return Some(TypeCheckError::PredicateError(
+            Some(TypeCheckError::PredicateError(
                 "Not an Date string.".to_string(),
             ))
         }

@@ -78,7 +78,7 @@ pub mod structures {
             chk: name_tree(), // this must be a NameT
             opt: DictKeySpec::Optional,
         };
-        let typ = Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![
+        Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![
             dests,
             ap,
             javascript,
@@ -89,8 +89,7 @@ pub mod structures {
             alternate_presentations,
             embedded_files,
             renditions,
-        ]))));
-        typ
+        ]))))
     }
     struct SingleReferencePredicate;
 
@@ -120,7 +119,7 @@ pub mod structures {
                 }
                 None
             } else {
-                return Some(TypeCheckError::PredicateError(
+                Some(TypeCheckError::PredicateError(
                     "Reference wasn't an Array".to_string(),
                 ))
             }

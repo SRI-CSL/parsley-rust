@@ -8,107 +8,92 @@ impl Predicate for NumberTreePredicate {
     fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
         if let PDFObjT::Dict(ref s) = obj.val() {
             let mappings = s.map();
-            match mappings.get(&Vec::from("Names")) {
-                Some(a) => {
-                    if let PDFObjT::Array(ref s) = a.val() {
-                        if s.objs().len() % 2 == 0 {
-                            for c in (0 .. s.objs().len()).step_by(2) {
-                                if let PDFObjT::Integer(ref _s1) = s.objs()[c].val() {
-                                    if let PDFObjT::Reference(ref _s2) = s.objs()[c + 1].val() {
-                                    } else {
-                                        return Some(TypeCheckError::PredicateError(
-                                            "Reference not found in Num Tree".to_string(),
-                                        ))
-                                    }
+            if let Some(a) = mappings.get(&Vec::from("Names")) {
+                if let PDFObjT::Array(ref s) = a.val() {
+                    if s.objs().len() % 2 == 0 {
+                        for c in (0 .. s.objs().len()).step_by(2) {
+                            if let PDFObjT::Integer(ref _s1) = s.objs()[c].val() {
+                                if let PDFObjT::Reference(ref _s2) = s.objs()[c + 1].val() {
                                 } else {
                                     return Some(TypeCheckError::PredicateError(
-                                        "String not found in num tree".to_string(),
+                                        "Reference not found in Num Tree".to_string(),
                                     ))
                                 }
+                            } else {
+                                return Some(TypeCheckError::PredicateError(
+                                    "String not found in num tree".to_string(),
+                                ))
                             }
+                        }
+                    } else {
+                        return Some(TypeCheckError::PredicateError(
+                            "Array found but not correct length in Num Tree".to_string(),
+                        ))
+                    }
+                } else {
+                    return Some(TypeCheckError::PredicateError(
+                        "Array not found in Num Tree".to_string(),
+                    ))
+                }
+            }
+            if let Some(a) = mappings.get(&Vec::from("Limits")) {
+                if let PDFObjT::Array(ref s) = a.val() {
+                    println!("Limits {:?}", s);
+                    for c in s.objs() {
+                        if let PDFObjT::Integer(ref _s1) = c.val() {
                         } else {
                             return Some(TypeCheckError::PredicateError(
-                                "Array found but not correct length in Num Tree".to_string(),
+                                "TypeMismatch: Integer expected".to_string(),
                             ))
                         }
-                    } else {
+                    }
+                    if s.objs().len() != 2 {
                         return Some(TypeCheckError::PredicateError(
-                            "Array not found in Num Tree".to_string(),
+                            "Length Mismatch".to_string(),
                         ))
                     }
-                },
-                None => {},
+                }
             }
-            match mappings.get(&Vec::from("Limits")) {
-                Some(a) => {
-                    if let PDFObjT::Array(ref s) = a.val() {
-                        println!("Limits {:?}", s);
-                        for c in s.objs() {
-                            if let PDFObjT::Integer(ref _s1) = c.val() {
-                            } else {
-                                return Some(TypeCheckError::PredicateError(
-                                    "TypeMismatch: Integer expected".to_string(),
-                                ))
-                            }
-                        }
-                        if s.objs().len() != 2 {
+            if let Some(a) = mappings.get(&Vec::from("Kids")) {
+                if let PDFObjT::Array(ref s) = a.val() {
+                    for c in s.objs() {
+                        println!("{:?}", c);
+                        if let PDFObjT::Reference(ref _s2) = c.val() {
+                        } else {
                             return Some(TypeCheckError::PredicateError(
-                                "Length Mismatch".to_string(),
+                                "Reference expected".to_string(),
                             ))
                         }
                     }
-                },
-                None => {},
-            }
-            match mappings.get(&Vec::from("Kids")) {
-                Some(a) => {
-                    if let PDFObjT::Array(ref s) = a.val() {
-                        for c in s.objs() {
-                            println!("{:?}", c);
-                            if let PDFObjT::Reference(ref _s2) = c.val() {
-                            } else {
-                                return Some(TypeCheckError::PredicateError(
-                                    "Reference expected".to_string(),
-                                ))
-                            }
-                        }
-                    } else {
-                        println!("{:?}", a);
-                        return Some(TypeCheckError::PredicateError(
-                            "Reference wasn't an Array".to_string(),
-                        ))
-                    }
-                },
-                None => {},
+                } else {
+                    println!("{:?}", a);
+                    return Some(TypeCheckError::PredicateError(
+                        "Reference wasn't an Array".to_string(),
+                    ))
+                }
             }
 
-            if mappings.contains_key(&Vec::from("Nums"))
+            if (mappings.contains_key(&Vec::from("Nums"))
                 && mappings.contains_key(&Vec::from("Limits"))
-                && !mappings.contains_key(&Vec::from("Kids"))
-            {
-                None
-            } else if !mappings.contains_key(&Vec::from("Nums"))
-                && mappings.contains_key(&Vec::from("Limits"))
-                && mappings.contains_key(&Vec::from("Kids"))
-            {
-                None
-            } else if !mappings.contains_key(&Vec::from("Nums"))
-                && !mappings.contains_key(&Vec::from("Limits"))
-                && mappings.contains_key(&Vec::from("Kids"))
-            {
-                None
-            } else if mappings.contains_key(&Vec::from("Nums"))
-                && !mappings.contains_key(&Vec::from("Limits"))
-                && !mappings.contains_key(&Vec::from("Kids"))
+                && !mappings.contains_key(&Vec::from("Kids")))
+                || (!mappings.contains_key(&Vec::from("Nums"))
+                    && mappings.contains_key(&Vec::from("Limits"))
+                    && mappings.contains_key(&Vec::from("Kids")))
+                || (!mappings.contains_key(&Vec::from("Nums"))
+                    && !mappings.contains_key(&Vec::from("Limits"))
+                    && mappings.contains_key(&Vec::from("Kids")))
+                || (mappings.contains_key(&Vec::from("Nums"))
+                    && !mappings.contains_key(&Vec::from("Limits"))
+                    && !mappings.contains_key(&Vec::from("Kids")))
             {
                 None
             } else {
-                return Some(TypeCheckError::PredicateError(
+                Some(TypeCheckError::PredicateError(
                     "Missing field or Forbidden field".to_string(),
                 ))
             }
         } else {
-            return Some(TypeCheckError::PredicateError(
+            Some(TypeCheckError::PredicateError(
                 "No Dictionary, no Nums Tree".to_string(),
             ))
         }
@@ -135,7 +120,7 @@ impl Predicate for ReferencePredicate {
             }
             None
         } else {
-            return Some(TypeCheckError::PredicateError(
+            Some(TypeCheckError::PredicateError(
                 "Reference wasn't an Array".to_string(),
             ))
         }
@@ -163,12 +148,12 @@ impl Predicate for NumsPredicate {
                 }
                 None
             } else {
-                return Some(TypeCheckError::PredicateError(
+                Some(TypeCheckError::PredicateError(
                     "Array found but not correct length in Number Tree".to_string(),
                 ))
             }
         } else {
-            return Some(TypeCheckError::PredicateError(
+            Some(TypeCheckError::PredicateError(
                 "Array not found in Number Tree".to_string(),
             ))
         }

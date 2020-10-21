@@ -8,72 +8,60 @@ impl Predicate for PageTreePredicate {
     fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
         if let PDFObjT::Dict(ref s) = obj.val() {
             let mappings = s.map();
-            match mappings.get(&Vec::from("Count")) {
-                Some(a) => {
-                    if let PDFObjT::Integer(ref _s) = a.val() {}
+            if let Some(a) = mappings.get(&Vec::from("Count")) {
+                if let PDFObjT::Integer(ref _s) = a.val() {}
+                return Some(TypeCheckError::PredicateError(
+                    "Integer expected".to_string(),
+                ))
+            }
+            if let Some(a) = mappings.get(&Vec::from("Kids")) {
+                if let PDFObjT::Array(ref s) = a.val() {
+                    for c in s.objs() {
+                        if let PDFObjT::Reference(ref _s2) = c.val() {
+                        } else {
+                            return Some(TypeCheckError::PredicateError(
+                                "Reference expected".to_string(),
+                            ))
+                        }
+                    }
+                } else {
                     return Some(TypeCheckError::PredicateError(
-                        "Integer expected".to_string(),
+                        "Reference wasn't an Array".to_string(),
                     ))
-                },
-                None => {},
+                }
             }
-            match mappings.get(&Vec::from("Kids")) {
-                Some(a) => {
-                    if let PDFObjT::Array(ref s) = a.val() {
-                        for c in s.objs() {
-                            if let PDFObjT::Reference(ref _s2) = c.val() {
-                            } else {
-                                return Some(TypeCheckError::PredicateError(
-                                    "Reference expected".to_string(),
-                                ))
-                            }
+            if let Some(a) = mappings.get(&Vec::from("Parent")) {
+                if let PDFObjT::Array(ref s) = a.val() {
+                    for c in s.objs() {
+                        if let PDFObjT::Reference(ref _s2) = c.val() {
+                        } else {
+                            return Some(TypeCheckError::PredicateError(
+                                "Reference expected".to_string(),
+                            ))
                         }
-                    } else {
-                        return Some(TypeCheckError::PredicateError(
-                            "Reference wasn't an Array".to_string(),
-                        ))
                     }
-                },
-                None => {},
+                } else {
+                    return Some(TypeCheckError::PredicateError(
+                        "Reference wasn't an Array".to_string(),
+                    ))
+                }
             }
-            match mappings.get(&Vec::from("Parent")) {
-                Some(a) => {
-                    if let PDFObjT::Array(ref s) = a.val() {
-                        for c in s.objs() {
-                            if let PDFObjT::Reference(ref _s2) = c.val() {
-                            } else {
-                                return Some(TypeCheckError::PredicateError(
-                                    "Reference expected".to_string(),
-                                ))
-                            }
-                        }
-                    } else {
-                        return Some(TypeCheckError::PredicateError(
-                            "Reference wasn't an Array".to_string(),
-                        ))
-                    }
-                },
-                None => {},
-            }
-            if mappings.contains_key(&Vec::from("Parent"))
+            if (mappings.contains_key(&Vec::from("Parent"))
                 && mappings.contains_key(&Vec::from("Kids"))
                 && mappings.contains_key(&Vec::from("Count"))
-                && mappings.contains_key(&Vec::from("Parent"))
-            {
-            } else if mappings.contains_key(&Vec::from("Parent"))
-                && mappings.contains_key(&Vec::from("Kids"))
-                && mappings.contains_key(&Vec::from("Count"))
-                && mappings.contains_key(&Vec::from("Parent"))
-            {
-            } else if mappings.contains_key(&Vec::from("Parent"))
-                && mappings.contains_key(&Vec::from("Kids"))
-                && mappings.contains_key(&Vec::from("Count"))
-                && mappings.contains_key(&Vec::from("Parent"))
-            {
-            } else if mappings.contains_key(&Vec::from("Parent"))
-                && mappings.contains_key(&Vec::from("Kids"))
-                && mappings.contains_key(&Vec::from("Count"))
-                && mappings.contains_key(&Vec::from("Parent"))
+                && mappings.contains_key(&Vec::from("Parent")))
+                || (mappings.contains_key(&Vec::from("Parent"))
+                    && mappings.contains_key(&Vec::from("Kids"))
+                    && mappings.contains_key(&Vec::from("Count"))
+                    && mappings.contains_key(&Vec::from("Parent")))
+                || (mappings.contains_key(&Vec::from("Parent"))
+                    && mappings.contains_key(&Vec::from("Kids"))
+                    && mappings.contains_key(&Vec::from("Count"))
+                    && mappings.contains_key(&Vec::from("Parent")))
+                || (mappings.contains_key(&Vec::from("Parent"))
+                    && mappings.contains_key(&Vec::from("Kids"))
+                    && mappings.contains_key(&Vec::from("Count"))
+                    && mappings.contains_key(&Vec::from("Parent")))
             {
             } else {
                 return Some(TypeCheckError::PredicateError(
@@ -83,7 +71,7 @@ impl Predicate for PageTreePredicate {
             None
         } else {
             // Not a dictionary
-            return Some(TypeCheckError::PredicateError(
+            Some(TypeCheckError::PredicateError(
                 "No Dictionary, no Page Tree".to_string(),
             ))
         }
@@ -112,7 +100,7 @@ impl Predicate for ReferencePredicate {
             }
             None
         } else {
-            return Some(TypeCheckError::PredicateError(
+            Some(TypeCheckError::PredicateError(
                 "Reference wasn't an Array".to_string(),
             ))
         }
