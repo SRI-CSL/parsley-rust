@@ -1,19 +1,15 @@
-use super::super::pcore::parsebuffer::LocatedVal;
-use super::pdf_obj::{PDFObjContext, PDFObjT};
+use super::pdf_obj::PDFObjT;
 use crate::pdf_lib::common_data_structures::structures::name_dictionary;
 use crate::pdf_lib::common_data_structures::structures::{
-    mk_name_check, mk_reference_typchk, mk_single_reference_typchk,
+    mk_name_check, mk_single_reference_typchk,
 };
-use crate::pdf_lib::name_tree::name_tree;
 use crate::pdf_lib::number_tree::number_tree;
 use crate::pdf_lib::page_tree::page_tree;
 use crate::pdf_lib::pdf_prim::NameT;
 use crate::pdf_lib::pdf_type_check::{
-    ChoicePred, DictEntry, DictKeySpec, PDFPrimType, PDFType, Predicate, TypeCheck, TypeCheckError,
+    ChoicePred, DictEntry, DictKeySpec, PDFPrimType, PDFType, TypeCheck,
 };
 use std::rc::Rc;
-
-fn mk_new_context() -> PDFObjContext { PDFObjContext::new(10) }
 
 fn mk_af_typchk() -> Rc<TypeCheck> {
     Rc::new(TypeCheck::new(Rc::new(PDFType::Array {
@@ -299,9 +295,12 @@ mod test_name_tree {
     use super::super::super::pcore::parsebuffer::{LocatedVal, ParseBuffer};
     use super::super::pdf_obj::{parse_pdf_obj, IndirectT, PDFObjContext, PDFObjT};
     use super::super::pdf_prim::IntegerT;
-    use super::super::pdf_type_check::{check_type, PDFPrimType, PDFType, TypeCheckError};
-    use super::{catalog_type, mk_new_context};
+    use super::super::pdf_type_check::check_type;
+    use super::catalog_type;
     use std::rc::Rc;
+
+    fn mk_new_context() -> PDFObjContext { PDFObjContext::new(10) }
+
     #[test]
     fn test_catalog() {
         let mut ctxt = mk_new_context();

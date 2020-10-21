@@ -1,10 +1,9 @@
 pub mod structures {
     use super::super::super::pcore::parsebuffer::LocatedVal;
-    use super::super::super::pcore::parsebuffer::ParseBuffer;
     use super::super::name_tree::name_tree;
-    use super::super::pdf_obj::{parse_pdf_obj, PDFObjContext, PDFObjT};
+    use super::super::pdf_obj::PDFObjT;
     use super::super::pdf_type_check::{
-        check_type, ChoicePred, DictEntry, DictKeySpec, PDFPrimType, PDFType, Predicate, TypeCheck,
+        ChoicePred, DictEntry, DictKeySpec, PDFPrimType, PDFType, Predicate, TypeCheck,
         TypeCheckError,
     };
     use crate::pdf_lib::pdf_prim::NameT;
@@ -29,66 +28,67 @@ pub mod structures {
     }
 
     pub fn name_dictionary() -> Rc<TypeCheck> {
-        let Dests = DictEntry {
+        let dests = DictEntry {
             key: Vec::from("Dests"),
             chk: name_tree(), // this must be a NameT
             opt: DictKeySpec::Optional,
         };
-        let AP = DictEntry {
+        let ap = DictEntry {
             key: Vec::from("AP"),
             chk: name_tree(), // this must be a NameT
             opt: DictKeySpec::Optional,
         };
-        let JavaScript = DictEntry {
+        let javascript = DictEntry {
             key: Vec::from("JavaScript"),
             chk: name_tree(), // this must be a NameT
             opt: DictKeySpec::Optional,
         };
-        let Pages = DictEntry {
+        let pages = DictEntry {
             key: Vec::from("Pages"),
             chk: name_tree(), // this must be a NameT
             opt: DictKeySpec::Optional,
         };
-        let Templates = DictEntry {
+        let templates = DictEntry {
             key: Vec::from("Templates"),
             chk: name_tree(), // this must be a NameT
             opt: DictKeySpec::Optional,
         };
-        let IDS = DictEntry {
+        let ids = DictEntry {
             key: Vec::from("IDS"),
             chk: name_tree(), // this must be a NameT
             opt: DictKeySpec::Optional,
         };
-        let URLS = DictEntry {
+        let urls = DictEntry {
             key: Vec::from("URLS"),
             chk: name_tree(), // this must be a NameT
             opt: DictKeySpec::Optional,
         };
-        let EmbeddedFiles = DictEntry {
+        let embedded_files = DictEntry {
             key: Vec::from("EmbeddedFiles"),
             chk: name_tree(), // this must be a NameT
             opt: DictKeySpec::Optional,
         };
-        let AlternatePresentations = DictEntry {
+        let alternate_presentations = DictEntry {
             key: Vec::from("AlternatePresentations"),
             chk: name_tree(), // this must be a NameT
             opt: DictKeySpec::Optional,
         };
-        let Renditions = DictEntry {
+        let renditions = DictEntry {
             key: Vec::from("Renditions"),
             chk: name_tree(), // this must be a NameT
             opt: DictKeySpec::Optional,
         };
         let typ = Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![
-            Dests,
-            AP,
-            JavaScript,
-            Pages,
-            Templates,
-            IDS,
-            URLS,
-            EmbeddedFiles,
-            Renditions,
+            dests,
+            ap,
+            javascript,
+            pages,
+            templates,
+            ids,
+            urls,
+            alternate_presentations,
+            embedded_files,
+            renditions,
         ]))));
         typ
     }

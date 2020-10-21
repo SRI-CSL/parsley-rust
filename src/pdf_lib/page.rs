@@ -1,12 +1,6 @@
-use super::super::pcore::parsebuffer::LocatedVal;
-use super::pdf_obj::{PDFObjContext, PDFObjT};
-use crate::pdf_lib::common_data_structures::structures::{
-    mk_name_check, mk_rectangle_typchk, mk_reference_typchk,
-};
-use crate::pdf_lib::pdf_prim::NameT;
+use crate::pdf_lib::common_data_structures::structures::{mk_name_check, mk_rectangle_typchk};
 use crate::pdf_lib::pdf_type_check::{
-    mk_date_typchk, ChoicePred, DictEntry, DictKeySpec, PDFPrimType, PDFType, Predicate, TypeCheck,
-    TypeCheckError,
+    mk_date_typchk, DictEntry, DictKeySpec, PDFPrimType, PDFType, TypeCheck,
 };
 //use crate::pdf_lib::number_tree::{}
 use std::rc::Rc;
@@ -230,9 +224,7 @@ mod test_page {
     use super::super::pdf_obj::{parse_pdf_obj, IndirectT, PDFObjContext, PDFObjT};
     use super::super::pdf_prim::IntegerT;
 
-    use super::super::pdf_type_check::{
-        check_type, DictEntry, DictKeySpec, PDFType, TypeCheck, TypeCheckError,
-    };
+    use super::super::pdf_type_check::check_type;
     use super::page_type;
     use std::rc::Rc;
 
