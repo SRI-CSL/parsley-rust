@@ -1,7 +1,8 @@
 use super::pdf_obj::PDFObjT;
 use crate::pdf_lib::common_data_structures::structures::name_dictionary;
 use crate::pdf_lib::common_data_structures::structures::{
-    mk_name_check, mk_single_reference_typchk,
+    mk_generic_array_typchk, mk_generic_dict_typchk, mk_generic_indirect_array_typchk,
+    mk_generic_indirect_dict_typchk, mk_name_check,
 };
 use crate::pdf_lib::number_tree::number_tree;
 use crate::pdf_lib::page_tree::page_tree;
@@ -13,13 +14,13 @@ use std::rc::Rc;
 
 fn mk_af_typchk() -> Rc<TypeCheck> {
     Rc::new(TypeCheck::new(Rc::new(PDFType::Array {
-        elem: Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![])))),
+        elem: mk_generic_dict_typchk(),
         size: None,
     })))
 }
 fn mk_pagemode_typchk() -> Rc<TypeCheck> {
     let pred = ChoicePred(
-        String::from("Invalid PageLayout"),
+        String::from("Invalid PageMode"),
         vec![
             PDFObjT::Name(NameT::new(Vec::from("UseNone"))),
             PDFObjT::Name(NameT::new(Vec::from("UseOutlines"))),
@@ -59,7 +60,7 @@ pub fn catalog_type() -> Rc<TypeCheck> {
     // pagelabels, names, dests, viewerpreferences, pagelayout,
     let typ = DictEntry {
         key: Vec::from("Type"),
-        chk: mk_name_check("Catalog".to_string()),
+        chk: mk_name_check("Not a Catalog".to_string(), "Catalog".to_string()),
         opt: DictKeySpec::Required,
     };
     let version = DictEntry {
@@ -71,13 +72,13 @@ pub fn catalog_type() -> Rc<TypeCheck> {
     };
     let extensions = DictEntry {
         key: Vec::from("Extensions"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![])))),
+        chk: mk_generic_dict_typchk(),
         opt: DictKeySpec::Optional,
     };
     let pages = DictEntry {
         key: Vec::from("Pages"),
         chk: page_tree(),
-        opt: DictKeySpec::Optional,
+        opt: DictKeySpec::Required,
     };
     let pagelabels = DictEntry {
         key: Vec::from("PageLabels"),
@@ -91,12 +92,12 @@ pub fn catalog_type() -> Rc<TypeCheck> {
     };
     let dests = DictEntry {
         key: Vec::from("Dests"),
-        chk: mk_af_typchk(),
+        chk: mk_generic_indirect_dict_typchk(), // FIXME: indirect dict of names
         opt: DictKeySpec::Optional,
     };
     let viewerpreferences = DictEntry {
         key: Vec::from("ViewerPreferences"),
-        chk: mk_af_typchk(),
+        chk: mk_generic_dict_typchk(),
         opt: DictKeySpec::Optional,
     };
     let pagelayout = DictEntry {
@@ -113,32 +114,32 @@ pub fn catalog_type() -> Rc<TypeCheck> {
     };
     let outlines = DictEntry {
         key: Vec::from("Outlines"),
-        chk: mk_single_reference_typchk(),
+        chk: mk_generic_indirect_dict_typchk(),
         opt: DictKeySpec::Optional,
     };
     let threads = DictEntry {
         key: Vec::from("Threads"),
-        chk: mk_af_typchk(),
+        chk: mk_generic_indirect_array_typchk(),
         opt: DictKeySpec::Optional,
     };
     let openaction = DictEntry {
         key: Vec::from("OpenAction"),
-        chk: mk_af_typchk(),
+        chk: mk_af_typchk(), // FIXME: need to use disjunction when implemented
         opt: DictKeySpec::Optional,
     };
     let aa = DictEntry {
         key: Vec::from("AA"),
-        chk: mk_af_typchk(),
+        chk: mk_generic_array_typchk(),
         opt: DictKeySpec::Optional,
     };
     let uri = DictEntry {
-        key: Vec::from("Uri"),
-        chk: mk_af_typchk(),
+        key: Vec::from("URI"),
+        chk: mk_generic_dict_typchk(),
         opt: DictKeySpec::Optional,
     };
     let acroform = DictEntry {
         key: Vec::from("AcroForm"),
-        chk: mk_af_typchk(),
+        chk: mk_generic_dict_typchk(),
         opt: DictKeySpec::Optional,
     };
 
@@ -149,57 +150,45 @@ pub fn catalog_type() -> Rc<TypeCheck> {
         key: Vec::from("Metadata"),
         chk: Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
             PDFPrimType::Bool,
-        )))),
+        )))), // FIXME: this needs to be a generic indirect stream
         opt: DictKeySpec::Optional,
     };
     let structtreeroot = DictEntry {
         key: Vec::from("StructTreeRoot"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
-            PDFPrimType::Bool,
-        )))),
+        chk: mk_generic_dict_typchk(),
         opt: DictKeySpec::Optional,
     };
     let markinfo = DictEntry {
         key: Vec::from("MarkInfo"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
-            PDFPrimType::Bool,
-        )))),
+        chk: mk_generic_dict_typchk(),
         opt: DictKeySpec::Optional,
     };
     let lang = DictEntry {
         key: Vec::from("Lang"),
         chk: Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
-            PDFPrimType::Bool,
+            PDFPrimType::String,
         )))),
         opt: DictKeySpec::Optional,
     };
     let spiderinfo = DictEntry {
         key: Vec::from("SpiderInfo"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
-            PDFPrimType::Bool,
-        )))),
+        chk: mk_generic_dict_typchk(),
         opt: DictKeySpec::Optional,
     };
     let outputintents = DictEntry {
         key: Vec::from("OutputIntents"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
-            PDFPrimType::Bool,
-        )))),
+        chk: mk_generic_array_typchk(),
         opt: DictKeySpec::Optional,
     };
     let pieceinfo = DictEntry {
         key: Vec::from("PieceInfo"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
-            PDFPrimType::Bool,
-        )))),
+        chk: mk_generic_dict_typchk(),
         opt: DictKeySpec::Optional,
     };
     let ocproperties = DictEntry {
-        key: Vec::from("OcProperties"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
-            PDFPrimType::Bool,
-        )))),
-        opt: DictKeySpec::Optional,
+        key: Vec::from("OCProperties"),
+        chk: mk_generic_dict_typchk(),
+        opt: DictKeySpec::Optional, // FIXME: "Required if the document contains optional content"
     };
 
     // Row 4
@@ -207,30 +196,22 @@ pub fn catalog_type() -> Rc<TypeCheck> {
     // dpartroot])))
     let perms = DictEntry {
         key: Vec::from("Perms"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
-            PDFPrimType::Bool,
-        )))),
+        chk: mk_generic_dict_typchk(),
         opt: DictKeySpec::Optional,
     };
     let legal = DictEntry {
         key: Vec::from("Legal"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
-            PDFPrimType::Bool,
-        )))),
+        chk: mk_generic_dict_typchk(),
         opt: DictKeySpec::Optional,
     };
     let requirements = DictEntry {
         key: Vec::from("Requirements"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
-            PDFPrimType::Bool,
-        )))),
+        chk: mk_generic_array_typchk(), // FIXME: array of dicts
         opt: DictKeySpec::Optional,
     };
     let collection = DictEntry {
         key: Vec::from("Collection"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
-            PDFPrimType::Bool,
-        )))),
+        chk: mk_generic_array_typchk(),
         opt: DictKeySpec::Optional,
     };
     let needsrendering = DictEntry {
@@ -242,7 +223,7 @@ pub fn catalog_type() -> Rc<TypeCheck> {
     };
     let dss = DictEntry {
         key: Vec::from("DSS"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![])))),
+        chk: mk_generic_dict_typchk(),
         opt: DictKeySpec::Optional,
     };
     let af = DictEntry {
@@ -252,7 +233,7 @@ pub fn catalog_type() -> Rc<TypeCheck> {
     };
     let dpartroot = DictEntry {
         key: Vec::from("DPartRoot"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![])))),
+        chk: mk_generic_dict_typchk(),
         opt: DictKeySpec::Optional,
     };
     Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![
@@ -293,10 +274,11 @@ pub fn catalog_type() -> Rc<TypeCheck> {
 #[cfg(test)]
 mod test_name_tree {
     use super::super::super::pcore::parsebuffer::{LocatedVal, ParseBuffer};
-    use super::super::pdf_obj::{parse_pdf_obj, IndirectT, PDFObjContext, PDFObjT};
+    use super::super::pdf_obj::{parse_pdf_obj, DictT, IndirectT, PDFObjContext, PDFObjT};
     use super::super::pdf_prim::IntegerT;
     use super::super::pdf_type_check::check_type;
     use super::catalog_type;
+    use std::collections::BTreeMap;
     use std::rc::Rc;
 
     fn mk_new_context() -> PDFObjContext { PDFObjContext::new(10) }
@@ -314,7 +296,11 @@ mod test_name_tree {
         let i2 = IndirectT::new(
             3,
             0,
-            Rc::new(LocatedVal::new(PDFObjT::Integer(IntegerT::new(5)), 0, 1)),
+            Rc::new(LocatedVal::new(
+                PDFObjT::Dict(DictT::new(BTreeMap::new())),
+                0,
+                1,
+            )),
         );
         let l2 = LocatedVal::new(i2, 0, 4);
         ctxt.register_obj(&l1);

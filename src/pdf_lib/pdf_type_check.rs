@@ -99,10 +99,9 @@ pub trait Predicate {
 }
 
 pub struct TypeCheck {
-    typ:          Rc<PDFType>,
-    pred:         Option<Rc<dyn Predicate>>,
-    indirect:     IndirectSpec,
-    choices_pred: Vec<Rc<PDFType>>,
+    typ:      Rc<PDFType>,
+    pred:     Option<Rc<dyn Predicate>>,
+    indirect: IndirectSpec,
 }
 
 impl TypeCheck {
@@ -112,7 +111,6 @@ impl TypeCheck {
             typ,
             pred: None,
             indirect: IndirectSpec::Allowed,
-            choices_pred: vec![],
         }
     }
 
@@ -122,19 +120,25 @@ impl TypeCheck {
             typ,
             pred: Some(pred),
             indirect: IndirectSpec::Allowed,
-            choices_pred: vec![],
+        }
+    }
+
+    // the constructor with an indirect specification
+    pub fn new_indirect(typ: Rc<PDFType>, indirect: IndirectSpec) -> Self {
+        Self {
+            typ,
+            pred: None,
+            indirect,
         }
     }
 
     pub fn new_all(
         typ: Rc<PDFType>, pred: Option<Rc<dyn Predicate>>, indirect: IndirectSpec,
-        choices_pred: Vec<Rc<PDFType>>,
     ) -> Self {
         Self {
             typ,
             pred,
             indirect,
-            choices_pred,
         }
     }
 
@@ -142,7 +146,6 @@ impl TypeCheck {
     pub fn typ_rc(&self) -> &Rc<PDFType> { &self.typ }
     pub fn pred(&self) -> &Option<Rc<dyn Predicate>> { &self.pred }
     pub fn indirect(&self) -> IndirectSpec { self.indirect }
-    pub fn choices_pred(&self) -> &Vec<Rc<PDFType>> { &self.choices_pred }
 }
 
 impl PartialEq for TypeCheck {
@@ -199,10 +202,10 @@ pub fn check_type(
             break
         }
         let (o, c) = next.unwrap();
-        match (o.val(), c.typ(), c.indirect(), c.choices_pred()) {
+        match (o.val(), c.typ(), c.indirect()) {
             // Indirects are best handled first.
-            (PDFObjT::Reference(refnc), _, IndirectSpec::Allowed, _)
-            | (PDFObjT::Reference(refnc), _, IndirectSpec::Required, _) => {
+            (PDFObjT::Reference(refnc), _, IndirectSpec::Allowed)
+            | (PDFObjT::Reference(refnc), _, IndirectSpec::Required) => {
                 // lookup referenced object and add it to the queue
                 match ctxt.lookup_obj(refnc.id()) {
                     Some(obj) => {
@@ -211,32 +214,28 @@ pub fn check_type(
                             None => None,
                             Some(p) => Some(Rc::clone(p)),
                         };
-                        let chk = TypeCheck::new_all(
-                            Rc::clone(c.typ_rc()),
-                            pred,
-                            IndirectSpec::Allowed,
-                            vec![],
-                        );
+                        let chk =
+                            TypeCheck::new_all(Rc::clone(c.typ_rc()), pred, IndirectSpec::Allowed);
                         pending.push_back((Rc::clone(obj), Rc::new(chk)));
                         continue
                     },
                     None => return Some(TypeCheckError::RefNotFound(*refnc)),
                 }
             },
-            (PDFObjT::Reference(_), _, IndirectSpec::Forbidden, _) => {
+            (PDFObjT::Reference(_), _, IndirectSpec::Forbidden) => {
                 return Some(TypeCheckError::ValueMismatch(
                     Rc::clone(&o),
                     String::from("An indirect reference was forbidden"),
                 ))
             },
-            (_, _, IndirectSpec::Required, _) => {
+            (_, _, IndirectSpec::Required) => {
                 return Some(TypeCheckError::ValueMismatch(
                     Rc::clone(&o),
                     String::from("An indirect reference was required"),
                 ))
             },
 
-            (_, PDFType::Any, _, _) => {
+            (_, PDFType::Any, _) => {
                 let invalid = check_predicate(&o, c.pred());
                 if invalid.is_none() {
                     continue
@@ -245,7 +244,7 @@ pub fn check_type(
                 }
             },
 
-            (PDFObjT::Boolean(_), PDFType::PrimType(PDFPrimType::Bool), _, _) => {
+            (PDFObjT::Boolean(_), PDFType::PrimType(PDFPrimType::Bool), _) => {
                 let invalid = check_predicate(&o, c.pred());
                 if invalid.is_none() {
                     continue
@@ -253,7 +252,7 @@ pub fn check_type(
                     return invalid
                 }
             },
-            (PDFObjT::String(_), PDFType::PrimType(PDFPrimType::String), _, _) => {
+            (PDFObjT::String(_), PDFType::PrimType(PDFPrimType::String), _) => {
                 let invalid = check_predicate(&o, c.pred());
                 if invalid.is_none() {
                     continue
@@ -261,7 +260,7 @@ pub fn check_type(
                     return invalid
                 }
             },
-            (PDFObjT::Name(_), PDFType::PrimType(PDFPrimType::Name), _, _) => {
+            (PDFObjT::Name(_), PDFType::PrimType(PDFPrimType::Name), _) => {
                 let invalid = check_predicate(&o, c.pred());
                 if invalid.is_none() {
                     continue
@@ -269,7 +268,7 @@ pub fn check_type(
                     return invalid
                 }
             },
-            (PDFObjT::Null(_), PDFType::PrimType(PDFPrimType::Null), _, _) => {
+            (PDFObjT::Null(_), PDFType::PrimType(PDFPrimType::Null), _) => {
                 let invalid = check_predicate(&o, c.pred());
                 if invalid.is_none() {
                     continue
@@ -277,7 +276,7 @@ pub fn check_type(
                     return invalid
                 }
             },
-            (PDFObjT::Integer(_), PDFType::PrimType(PDFPrimType::Integer), _, _) => {
+            (PDFObjT::Integer(_), PDFType::PrimType(PDFPrimType::Integer), _) => {
                 let invalid = check_predicate(&o, c.pred());
                 if invalid.is_none() {
                     continue
@@ -285,7 +284,7 @@ pub fn check_type(
                     return invalid
                 }
             },
-            (PDFObjT::Real(_), PDFType::PrimType(PDFPrimType::Real), _, _) => {
+            (PDFObjT::Real(_), PDFType::PrimType(PDFPrimType::Real), _) => {
                 let invalid = check_predicate(&o, c.pred());
                 if invalid.is_none() {
                     continue
@@ -293,7 +292,7 @@ pub fn check_type(
                     return invalid
                 }
             },
-            (PDFObjT::Comment(_), PDFType::PrimType(PDFPrimType::Comment), _, _) => {
+            (PDFObjT::Comment(_), PDFType::PrimType(PDFPrimType::Comment), _) => {
                 let invalid = check_predicate(&o, c.pred());
                 if invalid.is_none() {
                     continue
@@ -301,7 +300,7 @@ pub fn check_type(
                     return invalid
                 }
             },
-            (PDFObjT::Array(ao), PDFType::Array { elem, size }, _, _) => {
+            (PDFObjT::Array(ao), PDFType::Array { elem, size }, _) => {
                 match size {
                     Some(sz) => {
                         if ao.objs().len() != *sz {
@@ -323,7 +322,7 @@ pub fn check_type(
                     pending.push_back((Rc::clone(e), Rc::clone(elem)))
                 }
             },
-            (PDFObjT::Dict(dict), PDFType::Dict(ents), _, _) => {
+            (PDFObjT::Dict(dict), PDFType::Dict(ents), _) => {
                 for ent in ents {
                     let val = dict.get(&ent.key);
                     match (val, ent.opt, ent.chk.typ()) {
@@ -342,7 +341,7 @@ pub fn check_type(
                     }
                 }
             },
-            (PDFObjT::Stream(s), PDFType::Stream(ents), _, _) => {
+            (PDFObjT::Stream(s), PDFType::Stream(ents), _) => {
                 // Same code as above for now, copied in case we need to customize later.
                 for ent in ents {
                     let val = s.dict().val().get(&ent.key);
@@ -362,7 +361,7 @@ pub fn check_type(
                     }
                 }
             },
-            (obj, _, _, _) => {
+            (obj, _, _) => {
                 return Some(TypeCheckError::TypeMismatch(
                     Rc::clone(&c.typ),
                     type_of(obj),
@@ -453,7 +452,6 @@ mod test_pdf_types {
             Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
             None,
             IndirectSpec::Required,
-            vec![],
         );
         assert_eq!(check_type(&ctxt, Rc::new(obj), Rc::new(typ)), None);
 
@@ -466,7 +464,6 @@ mod test_pdf_types {
             Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
             None,
             IndirectSpec::Forbidden,
-            vec![],
         );
         let err = TypeCheckError::ValueMismatch(
             Rc::clone(&obj),
@@ -483,7 +480,6 @@ mod test_pdf_types {
             Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
             None,
             IndirectSpec::Required,
-            vec![],
         );
         let err = TypeCheckError::ValueMismatch(
             Rc::clone(&obj),

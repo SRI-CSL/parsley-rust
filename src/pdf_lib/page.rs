@@ -1,4 +1,6 @@
-use crate::pdf_lib::common_data_structures::structures::{mk_name_check, mk_rectangle_typchk};
+use crate::pdf_lib::common_data_structures::structures::{
+    mk_generic_dict_typchk, mk_name_check, mk_rectangle_typchk,
+};
 use crate::pdf_lib::pdf_type_check::{
     mk_date_typchk, DictEntry, DictKeySpec, PDFPrimType, PDFType, TypeCheck,
 };
@@ -8,7 +10,7 @@ use std::rc::Rc;
 fn page_type() -> TypeCheck {
     let typ = DictEntry {
         key: Vec::from("Type"),
-        chk: mk_name_check("Page".to_string()),
+        chk: mk_name_check("Not a Page".to_string(), "Page".to_string()),
         opt: DictKeySpec::Required,
     };
     let parent = DictEntry {
@@ -23,7 +25,7 @@ fn page_type() -> TypeCheck {
     };
     let resources = DictEntry {
         key: Vec::from("Resources"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![])))),
+        chk: mk_generic_dict_typchk(),
         opt: DictKeySpec::Optional,
     };
     let mediabox = DictEntry {
@@ -53,7 +55,7 @@ fn page_type() -> TypeCheck {
     };
     let boxcolorinfo = DictEntry {
         key: Vec::from("BoxColorInfo"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![])))),
+        chk: mk_generic_dict_typchk(),
         opt: DictKeySpec::Optional,
     };
     let contents = DictEntry {
@@ -70,7 +72,7 @@ fn page_type() -> TypeCheck {
     };
     let group = DictEntry {
         key: Vec::from("Group"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![])))),
+        chk: mk_generic_dict_typchk(),
         opt: DictKeySpec::Optional,
     };
     let thumb = DictEntry {
@@ -92,7 +94,7 @@ fn page_type() -> TypeCheck {
     };
     let trans = DictEntry {
         key: Vec::from("Trans"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![])))),
+        chk: mk_generic_dict_typchk(),
         opt: DictKeySpec::Optional,
     };
     let annots = DictEntry {
@@ -102,7 +104,7 @@ fn page_type() -> TypeCheck {
     };
     let aa = DictEntry {
         key: Vec::from("AA"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![])))),
+        chk: mk_generic_dict_typchk(),
         opt: DictKeySpec::Optional,
     };
     let metadata = DictEntry {
@@ -112,7 +114,7 @@ fn page_type() -> TypeCheck {
     };
     let pieceinfo = DictEntry {
         key: Vec::from("PieceInfo"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![])))),
+        chk: mk_generic_dict_typchk(),
         opt: DictKeySpec::Optional,
     };
     let structparents = DictEntry {
@@ -136,7 +138,7 @@ fn page_type() -> TypeCheck {
     };
     let separationinfo = DictEntry {
         key: Vec::from("SeparationInfo"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![])))),
+        chk: mk_generic_dict_typchk(),
         opt: DictKeySpec::Optional,
     };
     let tabs = DictEntry {
@@ -151,7 +153,7 @@ fn page_type() -> TypeCheck {
     };
     let pressteps = DictEntry {
         key: Vec::from("PresSteps"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![])))),
+        chk: mk_generic_dict_typchk(),
         opt: DictKeySpec::Optional,
     };
     let userunit = DictEntry {
@@ -178,7 +180,7 @@ fn page_type() -> TypeCheck {
     };
     let dpart = DictEntry {
         key: Vec::from("DpPart"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![])))),
+        chk: mk_generic_dict_typchk(),
         opt: DictKeySpec::Optional,
     };
     TypeCheck::new(Rc::new(PDFType::Dict(vec![

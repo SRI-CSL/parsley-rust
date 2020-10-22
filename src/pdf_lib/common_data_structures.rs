@@ -3,16 +3,47 @@ pub mod structures {
     use super::super::name_tree::name_tree;
     use super::super::pdf_obj::PDFObjT;
     use super::super::pdf_type_check::{
-        ChoicePred, DictEntry, DictKeySpec, PDFPrimType, PDFType, Predicate, TypeCheck,
-        TypeCheckError,
+        ChoicePred, DictEntry, DictKeySpec, IndirectSpec, PDFPrimType, PDFType, Predicate,
+        TypeCheck, TypeCheckError,
     };
     use crate::pdf_lib::pdf_prim::NameT;
     use std::rc::Rc;
-    pub fn mk_name_check(name: String) -> Rc<TypeCheck> {
-        let pred = ChoicePred(
-            String::from("Catalog not present."),
-            vec![PDFObjT::Name(NameT::new(Vec::from(name)))],
-        );
+
+    // A generic dictionary, typically used for out-of-scope
+    // dictionary values.
+    pub fn mk_generic_dict_typchk() -> Rc<TypeCheck> {
+        Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![]))))
+    }
+
+    // A generic dictionary that is required to be an indirect reference,
+    // typically used for out-of-scope dictionary values.
+    pub fn mk_generic_indirect_dict_typchk() -> Rc<TypeCheck> {
+        Rc::new(TypeCheck::new_indirect(
+            Rc::new(PDFType::Dict(vec![])),
+            IndirectSpec::Required,
+        ))
+    }
+
+    // A generic array, typically used for out-of-scope
+    // array values.
+    pub fn mk_generic_array_typchk() -> Rc<TypeCheck> {
+        Rc::new(TypeCheck::new(Rc::new(PDFType::Array {
+            elem: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))),
+            size: None,
+        })))
+    }
+
+    // A generic array that is required to be an indirect reference,
+    // typically used for out-of-scope array values.
+    pub fn mk_generic_indirect_array_typchk() -> Rc<TypeCheck> {
+        Rc::new(TypeCheck::new_indirect(
+            Rc::new(PDFType::Dict(vec![])),
+            IndirectSpec::Required,
+        ))
+    }
+
+    pub fn mk_name_check(msg: String, name: String) -> Rc<TypeCheck> {
+        let pred = ChoicePred(msg, vec![PDFObjT::Name(NameT::new(Vec::from(name)))]);
         Rc::new(TypeCheck::new_refined(
             Rc::new(PDFType::PrimType(PDFPrimType::Name)),
             Rc::new(pred),
