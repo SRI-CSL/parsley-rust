@@ -1,13 +1,14 @@
 use crate::pdf_lib::common_data_structures::structures::{
-    mk_generic_dict_typchk, mk_name_check, mk_rectangle_typchk,
+    mk_generic_array_typchk, mk_generic_dict_typchk, mk_generic_indirect_array_typchk,
+    mk_generic_indirect_dict_typchk, mk_name_check, mk_rectangle_typchk,
 };
+use crate::pdf_lib::page_tree::{non_root_page_tree, page_tree, root_page_tree};
 use crate::pdf_lib::pdf_type_check::{
-    mk_date_typchk, DictEntry, DictKeySpec, PDFPrimType, PDFType, TypeCheck,
+    mk_date_typchk, DictEntry, DictKeySpec, IndirectSpec, PDFPrimType, PDFType, TypeCheck,
 };
-//use crate::pdf_lib::number_tree::{}
 use std::rc::Rc;
 
-fn page_type() -> TypeCheck {
+pub fn page_type() -> Rc<TypeCheck> {
     let typ = DictEntry {
         key: Vec::from("Type"),
         chk: mk_name_check("Not a Page".to_string(), "Page".to_string()),
@@ -15,7 +16,14 @@ fn page_type() -> TypeCheck {
     };
     let parent = DictEntry {
         key: Vec::from("Parent"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))),
+        chk: Rc::new(TypeCheck::new_all(
+            Rc::new(PDFType::Disjunct(vec![
+                root_page_tree(),
+                non_root_page_tree(),
+            ])),
+            None,
+            IndirectSpec::Required,
+        )),
         opt: DictKeySpec::Required,
     };
     let lastmodified = DictEntry {
@@ -60,7 +68,7 @@ fn page_type() -> TypeCheck {
     };
     let contents = DictEntry {
         key: Vec::from("Contents"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))),
+        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Disjunct(vec![])))), // Fix me
         opt: DictKeySpec::Optional,
     };
     let rotate = DictEntry {
@@ -82,7 +90,7 @@ fn page_type() -> TypeCheck {
     };
     let b = DictEntry {
         key: Vec::from("B"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))),
+        chk: mk_generic_array_typchk(),
         opt: DictKeySpec::Optional,
     };
     let dur = DictEntry {
@@ -99,7 +107,7 @@ fn page_type() -> TypeCheck {
     };
     let annots = DictEntry {
         key: Vec::from("Annots"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))),
+        chk: mk_generic_array_typchk(),
         opt: DictKeySpec::Optional,
     };
     let aa = DictEntry {
@@ -126,7 +134,7 @@ fn page_type() -> TypeCheck {
     };
     let id = DictEntry {
         key: Vec::from("ID"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))),
+        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))), // Fixme
         opt: DictKeySpec::Optional,
     };
     let pz = DictEntry {
@@ -143,7 +151,7 @@ fn page_type() -> TypeCheck {
     };
     let tabs = DictEntry {
         key: Vec::from("Tabs"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))),
+        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))), // Fixme values can be R, C, S, A, W
         opt: DictKeySpec::Optional,
     };
     let templateinstantiated = DictEntry {
@@ -165,7 +173,7 @@ fn page_type() -> TypeCheck {
     };
     let vp = DictEntry {
         key: Vec::from("VP"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))),
+        chk: mk_generic_array_typchk(),
         opt: DictKeySpec::Optional,
     };
     let af = DictEntry {
@@ -175,7 +183,7 @@ fn page_type() -> TypeCheck {
     };
     let outputintents = DictEntry {
         key: Vec::from("OutputIntents"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))),
+        chk: mk_generic_array_typchk(),
         opt: DictKeySpec::Optional,
     };
     let dpart = DictEntry {
@@ -183,7 +191,7 @@ fn page_type() -> TypeCheck {
         chk: mk_generic_dict_typchk(),
         opt: DictKeySpec::Optional,
     };
-    TypeCheck::new(Rc::new(PDFType::Dict(vec![
+    Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![
         typ,
         parent,
         lastmodified,
@@ -217,7 +225,7 @@ fn page_type() -> TypeCheck {
         af,
         outputintents,
         dpart,
-    ])))
+    ]))))
 }
 #[cfg(test)]
 
@@ -249,6 +257,6 @@ mod test_page {
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
 
         let typ = page_type();
-        assert_eq!(check_type(&ctxt, Rc::new(obj), Rc::new(typ)), None);
+        assert_eq!(check_type(&ctxt, Rc::new(obj), typ), None);
     }
 }

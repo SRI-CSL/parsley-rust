@@ -5,7 +5,7 @@ use crate::pdf_lib::common_data_structures::structures::{
     mk_generic_indirect_dict_typchk, mk_name_check,
 };
 use crate::pdf_lib::number_tree::number_tree;
-use crate::pdf_lib::page_tree::page_tree;
+use crate::pdf_lib::page_tree::root_page_tree;
 use crate::pdf_lib::pdf_prim::NameT;
 use crate::pdf_lib::pdf_type_check::{
     ChoicePred, DictEntry, DictKeySpec, PDFPrimType, PDFType, TypeCheck,
@@ -77,7 +77,7 @@ pub fn catalog_type() -> Rc<TypeCheck> {
     };
     let pages = DictEntry {
         key: Vec::from("Pages"),
-        chk: page_tree(),
+        chk: root_page_tree(),
         opt: DictKeySpec::Required,
     };
     let pagelabels = DictEntry {
@@ -124,7 +124,10 @@ pub fn catalog_type() -> Rc<TypeCheck> {
     };
     let openaction = DictEntry {
         key: Vec::from("OpenAction"),
-        chk: mk_af_typchk(), // FIXME: need to use disjunction when implemented
+        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Disjunct(vec![
+            mk_generic_array_typchk(),
+            mk_generic_dict_typchk(),
+        ])))),
         opt: DictKeySpec::Optional,
     };
     let aa = DictEntry {

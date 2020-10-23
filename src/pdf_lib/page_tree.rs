@@ -1,7 +1,102 @@
 use super::super::pcore::parsebuffer::LocatedVal;
 use super::pdf_obj::PDFObjT;
-use crate::pdf_lib::pdf_type_check::{PDFType, Predicate, TypeCheck, TypeCheckError};
+use crate::pdf_lib::page::page_type;
+use crate::pdf_lib::pdf_prim::NameT;
+use crate::pdf_lib::pdf_type_check::{
+    ChoicePred, DictEntry, DictKeySpec, IndirectSpec, PDFPrimType, PDFType, Predicate, TypeCheck,
+    TypeCheckError,
+};
 use std::rc::Rc;
+
+fn mk_pages_check() -> Rc<TypeCheck> {
+    let pred = ChoicePred(
+        String::from("Pages not present."),
+        vec![PDFObjT::Name(NameT::new(Vec::from("Pages")))],
+    );
+    Rc::new(TypeCheck::new_refined(
+        Rc::new(PDFType::PrimType(PDFPrimType::Name)),
+        Rc::new(pred),
+    ))
+}
+
+fn mk_count_typchk() -> Rc<TypeCheck> {
+    Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
+        PDFPrimType::Integer,
+    ))))
+}
+
+fn mk_indirect_typchk() -> Rc<TypeCheck> {
+    Rc::new(TypeCheck::new_refined(
+        Rc::new(PDFType::Array {
+            elem: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))),
+            size: None,
+        }),
+        Rc::new(ReferencePredicate),
+    ))
+}
+
+pub fn root_page_tree() -> Rc<TypeCheck> {
+    let pages = DictEntry {
+        key: Vec::from("Type"),
+        chk: mk_pages_check(), // this must be a NameT
+        opt: DictKeySpec::Required,
+    };
+    let count = DictEntry {
+        key: Vec::from("Count"),
+        chk: mk_count_typchk(),
+        opt: DictKeySpec::Required,
+    };
+    let kids = DictEntry {
+        key: Vec::from("Kids"),
+        chk: Rc::new(TypeCheck::new_all(
+            Rc::new(PDFType::Disjunct(vec![page_type(), non_root_page_tree()])),
+            None,
+            IndirectSpec::Required,
+        )),
+        opt: DictKeySpec::Required,
+    };
+    let parent = DictEntry {
+        key: Vec::from("Parent"),
+        chk: mk_indirect_typchk(),
+        opt: DictKeySpec::Forbidden,
+    };
+    return Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![
+        pages, count, kids, parent,
+    ]))))
+}
+
+pub fn non_root_page_tree() -> Rc<TypeCheck> {
+    let pages = DictEntry {
+        key: Vec::from("Type"),
+        chk: mk_pages_check(), // this must be a NameT
+        opt: DictKeySpec::Required,
+    };
+    let count = DictEntry {
+        key: Vec::from("Count"),
+        chk: mk_count_typchk(),
+        opt: DictKeySpec::Required,
+    };
+    let kids = DictEntry {
+        key: Vec::from("Kids"),
+        chk: Rc::new(TypeCheck::new_all(
+            Rc::new(PDFType::Disjunct(vec![page_type(), non_root_page_tree()])),
+            None,
+            IndirectSpec::Required,
+        )),
+        opt: DictKeySpec::Required,
+    };
+    let parent = DictEntry {
+        key: Vec::from("Parent"),
+        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Disjunct(vec![
+            non_root_page_tree(),
+            root_page_tree(),
+        ])))),
+        opt: DictKeySpec::Required,
+    };
+    return Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![
+        pages, count, kids, parent,
+    ]))))
+}
 
 struct PageTreePredicate;
 impl Predicate for PageTreePredicate {
