@@ -321,4 +321,36 @@ mod test_name_tree {
         let typ = catalog_type();
         assert_eq!(check_type(&ctxt, Rc::new(obj), typ), None);
     }
+
+    #[test]
+    fn test_catalog_2() {
+        let mut ctxt = mk_new_context();
+        let i1 = IndirectT::new(
+            2,
+            0,
+            Rc::new(LocatedVal::new(PDFObjT::Integer(IntegerT::new(5)), 0, 1)),
+        );
+        let l1 = LocatedVal::new(i1, 0, 4);
+
+        let i2 = IndirectT::new(
+            3,
+            0,
+            Rc::new(LocatedVal::new(
+                PDFObjT::Dict(DictT::new(BTreeMap::new())),
+                0,
+                1,
+            )),
+        );
+        let l2 = LocatedVal::new(i2, 0, 4);
+        ctxt.register_obj(&l1);
+        ctxt.register_obj(&l2);
+        let v = Vec::from(
+            "<</Type/Catalog/Pages 2 0 R/Lang(en-AU) /StructTreeRoot 75 0 R/MarkInfo<</Marked true>>>>"
+            .as_bytes(),
+        );
+        let mut pb = ParseBuffer::new(v);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let typ = catalog_type();
+        assert_eq!(check_type(&ctxt, Rc::new(obj), typ), None);
+    }
 }

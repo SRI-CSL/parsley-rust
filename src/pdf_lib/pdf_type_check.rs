@@ -581,6 +581,7 @@ pub fn check_type(
                 }
             },
             (obj, _, _) => {
+                println!("{:?} {:?}", c, obj);
                 result = Some(TypeCheckError::TypeMismatch(
                     Rc::clone(&c.typ),
                     type_of(obj),

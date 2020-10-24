@@ -1,13 +1,32 @@
+use super::pdf_obj::PDFObjT;
 use crate::pdf_lib::common_data_structures::structures::{
     mk_generic_array_typchk, mk_generic_dict_typchk, mk_generic_indirect_array_typchk,
     mk_generic_indirect_dict_typchk, mk_name_check, mk_rectangle_typchk,
 };
 use crate::pdf_lib::page_tree::{non_root_page_tree, page_tree, root_page_tree};
+use crate::pdf_lib::pdf_prim::NameT;
 use crate::pdf_lib::pdf_type_check::{
-    mk_date_typchk, DictEntry, DictKeySpec, IndirectSpec, PDFPrimType, PDFType, TypeCheck,
+    mk_date_typchk, ChoicePred, DictEntry, DictKeySpec, IndirectSpec, PDFPrimType, PDFType,
+    TypeCheck,
 };
 use std::rc::Rc;
 
+fn mk_tabs_typchk() -> Rc<TypeCheck> {
+    let pred = ChoicePred(
+        String::from("Invalid PageLayout"),
+        vec![
+            PDFObjT::Name(NameT::new(Vec::from("R"))),
+            PDFObjT::Name(NameT::new(Vec::from("C"))),
+            PDFObjT::Name(NameT::new(Vec::from("S"))),
+            PDFObjT::Name(NameT::new(Vec::from("A"))),
+            PDFObjT::Name(NameT::new(Vec::from("W"))),
+        ],
+    );
+    Rc::new(TypeCheck::new_refined(
+        Rc::new(PDFType::PrimType(PDFPrimType::Name)),
+        Rc::new(pred),
+    ))
+}
 pub fn page_type() -> Rc<TypeCheck> {
     let typ = DictEntry {
         key: Vec::from("Type"),
@@ -16,14 +35,17 @@ pub fn page_type() -> Rc<TypeCheck> {
     };
     let parent = DictEntry {
         key: Vec::from("Parent"),
-        chk: Rc::new(TypeCheck::new_all(
-            Rc::new(PDFType::Disjunct(vec![
-                root_page_tree(),
-                non_root_page_tree(),
-            ])),
-            None,
-            IndirectSpec::Required,
-        )),
+        chk: mk_generic_indirect_dict_typchk(),
+        /* FIXME
+         * */
+        //chk: Rc::new(TypeCheck::new_all(
+        //Rc::new(PDFType::Disjunct(vec![
+        //root_page_tree(),
+        //non_root_page_tree(),
+        //])),
+        //None,
+        //IndirectSpec::Required,
+        //)),
         opt: DictKeySpec::Required,
     };
     let lastmodified = DictEntry {
@@ -68,7 +90,10 @@ pub fn page_type() -> Rc<TypeCheck> {
     };
     let contents = DictEntry {
         key: Vec::from("Contents"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Disjunct(vec![])))), // Fix me
+        /* FIXME
+         * */
+        //chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Disjunct(vec![])))), // Fix me
+        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))),
         opt: DictKeySpec::Optional,
     };
     let rotate = DictEntry {
@@ -107,7 +132,7 @@ pub fn page_type() -> Rc<TypeCheck> {
     };
     let annots = DictEntry {
         key: Vec::from("Annots"),
-        chk: mk_generic_array_typchk(),
+        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))), // FIXME
         opt: DictKeySpec::Optional,
     };
     let aa = DictEntry {
@@ -134,7 +159,8 @@ pub fn page_type() -> Rc<TypeCheck> {
     };
     let id = DictEntry {
         key: Vec::from("ID"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))), // Fixme
+        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))), // FIXME
+        // This needs to be a byte stream, indirect reference preferred. Disjunction needed.
         opt: DictKeySpec::Optional,
     };
     let pz = DictEntry {
@@ -151,7 +177,7 @@ pub fn page_type() -> Rc<TypeCheck> {
     };
     let tabs = DictEntry {
         key: Vec::from("Tabs"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))), // Fixme values can be R, C, S, A, W
+        chk: mk_tabs_typchk(),
         opt: DictKeySpec::Optional,
     };
     let templateinstantiated = DictEntry {
@@ -232,7 +258,8 @@ pub fn page_type() -> Rc<TypeCheck> {
 mod test_page {
     use super::super::super::pcore::parsebuffer::{LocatedVal, ParseBuffer};
     use super::super::pdf_obj::{parse_pdf_obj, IndirectT, PDFObjContext, PDFObjT};
-    use super::super::pdf_prim::IntegerT;
+    use crate::pdf_lib::pdf_obj::DictT;
+    use std::collections::BTreeMap;
 
     use super::super::pdf_type_check::check_type;
     use super::page_type;
@@ -243,16 +270,159 @@ mod test_page {
     #[test]
     fn test_page() {
         let mut ctxt = mk_new_context();
-        //let v = Vec::from("<</Type /Pages /Kids [4 0 R  10 0 R 24 0 R ] /Count 3
-        // >>".as_bytes());
         let v = Vec::from("<</Type /Page /Parent 4 0 R /MediaBox [0 0 612 792] /Resources  <</Font <</F3 7 0 R /F5 9 0 R /F7 11 0 R >>   >>          /Contents 12 0 R /Annots [23 0 R 24 0 R ]       >> ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let i = IndirectT::new(
             4,
             0,
-            Rc::new(LocatedVal::new(PDFObjT::Integer(IntegerT::new(5)), 0, 1)),
+            Rc::new(LocatedVal::new(
+                PDFObjT::Dict(DictT::new(BTreeMap::new())),
+                0,
+                1,
+            )),
         );
         let l = LocatedVal::new(i, 0, 4);
+        ctxt.register_obj(&l);
+        let i = IndirectT::new(
+            23,
+            0,
+            Rc::new(LocatedVal::new(
+                PDFObjT::Dict(DictT::new(BTreeMap::new())),
+                0,
+                1,
+            )),
+        );
+        let l = LocatedVal::new(i, 0, 4);
+        ctxt.register_obj(&l);
+        let i = IndirectT::new(
+            24,
+            0,
+            Rc::new(LocatedVal::new(
+                PDFObjT::Dict(DictT::new(BTreeMap::new())),
+                0,
+                1,
+            )),
+        );
+        let l = LocatedVal::new(i, 0, 4);
+        ctxt.register_obj(&l);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+
+        let typ = page_type();
+        assert_eq!(check_type(&ctxt, Rc::new(obj), typ), None);
+    }
+    #[test]
+    fn test_another_page() {
+        let mut ctxt = mk_new_context();
+
+        let catalog = Vec::from("<<
+        /Type /Pages
+        /Count 118
+        /Kids [ 3 0 R 4 0 R 5 0 R 6 0 R 7 0 R 8 0 R 9 0 R 10 0 R 11 0 R 12 0 R 13 0 R 14 0 R 15 0 R 16 0 R 17 0 R 18 0 R 19 0 R 20 0 R 21 0 R 22 0 R 23 0 R 24 0 R 25 0 R 26 0 R 27 0 R 28 0 R 29 0 R 30 0 R 31 0 R 32 0 R 33 0 R 34 0 R 35 0 R 36 0 R 37 0 R 38 0 R 39 0 R 40 0 R 41 0 R 42 0 R 43 0 R 44 0 R 45 0 R 46 0 R 47 0 R 48 0 R 49 0 R 50 0 R 51 0 R 52 0 R 53 0 R 54 0 R 55 0 R 56 0 R 57 0 R 58 0 R 59 0 R 60 0 R 61 0 R 62 0 R 63 0 R 64 0 R 65 0 R 66 0 R 67 0 R 68 0 R 69 0 R 70 0 R 71 0 R 72 0 R 73 0 R 74 0 R 75 0 R 76 0 R 77 0 R 78 0 R 79 0 R 80 0 R 81 0 R 82 0 R 83 0 R 84 0 R 85 0 R 86 0 R 87 0 R 88 0 R 89 0 R 90 0 R 91 0 R 92 0 R 93 0 R 94 0 R 95 0 R 96 0 R 97 0 R 98 0 R 99 0 R 100 0 R 101 0 R 102 0 R 103 0 R 104 0 R 105 0 R 106 0 R 107 0 R 108 0 R 109 0 R 110 0 R 111 0 R 112 0 R 113 0 R 114 0 R 115 0 R 116 0 R 117 0 R 118 0 R 119 0 R 120 0 R ]
+        >>
+        ".as_bytes());
+
+        let page_obj = Vec::from(
+            "
+        <<
+        /CropBox [ 0 0 792 612 ]
+        /Annots 741 0 R
+        /Parent 1 0 R
+        /StructParents 127
+        /Contents 750 0 R
+        /Rotate 0
+        /BleedBox [ 0 0 792 612 ]
+        /ArtBox [ 0 0 792 612 ]
+        /Group 759 0 R
+        /MediaBox [ 0 0 792 612 ]
+        /TrimBox [ 0 0 792 612 ]
+        /Resources <<
+        /XObject <<
+        /Im0 170 0 R
+        /Fm0 462 0 R
+        >>
+        /Shading <<
+        /Sh0 176 0 R
+        >>
+        /ColorSpace <<
+        /CS0 172 0 R
+        /CS1 172 0 R
+        >>
+        /Font <<
+        /TT0 184 0 R
+        /TT1 180 0 R
+        /TT2 188 0 R
+        /TT3 196 0 R
+        /C2_0 200 0 R
+        /C2_1 207 0 R
+        /C2_2 258 0 R
+        >>
+        /ProcSet [ /PDF /Text /ImageC ]
+        /ExtGState <<
+        /GS0 221 0 R
+        /GS1 222 0 R
+        /GS2 387 0 R
+        /GS3 464 0 R
+        >>
+        >>
+        /Type /Page
+        >>
+        "
+            .as_bytes(),
+        );
+
+        let v = Vec::from(
+            "<<
+        /CropBox [ 0 0 792 612 ]
+        /Annots 39 0 R
+        /Parent 1 0 R
+        /StructParents 68
+        /Contents 48 0 R
+        /Rotate 0
+        /BleedBox [ 0 0 792 612 ]
+        /ArtBox [ 0 0 792 612 ]
+        /MediaBox [ 0 0 792 612 ]
+        /TrimBox [ 0 0 792 612 ]
+        /Resources <<
+        /XObject <<
+        /Im0 170 0 R
+        >>
+        /Shading <<
+        /Sh0 176 0 R
+        >>
+        /ColorSpace <<
+        /CS0 172 0 R
+        /CS1 172 0 R
+        >>
+        /Font <<
+        /TT0 180 0 R
+        /TT1 184 0 R
+        /TT2 188 0 R
+        /TT3 1884 0 R
+        /TT4 192 0 R
+        /C2_0 207 0 R
+        /C2_1 2021 0 R
+        >>
+        /ProcSet [ /PDF /Text /ImageC ]
+        /ExtGState <<
+        /GS0 221 0 R
+        /GS1 222 0 R
+        >>
+        >>
+        /Type /Page
+        >>
+        "
+            .as_bytes(),
+        );
+        let mut catalog_pb = ParseBuffer::new(catalog);
+        let mut page_pb = ParseBuffer::new(page_obj);
+        let mut pb = ParseBuffer::new(v);
+        let obj1 = parse_pdf_obj(&mut ctxt, &mut catalog_pb).unwrap();
+        let i1 = IndirectT::new(1, 0, Rc::new(obj1));
+        let l = LocatedVal::new(i1, 0, 4);
+        ctxt.register_obj(&l);
+        let obj2 = parse_pdf_obj(&mut ctxt, &mut page_pb).unwrap();
+        let i2 = IndirectT::new(39, 0, Rc::new(obj2));
+        let l = LocatedVal::new(i2, 0, 4);
         ctxt.register_obj(&l);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
 
