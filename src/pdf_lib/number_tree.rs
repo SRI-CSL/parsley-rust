@@ -1,6 +1,8 @@
 use super::super::pcore::parsebuffer::LocatedVal;
 use super::pdf_obj::PDFObjT;
-use crate::pdf_lib::pdf_type_check::{PDFType, Predicate, TypeCheck, TypeCheckError};
+use crate::pdf_lib::pdf_type_check::{
+    PDFType, Predicate, TypeCheck, TypeCheckContext, TypeCheckError,
+};
 use std::rc::Rc;
 
 struct NumberTreePredicate;
@@ -99,11 +101,13 @@ impl Predicate for NumberTreePredicate {
         }
     }
 }
-pub fn number_tree() -> Rc<TypeCheck> {
-    Rc::new(TypeCheck::new_refined(
+pub fn number_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+    TypeCheck::new_refined(
+        &mut tctx,
+        "numbertree",
         Rc::new(PDFType::Any),
         Rc::new(NumberTreePredicate),
-    ))
+    )
 }
 struct ReferencePredicate;
 
@@ -170,7 +174,7 @@ impl Predicate for NumsPredicate {
 mod test_number_tree {
     use super::super::super::pcore::parsebuffer::ParseBuffer;
     use super::super::pdf_obj::{parse_pdf_obj, PDFObjContext};
-    use super::super::pdf_type_check::{check_type, TypeCheckError};
+    use super::super::pdf_type_check::{check_type, TypeCheckContext, TypeCheckError};
     use super::number_tree;
     use std::rc::Rc;
 
@@ -178,17 +182,19 @@ mod test_number_tree {
     #[test]
     fn test_root_names_false_num_tree() {
         let mut ctxt = mk_new_context();
+        let mut tctx = TypeCheckContext::new();
 
         let v = Vec::from("<</Type /Pages /Kids [4 0 R  10 0 R 24 0 R ] /Count 3 >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         //let v = Vec::from("<< /Count 3 >>".as_bytes());
-        let typ = number_tree();
-        assert_eq!(check_type(&ctxt, Rc::new(obj), typ), None);
+        let typ = number_tree(&mut tctx);
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), None);
     }
     #[test]
     fn test_root_names_true_num_tree() {
         let mut ctxt = mk_new_context();
+        let mut tctx = TypeCheckContext::new();
 
         let v = Vec::from(
             "<< /Nums [1 25 0 R
@@ -205,20 +211,21 @@ mod test_number_tree {
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         //let v = Vec::from("<< /Count 3 >>".as_bytes());
-        let typ = number_tree();
-        assert_eq!(check_type(&ctxt, Rc::new(obj), typ), None);
+        let typ = number_tree(&mut tctx);
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), None);
     }
     #[test]
     fn test_root_kids_false_num_tree() {
         let mut ctxt = mk_new_context();
+        let mut tctx = TypeCheckContext::new();
 
         let v = Vec::from("<</Type /Pages /Count 3 >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         //let v = Vec::from("<< /Count 3 >>".as_bytes());
-        let typ = number_tree();
+        let typ = number_tree(&mut tctx);
         assert_eq!(
-            check_type(&ctxt, Rc::new(obj), typ),
+            check_type(&ctxt, &tctx, Rc::new(obj), typ),
             Some(TypeCheckError::PredicateError(
                 "Missing field or Forbidden field".to_string()
             ))
@@ -227,6 +234,7 @@ mod test_number_tree {
     #[test]
     fn test_root_kids_forbidden_num_tree() {
         let mut ctxt = mk_new_context();
+        let mut tctx = TypeCheckContext::new();
 
         let v = Vec::from(
             "<< /Nums [1 25 0 R
@@ -243,13 +251,14 @@ mod test_number_tree {
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         //let v = Vec::from("<< /Count 3 >>".as_bytes());
-        let typ = number_tree();
-        assert_eq!(check_type(&ctxt, Rc::new(obj), typ), None);
+        let typ = number_tree(&mut tctx);
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), None);
     }
 
     #[test]
     fn test_root_kids_true_num_tree() {
         let mut ctxt = mk_new_context();
+        let mut tctx = TypeCheckContext::new();
 
         let v = Vec::from(
             "<</Kids [2 0 R
@@ -262,13 +271,14 @@ mod test_number_tree {
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         //let v = Vec::from("<< /Count 3 >>".as_bytes());
-        let typ = number_tree();
-        assert_eq!(check_type(&ctxt, Rc::new(obj), typ), None);
+        let typ = number_tree(&mut tctx);
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), None);
     }
 
     #[test]
     fn test_intermediate_true_num_tree() {
         let mut ctxt = mk_new_context();
+        let mut tctx = TypeCheckContext::new();
 
         let v = Vec::from(
             "<</Limits [1 2]
@@ -286,13 +296,14 @@ mod test_number_tree {
         );
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
-        let typ = number_tree();
-        assert_eq!(check_type(&ctxt, Rc::new(obj), typ), None);
+        let typ = number_tree(&mut tctx);
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), None);
     }
 
     #[test]
     fn test_intermediate_false_num_tree() {
         let mut ctxt = mk_new_context();
+        let mut tctx = TypeCheckContext::new();
 
         let v = Vec::from(
             "<</Limits [(Hafnium) 1]
@@ -310,9 +321,9 @@ mod test_number_tree {
         );
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
-        let typ = number_tree();
+        let typ = number_tree(&mut tctx);
         assert_eq!(
-            check_type(&ctxt, Rc::new(obj), typ),
+            check_type(&ctxt, &tctx, Rc::new(obj), typ),
             Some(TypeCheckError::PredicateError(
                 "TypeMismatch: Integer expected".to_string()
             ))
@@ -322,6 +333,7 @@ mod test_number_tree {
     #[test]
     fn test_forbidden_false_num_tree() {
         let mut ctxt = mk_new_context();
+        let mut tctx = TypeCheckContext::new();
 
         let v = Vec::from(
             "<</Limits [(Hafnium) (Aluminum)]
@@ -347,9 +359,9 @@ mod test_number_tree {
         );
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
-        let typ = number_tree();
+        let typ = number_tree(&mut tctx);
         assert_eq!(
-            check_type(&ctxt, Rc::new(obj), typ),
+            check_type(&ctxt, &tctx, Rc::new(obj), typ),
             Some(TypeCheckError::PredicateError(
                 "TypeMismatch: Integer expected".to_string()
             ))
@@ -359,6 +371,7 @@ mod test_number_tree {
     #[test]
     fn test_leaves_true_num_tree() {
         let mut ctxt = mk_new_context();
+        let mut tctx = TypeCheckContext::new();
 
         let v = Vec::from(
             "<</Limits [2 3]
@@ -375,13 +388,14 @@ mod test_number_tree {
         );
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
-        let typ = number_tree();
-        assert_eq!(check_type(&ctxt, Rc::new(obj), typ), None);
+        let typ = number_tree(&mut tctx);
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), None);
     }
 
     #[test]
     fn test_leaves_false_num_tree() {
         let mut ctxt = mk_new_context();
+        let mut tctx = TypeCheckContext::new();
 
         let v = Vec::from(
             "<</Limits [2 (abcd)]
@@ -398,9 +412,9 @@ mod test_number_tree {
         );
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
-        let typ = number_tree();
+        let typ = number_tree(&mut tctx);
         assert_eq!(
-            check_type(&ctxt, Rc::new(obj), typ),
+            check_type(&ctxt, &tctx, Rc::new(obj), typ),
             Some(TypeCheckError::PredicateError(
                 "TypeMismatch: Integer expected".to_string()
             ))
@@ -410,6 +424,7 @@ mod test_number_tree {
     #[test]
     fn test_leaves_forbidden_false_num_tree() {
         let mut ctxt = mk_new_context();
+        let mut tctx = TypeCheckContext::new();
 
         let v = Vec::from(
             "<</Limits [1 3]
@@ -435,9 +450,9 @@ mod test_number_tree {
         );
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
-        let typ = number_tree();
+        let typ = number_tree(&mut tctx);
         assert_eq!(
-            check_type(&ctxt, Rc::new(obj), typ),
+            check_type(&ctxt, &tctx, Rc::new(obj), typ),
             Some(TypeCheckError::PredicateError(
                 "Missing field or Forbidden field".to_string()
             ))

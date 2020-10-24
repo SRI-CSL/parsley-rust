@@ -1,16 +1,17 @@
 use super::pdf_obj::PDFObjT;
 use crate::pdf_lib::common_data_structures::structures::{
-    mk_generic_array_typchk, mk_generic_dict_typchk, mk_generic_indirect_array_typchk,
-    mk_generic_indirect_dict_typchk, mk_name_check, mk_rectangle_typchk,
+    mk_generic_array_typchk, mk_generic_dict_typchk, mk_generic_indirect_dict_typchk,
+    mk_name_check, mk_rectangle_typchk,
 };
 use crate::pdf_lib::page_tree::{non_root_page_tree, page_tree, root_page_tree};
 use crate::pdf_lib::pdf_prim::NameT;
 use crate::pdf_lib::pdf_type_check::{
     mk_date_typchk, ChoicePred, DictEntry, DictKeySpec, PDFPrimType, PDFType, TypeCheck,
+    TypeCheckContext,
 };
 use std::rc::Rc;
 
-fn mk_tabs_typchk() -> Rc<TypeCheck> {
+fn mk_tabs_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     let pred = ChoicePred(
         String::from("Invalid PageLayout"),
         vec![
@@ -21,20 +22,22 @@ fn mk_tabs_typchk() -> Rc<TypeCheck> {
             PDFObjT::Name(NameT::new(Vec::from("W"))),
         ],
     );
-    Rc::new(TypeCheck::new_refined(
+    TypeCheck::new_refined(
+        &mut tctx,
+        "",
         Rc::new(PDFType::PrimType(PDFPrimType::Name)),
         Rc::new(pred),
-    ))
+    )
 }
-pub fn page_type() -> Rc<TypeCheck> {
+pub fn page_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     let typ = DictEntry {
         key: Vec::from("Type"),
-        chk: mk_name_check("Not a Page".to_string(), "Page".to_string()),
+        chk: mk_name_check("Not a Page".to_string(), "Page".to_string(), &mut tctx),
         opt: DictKeySpec::Required,
     };
     let parent = DictEntry {
         key: Vec::from("Parent"),
-        chk: mk_generic_indirect_dict_typchk(),
+        chk: mk_generic_indirect_dict_typchk(&mut tctx),
         /* FIXME
          * */
         //chk: Rc::new(TypeCheck::new_all(
@@ -49,42 +52,42 @@ pub fn page_type() -> Rc<TypeCheck> {
     };
     let lastmodified = DictEntry {
         key: Vec::from("LastModified"),
-        chk: mk_date_typchk(),
+        chk: mk_date_typchk(&mut tctx),
         opt: DictKeySpec::Optional,
     };
     let resources = DictEntry {
         key: Vec::from("Resources"),
-        chk: mk_generic_dict_typchk(),
+        chk: mk_generic_dict_typchk(&mut tctx),
         opt: DictKeySpec::Optional,
     };
     let mediabox = DictEntry {
         key: Vec::from("MediaBox"),
-        chk: mk_rectangle_typchk(),
+        chk: mk_rectangle_typchk(&mut tctx),
         opt: DictKeySpec::Optional,
     };
     let cropbox = DictEntry {
         key: Vec::from("CropBox"),
-        chk: mk_rectangle_typchk(),
+        chk: mk_rectangle_typchk(&mut tctx),
         opt: DictKeySpec::Optional,
     };
     let bleedbox = DictEntry {
         key: Vec::from("BleedBox"),
-        chk: mk_rectangle_typchk(),
+        chk: mk_rectangle_typchk(&mut tctx),
         opt: DictKeySpec::Optional,
     };
     let trimbox = DictEntry {
         key: Vec::from("TrimBox"),
-        chk: mk_rectangle_typchk(),
+        chk: mk_rectangle_typchk(&mut tctx),
         opt: DictKeySpec::Optional,
     };
     let artbox = DictEntry {
         key: Vec::from("ArtBox"),
-        chk: mk_rectangle_typchk(),
+        chk: mk_rectangle_typchk(&mut tctx),
         opt: DictKeySpec::Optional,
     };
     let boxcolorinfo = DictEntry {
         key: Vec::from("BoxColorInfo"),
-        chk: mk_generic_dict_typchk(),
+        chk: mk_generic_dict_typchk(&mut tctx),
         opt: DictKeySpec::Optional,
     };
     let contents = DictEntry {
@@ -92,167 +95,183 @@ pub fn page_type() -> Rc<TypeCheck> {
         /* FIXME
          * */
         //chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Disjunct(vec![])))), // Fix me
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))),
+        chk: TypeCheck::new(&mut tctx, "contents", Rc::new(PDFType::Any)),
         opt: DictKeySpec::Optional,
     };
     let rotate = DictEntry {
         key: Vec::from("Rotate"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
-            PDFPrimType::Integer,
-        )))),
+        chk: TypeCheck::new(
+            &mut tctx,
+            "rotate",
+            Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
+        ),
         opt: DictKeySpec::Optional,
     };
     let group = DictEntry {
         key: Vec::from("Group"),
-        chk: mk_generic_dict_typchk(),
+        chk: mk_generic_dict_typchk(&mut tctx),
         opt: DictKeySpec::Optional,
     };
     let thumb = DictEntry {
         key: Vec::from("Thumb"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Stream(vec![])))),
+        chk: TypeCheck::new(&mut tctx, "thumb", Rc::new(PDFType::Stream(vec![]))),
         opt: DictKeySpec::Optional,
     };
     let b = DictEntry {
         key: Vec::from("B"),
-        chk: mk_generic_array_typchk(),
+        chk: mk_generic_array_typchk(&mut tctx),
         opt: DictKeySpec::Optional,
     };
     let dur = DictEntry {
         key: Vec::from("Dur"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
-            PDFPrimType::Integer,
-        )))),
+        chk: TypeCheck::new(
+            &mut tctx,
+            "dur",
+            Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
+        ),
         opt: DictKeySpec::Optional,
     };
     let trans = DictEntry {
         key: Vec::from("Trans"),
-        chk: mk_generic_dict_typchk(),
+        chk: mk_generic_dict_typchk(&mut tctx),
         opt: DictKeySpec::Optional,
     };
     let annots = DictEntry {
         key: Vec::from("Annots"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))), /* FIXME: It can be a single
-                                                              * indirect reference or an array
-                                                              * of them */
+        chk: TypeCheck::new(&mut tctx, "annots", Rc::new(PDFType::Any)), /* FIXME: It can be a
+                                                                          * single
+                                                                          * indirect reference
+                                                                          * or an array
+                                                                          * of them */
         opt: DictKeySpec::Optional,
     };
     let aa = DictEntry {
         key: Vec::from("AA"),
-        chk: mk_generic_dict_typchk(),
+        chk: mk_generic_dict_typchk(&mut tctx),
         opt: DictKeySpec::Optional,
     };
     let metadata = DictEntry {
         key: Vec::from("Metadata"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Stream(vec![])))),
+        chk: TypeCheck::new(&mut tctx, "metadata", Rc::new(PDFType::Stream(vec![]))),
         opt: DictKeySpec::Optional,
     };
     let pieceinfo = DictEntry {
         key: Vec::from("PieceInfo"),
-        chk: mk_generic_dict_typchk(),
+        chk: mk_generic_dict_typchk(&mut tctx),
         opt: DictKeySpec::Optional,
     };
     let structparents = DictEntry {
         key: Vec::from("StructParents"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
-            PDFPrimType::Integer,
-        )))),
+        chk: TypeCheck::new(
+            &mut tctx,
+            "structparents",
+            Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
+        ),
         opt: DictKeySpec::Optional,
     };
     let id = DictEntry {
         key: Vec::from("ID"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))), // FIXME
+        chk: TypeCheck::new(&mut tctx, "id", Rc::new(PDFType::Any)), // FIXME
         // This needs to be a byte stream, indirect reference preferred. Disjunction needed.
         opt: DictKeySpec::Optional,
     };
     let pz = DictEntry {
         key: Vec::from("PZ"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
-            PDFPrimType::Integer,
-        )))),
+        chk: TypeCheck::new(
+            &mut tctx,
+            "pz",
+            Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
+        ),
         opt: DictKeySpec::Optional,
     };
     let separationinfo = DictEntry {
         key: Vec::from("SeparationInfo"),
-        chk: mk_generic_dict_typchk(),
+        chk: mk_generic_dict_typchk(&mut tctx),
         opt: DictKeySpec::Optional,
     };
     let tabs = DictEntry {
         key: Vec::from("Tabs"),
-        chk: mk_tabs_typchk(),
+        chk: mk_tabs_typchk(&mut tctx),
         opt: DictKeySpec::Optional,
     };
     let templateinstantiated = DictEntry {
         key: Vec::from("TemplateInstantiated"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))),
+        chk: TypeCheck::new(&mut tctx, "templateinst", Rc::new(PDFType::Any)),
         opt: DictKeySpec::Optional,
     };
     let pressteps = DictEntry {
         key: Vec::from("PresSteps"),
-        chk: mk_generic_dict_typchk(),
+        chk: mk_generic_dict_typchk(&mut tctx),
         opt: DictKeySpec::Optional,
     };
     let userunit = DictEntry {
         key: Vec::from("UserUnit"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
-            PDFPrimType::Integer,
-        )))),
+        chk: TypeCheck::new(
+            &mut tctx,
+            "userunit",
+            Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
+        ),
         opt: DictKeySpec::Optional,
     };
     let vp = DictEntry {
         key: Vec::from("VP"),
-        chk: mk_generic_array_typchk(),
+        chk: mk_generic_array_typchk(&mut tctx),
         opt: DictKeySpec::Optional,
     };
     let af = DictEntry {
         key: Vec::from("AF"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))),
+        chk: TypeCheck::new(&mut tctx, "af", Rc::new(PDFType::Any)),
         opt: DictKeySpec::Optional,
     };
     let outputintents = DictEntry {
         key: Vec::from("OutputIntents"),
-        chk: mk_generic_array_typchk(),
+        chk: mk_generic_array_typchk(&mut tctx),
         opt: DictKeySpec::Optional,
     };
     let dpart = DictEntry {
         key: Vec::from("DpPart"),
-        chk: mk_generic_dict_typchk(),
+        chk: mk_generic_dict_typchk(&mut tctx),
         opt: DictKeySpec::Optional,
     };
-    Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![
-        typ,
-        parent,
-        lastmodified,
-        resources,
-        mediabox,
-        cropbox,
-        bleedbox,
-        trimbox,
-        artbox,
-        boxcolorinfo,
-        contents,
-        rotate,
-        group,
-        thumb,
-        b,
-        dur,
-        trans,
-        annots,
-        aa,
-        metadata,
-        pieceinfo,
-        structparents,
-        id,
-        pz,
-        separationinfo,
-        tabs,
-        templateinstantiated,
-        pressteps,
-        userunit,
-        vp,
-        af,
-        outputintents,
-        dpart,
-    ]))))
+    TypeCheck::new(
+        &mut tctx,
+        "page",
+        Rc::new(PDFType::Dict(vec![
+            typ,
+            parent,
+            lastmodified,
+            resources,
+            mediabox,
+            cropbox,
+            bleedbox,
+            trimbox,
+            artbox,
+            boxcolorinfo,
+            contents,
+            rotate,
+            group,
+            thumb,
+            b,
+            dur,
+            trans,
+            annots,
+            aa,
+            metadata,
+            pieceinfo,
+            structparents,
+            id,
+            pz,
+            separationinfo,
+            tabs,
+            templateinstantiated,
+            pressteps,
+            userunit,
+            vp,
+            af,
+            outputintents,
+            dpart,
+        ])),
+    )
 }
 #[cfg(test)]
 
@@ -262,7 +281,7 @@ mod test_page {
     use crate::pdf_lib::pdf_obj::DictT;
     use std::collections::BTreeMap;
 
-    use super::super::pdf_type_check::check_type;
+    use super::super::pdf_type_check::{check_type, TypeCheckContext};
     use super::page_type;
     use std::rc::Rc;
 
@@ -271,6 +290,7 @@ mod test_page {
     #[test]
     fn test_page() {
         let mut ctxt = mk_new_context();
+        let mut tctx = TypeCheckContext::new();
         let v = Vec::from("<</Type /Page /Parent 4 0 R /MediaBox [0 0 612 792] /Resources  <</Font <</F3 7 0 R /F5 9 0 R /F7 11 0 R >>   >>          /Contents 12 0 R /Annots [23 0 R 24 0 R ]       >> ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let i = IndirectT::new(
@@ -286,8 +306,8 @@ mod test_page {
         ctxt.register_obj(&l);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
 
-        let typ = page_type();
-        assert_eq!(check_type(&ctxt, Rc::new(obj), typ), None);
+        let typ = page_type(&mut tctx);
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), None);
     }
     #[test]
     fn test_another_page() {
@@ -392,6 +412,7 @@ mod test_page {
         "
             .as_bytes(),
         );
+        let mut tctx = TypeCheckContext::new();
         let mut catalog_pb = ParseBuffer::new(catalog);
         let mut page_pb = ParseBuffer::new(page_obj);
         let mut pb = ParseBuffer::new(v);
@@ -405,7 +426,7 @@ mod test_page {
         ctxt.register_obj(&l);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
 
-        let typ = page_type();
-        assert_eq!(check_type(&ctxt, Rc::new(obj), typ), None);
+        let typ = page_type(&mut tctx);
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), None);
     }
 }

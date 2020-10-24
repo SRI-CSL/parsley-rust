@@ -4,98 +4,122 @@ use crate::pdf_lib::page::page_type;
 use crate::pdf_lib::pdf_prim::NameT;
 use crate::pdf_lib::pdf_type_check::{
     ChoicePred, DictEntry, DictKeySpec, IndirectSpec, PDFPrimType, PDFType, Predicate, TypeCheck,
-    TypeCheckError,
+    TypeCheckContext, TypeCheckError,
 };
 use std::rc::Rc;
 
-fn mk_pages_check() -> Rc<TypeCheck> {
+fn mk_pages_check(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     let pred = ChoicePred(
         String::from("Pages not present."),
         vec![PDFObjT::Name(NameT::new(Vec::from("Pages")))],
     );
-    Rc::new(TypeCheck::new_refined(
+    TypeCheck::new_refined(
+        &mut tctx,
+        "pages",
         Rc::new(PDFType::PrimType(PDFPrimType::Name)),
         Rc::new(pred),
-    ))
+    )
 }
 
-fn mk_count_typchk() -> Rc<TypeCheck> {
-    Rc::new(TypeCheck::new(Rc::new(PDFType::PrimType(
-        PDFPrimType::Integer,
-    ))))
+fn mk_count_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+    TypeCheck::new(
+        &mut tctx,
+        "count",
+        Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
+    )
 }
 
-fn mk_indirect_typchk() -> Rc<TypeCheck> {
-    Rc::new(TypeCheck::new_refined(
+fn mk_indirect_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+    TypeCheck::new_refined(
+        &mut tctx,
+        "indirect",
         Rc::new(PDFType::Array {
-            elem: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))),
+            elem: TypeCheck::new(&mut tctx, "elem", Rc::new(PDFType::Any)),
             size: None,
         }),
         Rc::new(ReferencePredicate),
-    ))
+    )
 }
 
-pub fn root_page_tree() -> Rc<TypeCheck> {
+pub fn root_page_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     let pages = DictEntry {
         key: Vec::from("Type"),
-        chk: mk_pages_check(), // this must be a NameT
+        chk: mk_pages_check(&mut tctx), // this must be a NameT
         opt: DictKeySpec::Required,
     };
     let count = DictEntry {
         key: Vec::from("Count"),
-        chk: mk_count_typchk(),
+        chk: mk_count_typchk(&mut tctx),
         opt: DictKeySpec::Required,
     };
     let kids = DictEntry {
         key: Vec::from("Kids"),
-        chk: Rc::new(TypeCheck::new_all(
-            Rc::new(PDFType::Disjunct(vec![page_type(), non_root_page_tree()])),
+        chk: TypeCheck::new_all(
+            &mut tctx,
+            "kids",
+            Rc::new(PDFType::Disjunct(vec![
+                page_type(&mut tctx),
+                non_root_page_tree(&mut tctx),
+            ])),
             None,
             IndirectSpec::Required,
-        )),
+        ),
         opt: DictKeySpec::Required,
     };
     let parent = DictEntry {
         key: Vec::from("Parent"),
-        chk: mk_indirect_typchk(),
+        chk: mk_indirect_typchk(&mut tctx),
         opt: DictKeySpec::Forbidden,
     };
-    Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![
-        pages, count, kids, parent,
-    ]))))
+    TypeCheck::new(
+        &mut tctx,
+        "",
+        Rc::new(PDFType::Dict(vec![pages, count, kids, parent])),
+    )
 }
 
-pub fn non_root_page_tree() -> Rc<TypeCheck> {
+pub fn non_root_page_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     let pages = DictEntry {
         key: Vec::from("Type"),
-        chk: mk_pages_check(), // this must be a NameT
+        chk: mk_pages_check(&mut tctx), // this must be a NameT
         opt: DictKeySpec::Required,
     };
     let count = DictEntry {
         key: Vec::from("Count"),
-        chk: mk_count_typchk(),
+        chk: mk_count_typchk(&mut tctx),
         opt: DictKeySpec::Required,
     };
     let kids = DictEntry {
         key: Vec::from("Kids"),
-        chk: Rc::new(TypeCheck::new_all(
-            Rc::new(PDFType::Disjunct(vec![page_type(), non_root_page_tree()])),
+        chk: TypeCheck::new_all(
+            &mut tctx,
+            "kids",
+            Rc::new(PDFType::Disjunct(vec![
+                page_type(&mut tctx),
+                non_root_page_tree(&mut tctx),
+            ])),
             None,
             IndirectSpec::Required,
-        )),
+        ),
         opt: DictKeySpec::Required,
     };
     let parent = DictEntry {
         key: Vec::from("Parent"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Disjunct(vec![
-            non_root_page_tree(),
-            root_page_tree(),
-        ])))),
+        chk: TypeCheck::new(
+            &mut tctx,
+            "parent",
+            Rc::new(PDFType::Disjunct(vec![
+                non_root_page_tree(&mut tctx),
+                root_page_tree(&mut tctx),
+            ])),
+        ),
         opt: DictKeySpec::Required,
     };
-    Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![
-        pages, count, kids, parent,
-    ]))))
+    TypeCheck::new(
+        &mut tctx,
+        "",
+        Rc::new(PDFType::Dict(vec![pages, count, kids, parent])),
+    )
 }
 
 struct PageTreePredicate;
@@ -173,11 +197,13 @@ impl Predicate for PageTreePredicate {
     }
 }
 
-pub fn page_tree() -> Rc<TypeCheck> {
-    Rc::new(TypeCheck::new_refined(
+pub fn page_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+    TypeCheck::new_refined(
+        &mut tctx,
+        "pagetree",
         Rc::new(PDFType::Any),
         Rc::new(PageTreePredicate),
-    ))
+    )
 }
 
 struct ReferencePredicate;
@@ -207,7 +233,7 @@ impl Predicate for ReferencePredicate {
 mod test_page_tree {
     use super::super::super::pcore::parsebuffer::ParseBuffer;
     use super::super::pdf_obj::{parse_pdf_obj, PDFObjContext};
-    use super::super::pdf_type_check::{check_type, TypeCheckError};
+    use super::super::pdf_type_check::{check_type, TypeCheck, TypeCheckContext, TypeCheckError};
     use super::page_tree;
     use std::rc::Rc;
 
@@ -216,6 +242,7 @@ mod test_page_tree {
     // Page Tree Non-Root Node Tests
     #[test]
     fn test_non_root_page_tree() {
+        let mut tctx = TypeCheckContext::new();
         let mut ctxt = mk_new_context();
         //let v = Vec::from("<</Type /Pages /Kids [4 0 R  10 0 R 24 0 R ] /Count 3
         // >>".as_bytes());
@@ -223,9 +250,9 @@ mod test_page_tree {
         //let v = Vec::from("<< /Count 3 >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
-        let typ = page_tree();
+        let typ = page_tree(&mut tctx);
         assert_eq!(
-            check_type(&ctxt, Rc::new(obj), typ),
+            check_type(&ctxt, &tctx, Rc::new(obj), typ),
             Some(TypeCheckError::PredicateError(
                 "Integer expected".to_string()
             ))
@@ -233,6 +260,7 @@ mod test_page_tree {
     }
     #[test]
     fn test_non_root_page_tree_not_wrong() {
+        let mut tctx = TypeCheckContext::new();
         let mut ctxt = mk_new_context();
         //let v = Vec::from("<</Type /Pages /Kids [4 0 R  10 0 R 24 0 R ] /Count 3
         // >>".as_bytes());
@@ -242,9 +270,9 @@ mod test_page_tree {
         //let v = Vec::from("<< /Count 3 >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
-        let typ = page_tree();
+        let typ = page_tree(&mut tctx);
         assert_eq!(
-            check_type(&ctxt, Rc::new(obj), typ),
+            check_type(&ctxt, &tctx, Rc::new(obj), typ),
             Some(TypeCheckError::PredicateError(
                 "Integer expected".to_string()
             ))
@@ -254,14 +282,15 @@ mod test_page_tree {
 
     #[test]
     fn test_page_tree_not_wrong() {
+        let mut tctx = TypeCheckContext::new();
         let mut ctxt = mk_new_context();
         let v = Vec::from("<</Type /Pages /Kids [4 0 R  10 0 R 24 0 R ] /Count 3 >>".as_bytes());
         //let v = Vec::from("<< /Count 3 >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
-        let typ = page_tree();
+        let typ = page_tree(&mut tctx);
         assert_eq!(
-            check_type(&ctxt, Rc::new(obj), typ),
+            check_type(&ctxt, &tctx, Rc::new(obj), typ),
             Some(TypeCheckError::PredicateError(
                 "Integer expected".to_string()
             ))

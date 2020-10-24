@@ -6,11 +6,13 @@ use std::rc::Rc;
 // Line 822
 
 /* Basic type structure of PDF objects */
-pub fn mk_date_typchk() -> Rc<TypeCheck> {
-    Rc::new(TypeCheck::new_refined(
+pub fn mk_date_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+    TypeCheck::new_refined(
+        &mut tctx,
+        "date",
         Rc::new(PDFType::PrimType(PDFPrimType::String)),
         Rc::new(DateStringPredicate),
-    ))
+    )
 }
 struct DateStringPredicate;
 impl Predicate for DateStringPredicate {
@@ -202,12 +204,17 @@ impl TypeCheck {
     }
 
     // the constructor with an indirect specification
-    pub fn new_indirect(typ: Rc<PDFType>, indirect: IndirectSpec) -> Self {
-        Self {
+    pub fn new_indirect(
+        tctx: &mut TypeCheckContext, name: &str, typ: Rc<PDFType>, indirect: IndirectSpec,
+    ) -> Rc<Self> {
+        let tc = Rc::new(TypeCheckRep {
+            name: String::from(name),
             typ,
             pred: None,
             indirect,
-        }
+        });
+        tctx.register(&tc);
+        Rc::new(TypeCheck::Rep(tc))
     }
 
     pub fn new_all(
@@ -225,9 +232,7 @@ impl TypeCheck {
     }
 
     // a type check named after another one, used for recursion
-    pub fn new_named(name: &str) -> Rc<Self> {
-        Rc::new(TypeCheck::Named(String::from(name)))
-    }
+    pub fn new_named(name: &str) -> Rc<Self> { Rc::new(TypeCheck::Named(String::from(name))) }
 }
 
 impl PartialEq for TypeCheckRep {
@@ -807,14 +812,22 @@ mod test_pdf_types {
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
 
         let mut tctx = TypeCheckContext::new();
-        let typ = TypeCheck::new(&mut tctx, "integer", Rc::new(PDFType::PrimType(PDFPrimType::Integer)));
+        let typ = TypeCheck::new(
+            &mut tctx,
+            "integer",
+            Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
+        );
         assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), None);
 
         // parse a reference pointing to that object
         let v = Vec::from("2 0 R".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
-        let typ = TypeCheck::new(&mut tctx, "integer", Rc::new(PDFType::PrimType(PDFPrimType::Integer)));
+        let typ = TypeCheck::new(
+            &mut tctx,
+            "integer",
+            Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
+        );
         assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), None);
 
         // require a referenced object
@@ -891,7 +904,11 @@ mod test_pdf_types {
             chk: Rc::clone(&rect),
             opt: DictKeySpec::Optional,
         };
-        let typ = TypeCheck::new(&mut tctx, "dict", Rc::new(PDFType::Dict(vec![ent1, ent2, ent3])));
+        let typ = TypeCheck::new(
+            &mut tctx,
+            "dict",
+            Rc::new(PDFType::Dict(vec![ent1, ent2, ent3])),
+        );
         assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), None);
     }
 
@@ -1069,14 +1086,20 @@ mod test_pdf_types {
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let mut tctx = TypeCheckContext::new();
         let chk = mk_ascii_typchk(&mut tctx);
-        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), Rc::clone(&chk)), None);
+        assert_eq!(
+            check_type(&ctxt, &tctx, Rc::new(obj), Rc::clone(&chk)),
+            None
+        );
 
         //                     (                )
         let v: Vec<u8> = vec![40, 129, 255, 0, 41];
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let err = TypeCheckError::PredicateError("Not an ASCII string.".to_string());
-        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), Rc::clone(&chk)), Some(err));
+        assert_eq!(
+            check_type(&ctxt, &tctx, Rc::new(obj), Rc::clone(&chk)),
+            Some(err)
+        );
     }
 
     #[test]
@@ -1180,14 +1203,25 @@ mod test_pdf_types {
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
 
         let mut tctx = TypeCheckContext::new();
-        let chk = TypeCheck::new_refined(&mut tctx, "ascii", Rc::new(PDFType::Any), Rc::new(AsciiStringPredicate));
-        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), Rc::clone(&chk)), None);
+        let chk = TypeCheck::new_refined(
+            &mut tctx,
+            "ascii",
+            Rc::new(PDFType::Any),
+            Rc::new(AsciiStringPredicate),
+        );
+        assert_eq!(
+            check_type(&ctxt, &tctx, Rc::new(obj), Rc::clone(&chk)),
+            None
+        );
 
         let v = Vec::from("10".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let err = TypeCheckError::PredicateError("Not an ASCII string.".to_string());
-        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), Rc::clone(&chk)), Some(err));
+        assert_eq!(
+            check_type(&ctxt, &tctx, Rc::new(obj), Rc::clone(&chk)),
+            Some(err)
+        );
     }
 
     struct OrTestPredicate;
@@ -1220,13 +1254,24 @@ mod test_pdf_types {
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
 
         let mut tctx = TypeCheckContext::new();
-        let chk = TypeCheck::new_refined(&mut tctx, "or", Rc::new(PDFType::Any), Rc::new(OrTestPredicate));
-        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), Rc::clone(&chk)), None);
+        let chk = TypeCheck::new_refined(
+            &mut tctx,
+            "or",
+            Rc::new(PDFType::Any),
+            Rc::new(OrTestPredicate),
+        );
+        assert_eq!(
+            check_type(&ctxt, &tctx, Rc::new(obj), Rc::clone(&chk)),
+            None
+        );
 
         let v = Vec::from("10".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
-        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), Rc::clone(&chk)), None);
+        assert_eq!(
+            check_type(&ctxt, &tctx, Rc::new(obj), Rc::clone(&chk)),
+            None
+        );
     }
 
     #[test]
@@ -1276,9 +1321,11 @@ mod test_pdf_types {
 
         let mut tctx = TypeCheckContext::new();
         let rect = mk_rectangle_typchk(&mut tctx);
-        let int = TypeCheck::new(&mut tctx, "int", Rc::new(PDFType::PrimType(
-            PDFPrimType::Integer,
-        )));
+        let int = TypeCheck::new(
+            &mut tctx,
+            "int",
+            Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
+        );
         let date = mk_date_typchk(&mut tctx);
 
         let opts = vec![Rc::clone(&rect), Rc::clone(&int), Rc::clone(&date)];
@@ -1316,9 +1363,11 @@ mod test_pdf_types {
         let obj = Rc::new(parse_pdf_obj(&mut ctxt, &mut pb).unwrap());
 
         let mut tctx = TypeCheckContext::new();
-        let int = TypeCheck::new(&mut tctx, "int", Rc::new(PDFType::PrimType(
-            PDFPrimType::Integer,
-        )));
+        let int = TypeCheck::new(
+            &mut tctx,
+            "int",
+            Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
+        );
         let date = mk_date_typchk(&mut tctx);
 
         let opts = vec![Rc::clone(&date), Rc::clone(&int)];
@@ -1342,9 +1391,11 @@ mod test_pdf_types {
         let obj = Rc::new(parse_pdf_obj(&mut ctxt, &mut pb).unwrap());
 
         let mut tctx = TypeCheckContext::new();
-        let int = TypeCheck::new(&mut tctx, "int", Rc::new(PDFType::PrimType(
-            PDFPrimType::Integer,
-        )));
+        let int = TypeCheck::new(
+            &mut tctx,
+            "int",
+            Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
+        );
         let date = mk_date_typchk(&mut tctx);
         let rect = mk_rectangle_typchk(&mut tctx);
 
@@ -1406,12 +1457,18 @@ mod test_pdf_types {
         let v = Vec::from("<</Key [1 2 3 4]>>".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let obj = Rc::new(parse_pdf_obj(&mut ctxt, &mut pb).unwrap());
-        assert_eq!(check_type(&ctxt, &tctx, Rc::clone(&obj), Rc::clone(&typ)), None);
+        assert_eq!(
+            check_type(&ctxt, &tctx, Rc::clone(&obj), Rc::clone(&typ)),
+            None
+        );
 
         // recursive case: the value is another (rect | dict)
         let v = Vec::from("<</Key <</Key [1 2 3 4]>>>>".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let obj = Rc::new(parse_pdf_obj(&mut ctxt, &mut pb).unwrap());
-        assert_eq!(check_type(&ctxt, &tctx, Rc::clone(&obj), Rc::clone(&typ)), None);
+        assert_eq!(
+            check_type(&ctxt, &tctx, Rc::clone(&obj), Rc::clone(&typ)),
+            None
+        );
     }
 }
