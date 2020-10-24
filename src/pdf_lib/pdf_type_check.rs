@@ -241,7 +241,7 @@ impl PartialEq for TypeCheckRep {
 
 impl std::fmt::Debug for TypeCheckRep {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("TypeCheck").field("typ", &self.typ).finish()
+        f.debug_struct("TypeCheck").field("name", &self.name).field("typ", &self.typ).finish()
     }
 }
 
@@ -535,12 +535,16 @@ fn resolve(
 ) -> Result<Rc<TypeCheckRep>, TypeCheckError> {
     match chk.as_ref() {
         TypeCheck::Rep(r) => Ok(Rc::clone(r)),
-        TypeCheck::Named(n) => match tctx.lookup(n) {
-            None => Err(TypeCheckError::UnknownTypeCheck(format!(
-                "Unknown typecheck {}",
-                n
-            ))),
-            Some(rep) => Ok(Rc::clone(&rep)),
+        TypeCheck::Named(n) =>
+        {
+            println!(" resolving {}", n);
+            match tctx.lookup(n) {
+                None => Err(TypeCheckError::UnknownTypeCheck(format!(
+                    "Unknown typecheck {}",
+                    n
+                ))),
+                Some(rep) => Ok(Rc::clone(&rep)),
+            }
         },
     }
 }
@@ -590,6 +594,8 @@ pub fn check_type(
             Err(err) => return Some(err),
         };
 
+        println!("\nchecking {:?}\n against {:?}\n\n", o.val(), c);
+
         // reset for the next check.
         result = None;
 
@@ -598,6 +604,7 @@ pub fn check_type(
             (PDFObjT::Reference(refnc), _, IndirectSpec::Allowed)
             | (PDFObjT::Reference(refnc), _, IndirectSpec::Required) => {
                 // lookup referenced object and add it to the queue
+                println!(" resolving id {:?} ...\n", refnc.id());
                 match ctxt.lookup_obj(refnc.id()) {
                     Some(obj) => {
                         // Remove any Required indirect from the check.
