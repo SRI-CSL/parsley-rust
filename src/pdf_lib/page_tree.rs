@@ -60,7 +60,7 @@ pub fn root_page_tree() -> Rc<TypeCheck> {
         chk: mk_indirect_typchk(),
         opt: DictKeySpec::Forbidden,
     };
-    return Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![
+    Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![
         pages, count, kids, parent,
     ]))))
 }
@@ -93,7 +93,7 @@ pub fn non_root_page_tree() -> Rc<TypeCheck> {
         ])))),
         opt: DictKeySpec::Required,
     };
-    return Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![
+    Rc::new(TypeCheck::new(Rc::new(PDFType::Dict(vec![
         pages, count, kids, parent,
     ]))))
 }

@@ -6,8 +6,7 @@ use crate::pdf_lib::common_data_structures::structures::{
 use crate::pdf_lib::page_tree::{non_root_page_tree, page_tree, root_page_tree};
 use crate::pdf_lib::pdf_prim::NameT;
 use crate::pdf_lib::pdf_type_check::{
-    mk_date_typchk, ChoicePred, DictEntry, DictKeySpec, IndirectSpec, PDFPrimType, PDFType,
-    TypeCheck,
+    mk_date_typchk, ChoicePred, DictEntry, DictKeySpec, PDFPrimType, PDFType, TypeCheck,
 };
 use std::rc::Rc;
 
@@ -132,7 +131,9 @@ pub fn page_type() -> Rc<TypeCheck> {
     };
     let annots = DictEntry {
         key: Vec::from("Annots"),
-        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))), // FIXME
+        chk: Rc::new(TypeCheck::new(Rc::new(PDFType::Any))), /* FIXME: It can be a single
+                                                              * indirect reference or an array
+                                                              * of them */
         opt: DictKeySpec::Optional,
     };
     let aa = DictEntry {
@@ -274,28 +275,6 @@ mod test_page {
         let mut pb = ParseBuffer::new(v);
         let i = IndirectT::new(
             4,
-            0,
-            Rc::new(LocatedVal::new(
-                PDFObjT::Dict(DictT::new(BTreeMap::new())),
-                0,
-                1,
-            )),
-        );
-        let l = LocatedVal::new(i, 0, 4);
-        ctxt.register_obj(&l);
-        let i = IndirectT::new(
-            23,
-            0,
-            Rc::new(LocatedVal::new(
-                PDFObjT::Dict(DictT::new(BTreeMap::new())),
-                0,
-                1,
-            )),
-        );
-        let l = LocatedVal::new(i, 0, 4);
-        ctxt.register_obj(&l);
-        let i = IndirectT::new(
-            24,
             0,
             Rc::new(LocatedVal::new(
                 PDFObjT::Dict(DictT::new(BTreeMap::new())),
