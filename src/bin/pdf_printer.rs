@@ -825,7 +825,9 @@ fn parse_file(test_file: &str) {
     dump_root(&fi, &ctxt, &root_obj);
     let mut tctx = TypeCheckContext::new();
     let typ = catalog_type(&mut tctx);
-    println!("{:?}", check_type(&ctxt, &tctx, Rc::clone(root_obj), typ));
+    if check_type(&ctxt, &tctx, Rc::clone(root_obj), typ) != None {
+        exit_log!(fi.file_offset(root_obj.loc_start()), "Type Check Error");
+    }
 }
 
 fn print_usage(code: i32) {

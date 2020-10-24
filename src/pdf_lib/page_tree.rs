@@ -66,7 +66,7 @@ pub fn root_page_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     };
     TypeCheck::new(
         tctx,
-        "",
+        "root-page-tree",
         Rc::new(PDFType::Dict(vec![pages, count, kids, parent])),
     )
 }
@@ -84,7 +84,7 @@ pub fn non_root_page_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     };
     let opts = Rc::new(PDFType::Disjunct(vec![
         page_type(tctx),
-        non_root_page_tree(tctx),
+        TypeCheck::new_named("root-non-page-tree"),
     ]));
     let kids = DictEntry {
         key: Vec::from("Kids"),
@@ -92,8 +92,8 @@ pub fn non_root_page_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
         opt: DictKeySpec::Required,
     };
     let opts_2 = Rc::new(PDFType::Disjunct(vec![
-        non_root_page_tree(tctx),
-        root_page_tree(tctx),
+        TypeCheck::new_named("root-non-page-tree"),
+        TypeCheck::new_named("root-page-tree"),
     ]));
     let parent = DictEntry {
         key: Vec::from("Parent"),
@@ -102,7 +102,7 @@ pub fn non_root_page_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     };
     TypeCheck::new(
         tctx,
-        "",
+        "root-non-page-tree",
         Rc::new(PDFType::Dict(vec![pages, count, kids, parent])),
     )
 }
@@ -218,7 +218,7 @@ impl Predicate for ReferencePredicate {
 mod test_page_tree {
     use super::super::super::pcore::parsebuffer::ParseBuffer;
     use super::super::pdf_obj::{parse_pdf_obj, PDFObjContext};
-    use super::super::pdf_type_check::{check_type, TypeCheck, TypeCheckContext, TypeCheckError};
+    use super::super::pdf_type_check::{check_type, TypeCheckContext, TypeCheckError};
     use super::page_tree;
     use std::rc::Rc;
 

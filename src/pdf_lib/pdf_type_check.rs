@@ -598,7 +598,6 @@ pub fn check_type(
             (PDFObjT::Reference(refnc), _, IndirectSpec::Allowed)
             | (PDFObjT::Reference(refnc), _, IndirectSpec::Required) => {
                 // lookup referenced object and add it to the queue
-                println!("{:?} {:?}", o.val(), c.typ());
                 match ctxt.lookup_obj(refnc.id()) {
                     Some(obj) => {
                         // Remove any Required indirect from the check.
@@ -733,7 +732,7 @@ pub fn check_type(
                 }
             },
             (obj, _, _) => {
-                println!("{:?} {:?}", c, obj);
+                println!("Mismatch {:?} {:?}", c, obj);
                 result = Some(TypeCheckError::TypeMismatch(
                     Rc::clone(&c.typ),
                     type_of(obj),

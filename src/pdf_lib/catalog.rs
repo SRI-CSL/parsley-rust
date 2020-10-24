@@ -274,11 +274,9 @@ pub fn catalog_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
 #[cfg(test)]
 mod test_name_tree {
     use super::super::super::pcore::parsebuffer::{LocatedVal, ParseBuffer};
-    use super::super::pdf_obj::{parse_pdf_obj, DictT, IndirectT, PDFObjContext, PDFObjT};
-    use super::super::pdf_prim::IntegerT;
+    use super::super::pdf_obj::{parse_pdf_obj, IndirectT, PDFObjContext};
     use super::super::pdf_type_check::{check_type, TypeCheckContext};
     use super::catalog_type;
-    use std::collections::BTreeMap;
     use std::rc::Rc;
 
     fn mk_new_context() -> PDFObjContext { PDFObjContext::new(10) }
@@ -287,22 +285,58 @@ mod test_name_tree {
     fn test_catalog() {
         let mut ctxt = mk_new_context();
         let mut tctx = TypeCheckContext::new();
-        let i1 = IndirectT::new(
-            2,
-            0,
-            Rc::new(LocatedVal::new(PDFObjT::Integer(IntegerT::new(5)), 0, 1)),
+        let v = Vec::from("<</Type /Pages /Kids [4 0 R] /Count 1 >>".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let i1 = IndirectT::new(2, 0, Rc::new(obj));
+        let v = Vec::from(
+            "<<
+        /CropBox [ 0 0 792 612 ]
+        /Annots 39 0 R
+        /Parent 1 0 R
+        /StructParents 68
+        /Contents 48 0 R
+        /Rotate 0
+        /BleedBox [ 0 0 792 612 ]
+        /ArtBox [ 0 0 792 612 ]
+        /MediaBox [ 0 0 792 612 ]
+        /TrimBox [ 0 0 792 612 ]
+        /Resources <<
+        /XObject <<
+        /Im0 170 0 R
+        >>
+        /Shading <<
+        /Sh0 176 0 R
+        >>
+        /ColorSpace <<
+        /CS0 172 0 R
+        /CS1 172 0 R
+        >>
+        /Font <<
+        /TT0 180 0 R
+        /TT1 184 0 R
+        /TT2 188 0 R
+        /TT3 1884 0 R
+        /TT4 192 0 R
+        /C2_0 207 0 R
+        /C2_1 2021 0 R
+        >>
+        /ProcSet [ /PDF /Text /ImageC ]
+        /ExtGState <<
+        /GS0 221 0 R
+        /GS1 222 0 R
+        >>
+        >>
+        /Type /Page
+        >>
+        "
+            .as_bytes(),
         );
+        let mut pb = ParseBuffer::new(v);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let l1 = LocatedVal::new(i1, 0, 4);
 
-        let i2 = IndirectT::new(
-            3,
-            0,
-            Rc::new(LocatedVal::new(
-                PDFObjT::Dict(DictT::new(BTreeMap::new())),
-                0,
-                1,
-            )),
-        );
+        let i2 = IndirectT::new(4, 0, Rc::new(obj));
         let l2 = LocatedVal::new(i2, 0, 4);
         ctxt.register_obj(&l1);
         ctxt.register_obj(&l2);
@@ -312,39 +346,6 @@ mod test_name_tree {
   /PageMode /UseOutlines
   /Outlines 3 0 R
   >>"
-            .as_bytes(),
-        );
-        let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
-        let typ = catalog_type(&mut tctx);
-        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), None);
-    }
-
-    #[test]
-    fn test_catalog_2() {
-        let mut ctxt = mk_new_context();
-        let mut tctx = TypeCheckContext::new();
-        let i1 = IndirectT::new(
-            2,
-            0,
-            Rc::new(LocatedVal::new(PDFObjT::Integer(IntegerT::new(5)), 0, 1)),
-        );
-        let l1 = LocatedVal::new(i1, 0, 4);
-
-        let i2 = IndirectT::new(
-            3,
-            0,
-            Rc::new(LocatedVal::new(
-                PDFObjT::Dict(DictT::new(BTreeMap::new())),
-                0,
-                1,
-            )),
-        );
-        let l2 = LocatedVal::new(i2, 0, 4);
-        ctxt.register_obj(&l1);
-        ctxt.register_obj(&l2);
-        let v = Vec::from(
-            "<</Type/Catalog/Pages 2 0 R/Lang(en-AU) /StructTreeRoot 75 0 R/MarkInfo<</Marked true>>>>"
             .as_bytes(),
         );
         let mut pb = ParseBuffer::new(v);
