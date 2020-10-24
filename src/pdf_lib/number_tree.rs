@@ -103,7 +103,7 @@ impl Predicate for NumberTreePredicate {
 }
 pub fn number_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     TypeCheck::new_refined(
-        &mut tctx,
+        tctx,
         "numbertree",
         Rc::new(PDFType::Any),
         Rc::new(NumberTreePredicate),

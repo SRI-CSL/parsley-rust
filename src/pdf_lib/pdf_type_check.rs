@@ -8,7 +8,7 @@ use std::rc::Rc;
 /* Basic type structure of PDF objects */
 pub fn mk_date_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     TypeCheck::new_refined(
-        &mut tctx,
+        tctx,
         "date",
         Rc::new(PDFType::PrimType(PDFPrimType::String)),
         Rc::new(DateStringPredicate),
@@ -779,7 +779,7 @@ mod test_pdf_types {
             tctx,
             "rectangle",
             Rc::new(PDFType::Array {
-                elem: elem,
+                elem,
                 size: Some(4),
             }),
         )

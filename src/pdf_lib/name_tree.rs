@@ -139,7 +139,7 @@ impl Predicate for NamesPredicate {
 
 pub fn name_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     TypeCheck::new_refined(
-        &mut tctx,
+        tctx,
         "nametree",
         Rc::new(PDFType::Any),
         Rc::new(NameTreePredicate),

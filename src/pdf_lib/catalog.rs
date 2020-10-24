@@ -14,14 +14,7 @@ use std::rc::Rc;
 
 fn mk_af_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     let elem = mk_generic_dict_typchk(tctx);
-    TypeCheck::new(
-        tctx,
-        "",
-        Rc::new(PDFType::Array {
-            elem: elem,
-            size: None,
-        }),
-    )
+    TypeCheck::new(tctx, "", Rc::new(PDFType::Array { elem, size: None }))
 }
 fn mk_pagemode_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     let pred = ChoicePred(
@@ -69,11 +62,7 @@ pub fn catalog_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     // pagelabels, names, dests, viewerpreferences, pagelayout,
     let typ = DictEntry {
         key: Vec::from("Type"),
-        chk: mk_name_check(
-            "Not a Catalog".to_string(),
-            "Catalog".to_string(),
-            tctx,
-        ),
+        chk: mk_name_check("Not a Catalog".to_string(), "Catalog".to_string(), tctx),
         opt: DictKeySpec::Required,
     };
     let version = DictEntry {
@@ -137,14 +126,7 @@ pub fn catalog_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     let gdict = mk_generic_dict_typchk(tctx);
     let openaction = DictEntry {
         key: Vec::from("OpenAction"),
-        chk: TypeCheck::new(
-            tctx,
-            "",
-            Rc::new(PDFType::Disjunct(vec![
-                garray,
-                gdict,
-            ])),
-        ),
+        chk: TypeCheck::new(tctx, "", Rc::new(PDFType::Disjunct(vec![garray, gdict]))),
         opt: DictKeySpec::Optional,
     };
     let aa = DictEntry {
@@ -183,11 +165,7 @@ pub fn catalog_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     };
     let lang = DictEntry {
         key: Vec::from("Lang"),
-        chk: TypeCheck::new(
-            tctx,
-            "",
-            Rc::new(PDFType::PrimType(PDFPrimType::String)),
-        ),
+        chk: TypeCheck::new(tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::String))),
         opt: DictKeySpec::Optional,
     };
     let spiderinfo = DictEntry {

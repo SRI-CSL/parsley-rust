@@ -11,15 +11,15 @@ pub mod structures {
 
     // A generic dictionary, typically used for out-of-scope
     // dictionary values.
-    pub fn mk_generic_dict_typchk(mut tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
-        TypeCheck::new(&mut tctx, "", Rc::new(PDFType::Dict(vec![])))
+    pub fn mk_generic_dict_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+        TypeCheck::new(tctx, "", Rc::new(PDFType::Dict(vec![])))
     }
 
     // A generic dictionary that is required to be an indirect reference,
     // typically used for out-of-scope dictionary values.
-    pub fn mk_generic_indirect_dict_typchk(mut tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+    pub fn mk_generic_indirect_dict_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
         TypeCheck::new_indirect(
-            &mut tctx,
+            tctx,
             "",
             Rc::new(PDFType::Dict(vec![])),
             IndirectSpec::Required,
@@ -28,104 +28,96 @@ pub mod structures {
 
     // A generic array, typically used for out-of-scope
     // array values.
-    pub fn mk_generic_array_typchk(mut tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
-        TypeCheck::new(
-            &mut tctx,
-            "",
-            Rc::new(PDFType::Array {
-                elem: TypeCheck::new(&mut tctx, "", Rc::new(PDFType::Any)),
-                size: None,
-            }),
-        )
+    pub fn mk_generic_array_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+        let elem = TypeCheck::new(tctx, "", Rc::new(PDFType::Any));
+        TypeCheck::new(tctx, "", Rc::new(PDFType::Array { elem, size: None }))
     }
 
     // A generic array that is required to be an indirect reference,
     // typically used for out-of-scope array values.
-    pub fn mk_generic_indirect_array_typchk(mut tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+    pub fn mk_generic_indirect_array_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
         TypeCheck::new_indirect(
-            &mut tctx,
+            tctx,
             "",
             Rc::new(PDFType::Dict(vec![])),
             IndirectSpec::Required,
         )
     }
 
-    pub fn mk_name_check(
-        msg: String, name: String, mut tctx: &mut TypeCheckContext,
-    ) -> Rc<TypeCheck> {
+    pub fn mk_name_check(msg: String, name: String, tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
         let pred = ChoicePred(msg, vec![PDFObjT::Name(NameT::new(Vec::from(name)))]);
         TypeCheck::new_refined(
-            &mut tctx,
+            tctx,
             "",
             Rc::new(PDFType::PrimType(PDFPrimType::Name)),
             Rc::new(pred),
         )
     }
-    pub fn mk_rectangle_typchk(mut tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+    pub fn mk_rectangle_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
         let elem = TypeCheck::new(tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Integer)));
         TypeCheck::new(
-            &mut tctx,
+            tctx,
             "rectangle",
             Rc::new(PDFType::Array {
-                elem: elem,
+                elem,
                 size: Some(4),
             }),
         )
     }
 
-    pub fn name_dictionary(mut tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+    pub fn name_dictionary(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
         let dests = DictEntry {
             key: Vec::from("Dests"),
-            chk: name_tree(&mut tctx), // this must be a NameT
+            chk: name_tree(tctx), // this must be a NameT
             opt: DictKeySpec::Optional,
         };
         let ap = DictEntry {
             key: Vec::from("AP"),
-            chk: name_tree(&mut tctx), // this must be a NameT
+            chk: name_tree(tctx), // this must be a NameT
             opt: DictKeySpec::Optional,
         };
         let javascript = DictEntry {
             key: Vec::from("JavaScript"),
-            chk: name_tree(&mut tctx), // this must be a NameT
+            chk: name_tree(tctx), // this must be a NameT
             opt: DictKeySpec::Optional,
         };
         let pages = DictEntry {
             key: Vec::from("Pages"),
-            chk: name_tree(&mut tctx), // this must be a NameT
+            chk: name_tree(tctx), // this must be a NameT
             opt: DictKeySpec::Optional,
         };
         let templates = DictEntry {
             key: Vec::from("Templates"),
-            chk: name_tree(&mut tctx), // this must be a NameT
+            chk: name_tree(tctx), // this must be a NameT
             opt: DictKeySpec::Optional,
         };
         let ids = DictEntry {
             key: Vec::from("IDS"),
-            chk: name_tree(&mut tctx), // this must be a NameT
+            chk: name_tree(tctx), // this must be a NameT
             opt: DictKeySpec::Optional,
         };
         let urls = DictEntry {
             key: Vec::from("URLS"),
-            chk: name_tree(&mut tctx), // this must be a NameT
+            chk: name_tree(tctx), // this must be a NameT
             opt: DictKeySpec::Optional,
         };
         let embedded_files = DictEntry {
             key: Vec::from("EmbeddedFiles"),
-            chk: name_tree(&mut tctx), // this must be a NameT
+            chk: name_tree(tctx), // this must be a NameT
             opt: DictKeySpec::Optional,
         };
         let alternate_presentations = DictEntry {
             key: Vec::from("AlternatePresentations"),
-            chk: name_tree(&mut tctx), // this must be a NameT
+            chk: name_tree(tctx), // this must be a NameT
             opt: DictKeySpec::Optional,
         };
         let renditions = DictEntry {
             key: Vec::from("Renditions"),
-            chk: name_tree(&mut tctx), // this must be a NameT
+            chk: name_tree(tctx), // this must be a NameT
             opt: DictKeySpec::Optional,
         };
         TypeCheck::new(
-            &mut tctx,
+            tctx,
             "namedictionary",
             Rc::new(PDFType::Dict(vec![
                 dests,
@@ -175,20 +167,18 @@ pub mod structures {
             }
         }
     }
-    pub fn mk_reference_typchk(mut tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+    pub fn mk_reference_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+        let elem = TypeCheck::new(tctx, "", Rc::new(PDFType::Any));
         TypeCheck::new_refined(
-            &mut tctx,
+            tctx,
             "reference",
-            Rc::new(PDFType::Array {
-                elem: TypeCheck::new(&mut tctx, "", Rc::new(PDFType::Any)),
-                size: None,
-            }),
+            Rc::new(PDFType::Array { elem, size: None }),
             Rc::new(ReferencePredicate),
         )
     }
-    pub fn mk_single_reference_typchk(mut tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+    pub fn mk_single_reference_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
         TypeCheck::new_refined(
-            &mut tctx,
+            tctx,
             "single",
             Rc::new(PDFType::Any),
             Rc::new(ReferencePredicate),

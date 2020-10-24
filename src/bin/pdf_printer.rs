@@ -46,7 +46,7 @@ use parsley_rust::pdf_lib::pdf_obj::{IndirectP, PDFObjContext, PDFObjT};
 use parsley_rust::pdf_lib::pdf_streams::{
     ObjStreamP, XrefEntStatus, XrefEntT, XrefStreamP, XrefStreamT,
 };
-use parsley_rust::pdf_lib::pdf_type_check::check_type;
+use parsley_rust::pdf_lib::pdf_type_check::{check_type, TypeCheckContext};
 
 /* from: https://osr.jpl.nasa.gov/wiki/pages/viewpage.action?spaceKey=SD&title=TA2+PDF+Safe+Parser+Evaluation
 
@@ -823,10 +823,9 @@ fn parse_file(test_file: &str) {
     };
 
     dump_root(&fi, &ctxt, &root_obj);
-    println!(
-        "{:?}",
-        check_type(&ctxt, Rc::clone(root_obj), catalog_type())
-    );
+    let mut tctx = TypeCheckContext::new();
+    let typ = catalog_type(&mut tctx);
+    println!("{:?}", check_type(&ctxt, &tctx, Rc::clone(root_obj), typ));
 }
 
 fn print_usage(code: i32) {
