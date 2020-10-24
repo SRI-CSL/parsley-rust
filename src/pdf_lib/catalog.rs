@@ -13,11 +13,12 @@ use crate::pdf_lib::pdf_type_check::{
 use std::rc::Rc;
 
 fn mk_af_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+    let elem = mk_generic_dict_typchk(tctx);
     TypeCheck::new(
-        &mut tctx,
+        tctx,
         "",
         Rc::new(PDFType::Array {
-            elem: mk_generic_dict_typchk(&mut tctx),
+            elem: elem,
             size: None,
         }),
     )
@@ -35,7 +36,7 @@ fn mk_pagemode_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
         ],
     );
     TypeCheck::new_refined(
-        &mut tctx,
+        tctx,
         "",
         Rc::new(PDFType::PrimType(PDFPrimType::Name)),
         Rc::new(pred),
@@ -54,7 +55,7 @@ fn mk_pagelayout_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
         ],
     );
     TypeCheck::new_refined(
-        &mut tctx,
+        tctx,
         "",
         Rc::new(PDFType::PrimType(PDFPrimType::Name)),
         Rc::new(pred),
@@ -71,92 +72,94 @@ pub fn catalog_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
         chk: mk_name_check(
             "Not a Catalog".to_string(),
             "Catalog".to_string(),
-            &mut tctx,
+            tctx,
         ),
         opt: DictKeySpec::Required,
     };
     let version = DictEntry {
         key: Vec::from("Version"),
-        chk: TypeCheck::new(&mut tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Name))), /* TODO: Maybe make a whitelist of version numbers? */
+        chk: TypeCheck::new(tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Name))), /* TODO: Maybe make a whitelist of version numbers? */
         opt: DictKeySpec::Optional,
     };
     let extensions = DictEntry {
         key: Vec::from("Extensions"),
-        chk: mk_generic_dict_typchk(&mut tctx),
+        chk: mk_generic_dict_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let pages = DictEntry {
         key: Vec::from("Pages"),
-        chk: root_page_tree(&mut tctx),
+        chk: root_page_tree(tctx),
         opt: DictKeySpec::Required,
     };
     let pagelabels = DictEntry {
         key: Vec::from("PageLabels"),
-        chk: number_tree(&mut tctx),
+        chk: number_tree(tctx),
         opt: DictKeySpec::Optional,
     };
     let names = DictEntry {
         key: Vec::from("Names"),
-        chk: name_dictionary(&mut tctx),
+        chk: name_dictionary(tctx),
         opt: DictKeySpec::Optional,
     };
     let dests = DictEntry {
         key: Vec::from("Dests"),
-        chk: mk_generic_indirect_dict_typchk(&mut tctx), // FIXME: indirect dict of names
+        chk: mk_generic_indirect_dict_typchk(tctx), // FIXME: indirect dict of names
         opt: DictKeySpec::Optional,
     };
     let viewerpreferences = DictEntry {
         key: Vec::from("ViewerPreferences"),
-        chk: mk_generic_dict_typchk(&mut tctx),
+        chk: mk_generic_dict_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let pagelayout = DictEntry {
         key: Vec::from("PageLayout"),
-        chk: mk_pagelayout_typchk(&mut tctx),
+        chk: mk_pagelayout_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     //Row 2
     //pagemode, outlines, threads, openaction, aa, uri, acroform,
     let pagemode = DictEntry {
         key: Vec::from("PageMode"),
-        chk: mk_pagemode_typchk(&mut tctx),
+        chk: mk_pagemode_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let outlines = DictEntry {
         key: Vec::from("Outlines"),
-        chk: mk_generic_indirect_dict_typchk(&mut tctx),
+        chk: mk_generic_indirect_dict_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let threads = DictEntry {
         key: Vec::from("Threads"),
-        chk: mk_generic_indirect_array_typchk(&mut tctx),
+        chk: mk_generic_indirect_array_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
+    let garray = mk_generic_array_typchk(tctx);
+    let gdict = mk_generic_dict_typchk(tctx);
     let openaction = DictEntry {
         key: Vec::from("OpenAction"),
         chk: TypeCheck::new(
-            &mut tctx,
+            tctx,
             "",
             Rc::new(PDFType::Disjunct(vec![
-                mk_generic_array_typchk(&mut tctx),
-                mk_generic_dict_typchk(&mut tctx),
+                garray,
+                gdict,
             ])),
         ),
         opt: DictKeySpec::Optional,
     };
     let aa = DictEntry {
         key: Vec::from("AA"),
-        chk: mk_generic_array_typchk(&mut tctx),
+        chk: mk_generic_array_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let uri = DictEntry {
         key: Vec::from("URI"),
-        chk: mk_generic_dict_typchk(&mut tctx),
+        chk: mk_generic_dict_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let acroform = DictEntry {
         key: Vec::from("AcroForm"),
-        chk: mk_generic_dict_typchk(&mut tctx),
+        chk: mk_generic_dict_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
 
@@ -165,23 +168,23 @@ pub fn catalog_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     // pieceinfo, ocproperties,
     let metadata = DictEntry {
         key: Vec::from("Metadata"),
-        chk: TypeCheck::new(&mut tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Bool))), /* FIXME: this needs to be a generic indirect stream */
+        chk: TypeCheck::new(tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Bool))), /* FIXME: this needs to be a generic indirect stream */
         opt: DictKeySpec::Optional,
     };
     let structtreeroot = DictEntry {
         key: Vec::from("StructTreeRoot"),
-        chk: mk_generic_dict_typchk(&mut tctx),
+        chk: mk_generic_dict_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let markinfo = DictEntry {
         key: Vec::from("MarkInfo"),
-        chk: mk_generic_dict_typchk(&mut tctx),
+        chk: mk_generic_dict_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let lang = DictEntry {
         key: Vec::from("Lang"),
         chk: TypeCheck::new(
-            &mut tctx,
+            tctx,
             "",
             Rc::new(PDFType::PrimType(PDFPrimType::String)),
         ),
@@ -189,22 +192,22 @@ pub fn catalog_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     };
     let spiderinfo = DictEntry {
         key: Vec::from("SpiderInfo"),
-        chk: mk_generic_dict_typchk(&mut tctx),
+        chk: mk_generic_dict_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let outputintents = DictEntry {
         key: Vec::from("OutputIntents"),
-        chk: mk_generic_array_typchk(&mut tctx),
+        chk: mk_generic_array_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let pieceinfo = DictEntry {
         key: Vec::from("PieceInfo"),
-        chk: mk_generic_dict_typchk(&mut tctx),
+        chk: mk_generic_dict_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let ocproperties = DictEntry {
         key: Vec::from("OCProperties"),
-        chk: mk_generic_dict_typchk(&mut tctx),
+        chk: mk_generic_dict_typchk(tctx),
         opt: DictKeySpec::Optional, // FIXME: "Required if the document contains optional content"
     };
 
@@ -213,46 +216,46 @@ pub fn catalog_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     // dpartroot])))
     let perms = DictEntry {
         key: Vec::from("Perms"),
-        chk: mk_generic_dict_typchk(&mut tctx),
+        chk: mk_generic_dict_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let legal = DictEntry {
         key: Vec::from("Legal"),
-        chk: mk_generic_dict_typchk(&mut tctx),
+        chk: mk_generic_dict_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let requirements = DictEntry {
         key: Vec::from("Requirements"),
-        chk: mk_generic_array_typchk(&mut tctx), // FIXME: array of dicts
+        chk: mk_generic_array_typchk(tctx), // FIXME: array of dicts
         opt: DictKeySpec::Optional,
     };
     let collection = DictEntry {
         key: Vec::from("Collection"),
-        chk: mk_generic_array_typchk(&mut tctx),
+        chk: mk_generic_array_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let needsrendering = DictEntry {
         key: Vec::from("NeedsRendering"),
-        chk: TypeCheck::new(&mut tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Bool))),
+        chk: TypeCheck::new(tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Bool))),
         opt: DictKeySpec::Optional,
     };
     let dss = DictEntry {
         key: Vec::from("DSS"),
-        chk: mk_generic_dict_typchk(&mut tctx),
+        chk: mk_generic_dict_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let af = DictEntry {
         key: Vec::from("AF"),
-        chk: mk_af_typchk(&mut tctx),
+        chk: mk_af_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let dpartroot = DictEntry {
         key: Vec::from("DPartRoot"),
-        chk: mk_generic_dict_typchk(&mut tctx),
+        chk: mk_generic_dict_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     TypeCheck::new(
-        &mut tctx,
+        tctx,
         "catalog",
         Rc::new(PDFType::Dict(vec![
             typ,
