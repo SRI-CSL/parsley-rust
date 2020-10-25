@@ -40,7 +40,6 @@ impl Predicate for NumberTreePredicate {
             }
             if let Some(a) = mappings.get(&Vec::from("Limits")) {
                 if let PDFObjT::Array(ref s) = a.val() {
-                    println!("Limits {:?}", s);
                     for c in s.objs() {
                         if let PDFObjT::Integer(ref _s1) = c.val() {
                         } else {
@@ -59,7 +58,6 @@ impl Predicate for NumberTreePredicate {
             if let Some(a) = mappings.get(&Vec::from("Kids")) {
                 if let PDFObjT::Array(ref s) = a.val() {
                     for c in s.objs() {
-                        println!("{:?}", c);
                         if let PDFObjT::Reference(ref _s2) = c.val() {
                         } else {
                             return Some(TypeCheckError::PredicateError(
@@ -68,7 +66,6 @@ impl Predicate for NumberTreePredicate {
                         }
                     }
                 } else {
-                    println!("{:?}", a);
                     return Some(TypeCheckError::PredicateError(
                         "Reference wasn't an Array".to_string(),
                     ))

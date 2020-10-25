@@ -3,42 +3,6 @@ use super::pdf_obj::{PDFObjContext, PDFObjT, ReferenceT};
 use std::collections::{BTreeMap, VecDeque};
 use std::rc::Rc;
 
-// Line 822
-
-/* Basic type structure of PDF objects */
-pub fn mk_date_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
-    TypeCheck::new_refined(
-        tctx,
-        "date",
-        Rc::new(PDFType::PrimType(PDFPrimType::String)),
-        Rc::new(DateStringPredicate),
-    )
-}
-struct DateStringPredicate;
-impl Predicate for DateStringPredicate {
-    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
-        /*
-         * PDF spec 7.9.4 defines the date format like:
-         *  (D:YYYYMMDDHHmmSSOHH'mm)
-         */
-        if let PDFObjT::String(ref s) = obj.val() {
-            // regex for Date
-            let re = regex::Regex::new(r"^D:\d{4}(([0][1-9]|[1][0-2])(([0][1-9]|[1-2][0-9]|[3][0-1])(([0-1][0-9]|[2][0-3])(([0-5][0-9])(([0-5][0-9])([+\-Z](([0-1][0-9]'|[2][0-3]')([0-5][0-9])?)?)?)?)?)?)?)?$").unwrap();
-            let date_string = std::str::from_utf8(s).unwrap_or("");
-            if !re.is_match(date_string) {
-                return Some(TypeCheckError::PredicateError(
-                    "Not a Date string.".to_string(),
-                ))
-            }
-            None
-        } else {
-            Some(TypeCheckError::PredicateError(
-                "Not an Date string.".to_string(),
-            ))
-        }
-    }
-}
-
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum PDFPrimType {
     Bool,
@@ -440,7 +404,7 @@ fn unwind(state: &mut State) -> bool {
  * non-empty (i.e. it should not have been modified since the
  * retrieval.) */
 fn return_check(state: &mut State, chk: PendingCheck) {
-    if let Some((pending, next_idx)) = state.get_mut(0) {
+    if let Some((pending, _)) = state.get_mut(0) {
         pending.push_front(chk);
     } else {
         unreachable!()
@@ -580,8 +544,6 @@ pub fn check_type(
             Err(err) => return Some(err),
         };
 
-        //println!("\nchecking {:?}\n against {:?}\n\n", o.val(), c);
-
         // reset for the next check.
         result = None;
 
@@ -590,7 +552,6 @@ pub fn check_type(
             (PDFObjT::Reference(refnc), _, IndirectSpec::Allowed)
             | (PDFObjT::Reference(refnc), _, IndirectSpec::Required) => {
                 // lookup referenced object and add it to the queue
-                //println!(" resolving id {:?} ...\n", refnc.id());
                 match ctxt.lookup_obj(refnc.id()) {
                     Some(obj) => {
                         // Remove any Required indirect from the check.
@@ -721,12 +682,10 @@ pub fn check_type(
                     }
                 }
                 if result.is_none() {
-                    //println!("Checks {:?}", chks);
                     push_checks(&mut state, chks)
                 }
             },
             (obj, _, _) => {
-                //println!("Mismatch {:?} {:?}", c, obj);
                 result = Some(TypeCheckError::TypeMismatch(
                     Rc::clone(&c.typ),
                     type_of(obj),
@@ -1106,86 +1065,6 @@ mod test_pdf_types {
         let obj = LocatedVal::new(PDFObjT::Null(()), 0, 0);
         let err = TypeCheckError::PredicateError("Not an ASCII string.".to_string());
         assert_eq!(pred.check(&Rc::new(obj)), Some(err));
-    }
-
-    struct DateStringPredicate;
-    impl Predicate for DateStringPredicate {
-        fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
-            /*
-             * PDF spec 7.9.4 defines the date format like:
-             *  (D:YYYYMMDDHHmmSSOHH'mm)
-             */
-            if let PDFObjT::String(ref s) = obj.val() {
-                // regex for Date
-                let re = regex::Regex::new(r"^D:\d{4}(([0][1-9]|[1][0-2])(([0][1-9]|[1-2][0-9]|[3][0-1])(([0-1][0-9]|[2][0-3])(([0-5][0-9])(([0-5][0-9])([+\-Z](([0-1][0-9]'|[2][0-3]')([0-5][0-9])?)?)?)?)?)?)?)?$").unwrap();
-                let date_string = std::str::from_utf8(s).unwrap_or("");
-                if !re.is_match(date_string) {
-                    return Some(TypeCheckError::PredicateError(
-                        "Not a Date string.".to_string(),
-                    ))
-                }
-                None
-            } else {
-                return Some(TypeCheckError::PredicateError(
-                    "Not an Date string.".to_string(),
-                ))
-            }
-        }
-    }
-
-    fn mk_date_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
-        TypeCheck::new_refined(
-            tctx,
-            "date",
-            Rc::new(PDFType::PrimType(PDFPrimType::String)),
-            Rc::new(DateStringPredicate),
-        )
-    }
-
-    #[test]
-    fn test_date_string() {
-        fn run_date_type_check(raw_pdf_date_string: &str) -> Option<TypeCheckError> {
-            let mut ctxt = mk_new_context();
-            let mut tctx = TypeCheckContext::new();
-            let v = Vec::from(raw_pdf_date_string.as_bytes());
-            let mut pb = ParseBuffer::new(v);
-            let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
-            let typ_chk = mk_date_typchk(&mut tctx);
-            return check_type(&ctxt, &tctx, Rc::new(obj), typ_chk)
-        }
-
-        let correct_test_cases = [
-            "(D:1992)",
-            "(D:199212)",
-            "(D:19921223)",
-            "(D:1992122319)",
-            "(D:199212231952)",
-            "(D:19921223195200)",
-            "(D:19921223195200-)",
-            "(D:19921223195200-08')",
-            "(D:19921223195200-08'00)",
-        ];
-        for d in correct_test_cases.iter() {
-            assert_eq!(run_date_type_check(d), None);
-        }
-
-        let incorrect_test_cases = [
-            "(D1992)",
-            "(D:199213)",
-            "(D:19921243)",
-            "(D:1992122349)",
-            "(D:199212231972)",
-            "(D:19921223195280)",
-            "(D:19921223195290-)",
-            "(D:199212231952-)",
-            "(D:19921223195200-58')",
-            "(D:19921223195200-08)",
-            "(D:19921223195200-08'0099)",
-            "(D:19921223195200-08'60)",
-        ];
-        for d in incorrect_test_cases.iter() {
-            assert!(run_date_type_check(d).is_some());
-        }
     }
 
     #[test]

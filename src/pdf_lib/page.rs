@@ -4,9 +4,10 @@ use crate::pdf_lib::common_data_structures::structures::{
 };
 use crate::pdf_lib::pdf_prim::NameT;
 use crate::pdf_lib::pdf_type_check::{
-    mk_date_typchk, ChoicePred, DictEntry, DictKeySpec, IndirectSpec, PDFPrimType, PDFType,
+    ChoicePred, DictEntry, DictKeySpec, IndirectSpec, PDFPrimType, PDFType,
     TypeCheck, TypeCheckContext,
 };
+use crate::pdf_lib::common_data_structures::structures::{mk_date_typchk};
 use std::rc::Rc;
 
 fn mk_tabs_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {

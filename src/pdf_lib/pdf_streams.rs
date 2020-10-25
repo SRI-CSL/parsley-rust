@@ -541,8 +541,6 @@ impl ParsleyParser for XrefStreamP<'_> {
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let meta = self.get_dict_info()?;
-        println!("Parsed xref meta for {} objects.", meta.size());
-
         let input = buf;
 
         // This vector is just being used to hoist the view generated
