@@ -421,7 +421,7 @@ fn push_checks(state: &mut State, chks: Vec<PendingCheck>) {
 }
 
 /* removes directly nested disjuncts */
-fn normalize_check(typ: &Rc<TypeCheckRep>) -> Rc<TypeCheckRep> {
+pub(super) fn normalize_check(typ: &Rc<TypeCheckRep>) -> Rc<TypeCheckRep> {
     match typ.typ() {
         PDFType::Any | PDFType::PrimType(_) => Rc::clone(typ),
         PDFType::Array { elem, size } => TypeCheckRep::new_replace_typ(
@@ -714,13 +714,13 @@ impl Predicate for ChoicePred {
 
 #[cfg(test)]
 mod test_pdf_types {
-    use super::super::super::pcore::parsebuffer::{LocatedVal, ParseBuffer};
-    use super::super::pdf_obj::{parse_pdf_obj, IndirectT, PDFObjContext, PDFObjT};
-    use super::super::pdf_prim::{IntegerT, NameT};
     use super::{
         check_type, normalize_check, ChoicePred, DictEntry, DictKeySpec, IndirectSpec, PDFPrimType,
         PDFType, Predicate, TypeCheck, TypeCheckContext, TypeCheckError,
     };
+    use crate::pcore::parsebuffer::{LocatedVal, ParseBuffer};
+    use crate::pdf_lib::pdf_obj::{parse_pdf_obj, IndirectT, PDFObjContext, PDFObjT};
+    use crate::pdf_lib::pdf_prim::{IntegerT, NameT};
     use std::rc::Rc;
 
     fn mk_new_context() -> PDFObjContext { PDFObjContext::new(10) }
@@ -734,6 +734,14 @@ mod test_pdf_types {
                 elem,
                 size: Some(4),
             }),
+        )
+    }
+
+    pub fn mk_date_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+        TypeCheck::new(
+            tctx,
+            "date",
+            Rc::new(PDFType::PrimType(PDFPrimType::String)),
         )
     }
 

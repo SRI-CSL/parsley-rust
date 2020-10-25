@@ -1,13 +1,13 @@
-use super::pdf_obj::PDFObjT;
-use crate::pdf_lib::common_data_structures::structures::{
-    mk_generic_array_typchk, mk_generic_dict_typchk, mk_name_check, mk_rectangle_typchk, resources,
+use crate::pdf_lib::common_data_structures::{
+    mk_date_typchk, mk_generic_array_typchk, mk_generic_dict_typchk, mk_name_check,
+    mk_rectangle_typchk, resources,
 };
+use crate::pdf_lib::pdf_obj::PDFObjT;
 use crate::pdf_lib::pdf_prim::NameT;
 use crate::pdf_lib::pdf_type_check::{
-    ChoicePred, DictEntry, DictKeySpec, IndirectSpec, PDFPrimType, PDFType,
-    TypeCheck, TypeCheckContext,
+    ChoicePred, DictEntry, DictKeySpec, IndirectSpec, PDFPrimType, PDFType, TypeCheck,
+    TypeCheckContext,
 };
-use crate::pdf_lib::common_data_structures::structures::{mk_date_typchk};
 use std::rc::Rc;
 
 fn mk_tabs_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
