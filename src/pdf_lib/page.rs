@@ -1,9 +1,7 @@
 use super::pdf_obj::PDFObjT;
 use crate::pdf_lib::common_data_structures::structures::{
-    mk_generic_array_typchk, mk_generic_dict_typchk, mk_generic_indirect_dict_typchk,
-    mk_name_check, mk_rectangle_typchk, resources,
+    mk_generic_array_typchk, mk_generic_dict_typchk, mk_name_check, mk_rectangle_typchk, resources,
 };
-use crate::pdf_lib::page_tree::{non_root_page_tree, page_tree, root_page_tree};
 use crate::pdf_lib::pdf_prim::NameT;
 use crate::pdf_lib::pdf_type_check::{
     mk_date_typchk, ChoicePred, DictEntry, DictKeySpec, IndirectSpec, PDFPrimType, PDFType,

@@ -334,12 +334,29 @@ mod test_name_tree {
         );
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let outline = Vec::from(
+            "<</Title ( Chapter 1 )
+        /Parent 21 0 R
+        /Next 26 0 R
+        /First 23 0 R
+        /Last 25 0 R
+        /Count 3
+        /Dest [3 0 R /XYZ 0 792 0]
+        >>
+        "
+            .as_bytes(),
+        );
+        let mut outline_pb = ParseBuffer::new(outline);
+        let outline_obj = parse_pdf_obj(&mut ctxt, &mut outline_pb).unwrap();
         let l1 = LocatedVal::new(i1, 0, 4);
 
         let i2 = IndirectT::new(4, 0, Rc::new(obj));
+        let i3 = IndirectT::new(3, 0, Rc::new(outline_obj));
         let l2 = LocatedVal::new(i2, 0, 4);
+        let l3 = LocatedVal::new(i3, 0, 4);
         ctxt.register_obj(&l1);
         ctxt.register_obj(&l2);
+        ctxt.register_obj(&l3);
         let v = Vec::from(
             "<</Type /Catalog
   /Pages 2 0 R

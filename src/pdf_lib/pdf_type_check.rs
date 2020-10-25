@@ -305,7 +305,6 @@ fn get_next_check(state: &mut State, check_error: &Option<TypeCheckError>) -> Ge
     loop {
         if let Some((pending, next_idx)) = state.get_mut(0) {
             if let Some((obj, tc)) = pending.pop_front() {
-                println!("Pending {:?}", tc);
                 match tc.as_ref() {
                     TypeCheck::Rep(chk) => {
                         match chk.as_ref().typ() {
@@ -526,15 +525,12 @@ fn resolve(
 ) -> Result<Rc<TypeCheckRep>, TypeCheckError> {
     match chk.as_ref() {
         TypeCheck::Rep(r) => Ok(Rc::clone(r)),
-        TypeCheck::Named(n) => {
-            println!(" resolving {}", n);
-            match tctx.lookup(n) {
-                None => Err(TypeCheckError::UnknownTypeCheck(format!(
-                    "Unknown typecheck {}",
-                    n
-                ))),
-                Some(rep) => Ok(Rc::clone(&rep)),
-            }
+        TypeCheck::Named(n) => match tctx.lookup(n) {
+            None => Err(TypeCheckError::UnknownTypeCheck(format!(
+                "Unknown typecheck {}",
+                n
+            ))),
+            Some(rep) => Ok(Rc::clone(&rep)),
         },
     }
 }
@@ -571,7 +567,6 @@ pub fn check_type(
         }
 
         let next = next.unwrap();
-        println!("Next {:?}", next);
         if next.is_none() {
             // if there are no more checks left, all checks must have
             // passed.
@@ -595,7 +590,7 @@ pub fn check_type(
             (PDFObjT::Reference(refnc), _, IndirectSpec::Allowed)
             | (PDFObjT::Reference(refnc), _, IndirectSpec::Required) => {
                 // lookup referenced object and add it to the queue
-                println!(" resolving id {:?} ...\n", refnc.id());
+                //println!(" resolving id {:?} ...\n", refnc.id());
                 match ctxt.lookup_obj(refnc.id()) {
                     Some(obj) => {
                         // Remove any Required indirect from the check.
@@ -726,12 +721,12 @@ pub fn check_type(
                     }
                 }
                 if result.is_none() {
-                    println!("Checks {:?}", chks);
+                    //println!("Checks {:?}", chks);
                     push_checks(&mut state, chks)
                 }
             },
             (obj, _, _) => {
-                println!("Mismatch {:?} {:?}", c, obj);
+                //println!("Mismatch {:?} {:?}", c, obj);
                 result = Some(TypeCheckError::TypeMismatch(
                     Rc::clone(&c.typ),
                     type_of(obj),
