@@ -442,20 +442,7 @@ fn unwind(state: &mut State) -> bool {
  * retrieval.) */
 fn return_check(state: &mut State, chk: PendingCheck) {
     if let Some((pending, next_idx)) = state.get_mut(0) {
-        if let Some((_, tc)) = pending.get(0) {
-            match tc.as_ref() {
-                TypeCheck::Rep(c) => match c.typ() {
-                    // if this check came from an in-progress
-                    // disjunct, we only need to adjust the index.
-                    PDFType::Disjunct(_) if *next_idx > 0 => *next_idx -= 1,
-                    _ => pending.push_front(chk),
-                },
-                TypeCheck::Named(_) => pending.push_front(chk),
-            }
-        } else {
-            // push to front of empty set
-            pending.push_front(chk)
-        }
+        pending.push_front(chk);
     } else {
         unreachable!()
     }
