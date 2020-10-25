@@ -54,9 +54,14 @@ pub fn root_page_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
         page_type(tctx),
         non_root_page_tree(tctx),
     ]));
+    let elem = TypeCheck::new_all(tctx, "kids", opts, None, IndirectSpec::Required);
     let kids = DictEntry {
         key: Vec::from("Kids"),
-        chk: TypeCheck::new_all(tctx, "kids", opts, None, IndirectSpec::Required),
+        chk: TypeCheck::new(
+            tctx,
+            "kids_each",
+            Rc::new(PDFType::Array { elem, size: None }),
+        ),
         opt: DictKeySpec::Required,
     };
     let parent = DictEntry {

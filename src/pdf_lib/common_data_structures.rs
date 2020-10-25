@@ -9,6 +9,56 @@ pub mod structures {
     use crate::pdf_lib::pdf_prim::NameT;
     use std::rc::Rc;
 
+    pub fn resources(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+        let extgstate = DictEntry {
+            key: Vec::from("ExtGState"),
+            chk: mk_generic_dict_typchk(tctx),
+            opt: DictKeySpec::Optional,
+        };
+        let colorspace = DictEntry {
+            key: Vec::from("ColorSpace"),
+            chk: mk_generic_dict_typchk(tctx),
+            opt: DictKeySpec::Optional,
+        };
+        let pattern = DictEntry {
+            key: Vec::from("Pattern"),
+            chk: mk_generic_dict_typchk(tctx),
+            opt: DictKeySpec::Optional,
+        };
+        let shading = DictEntry {
+            key: Vec::from("Shading"),
+            chk: mk_generic_dict_typchk(tctx),
+            opt: DictKeySpec::Optional,
+        };
+        let xobject = DictEntry {
+            key: Vec::from("XObject"),
+            chk: mk_generic_dict_typchk(tctx),
+            opt: DictKeySpec::Optional,
+        };
+        let font = DictEntry {
+            key: Vec::from("Font"),
+            chk: mk_generic_dict_typchk(tctx),
+            opt: DictKeySpec::Optional,
+        };
+        let procset = DictEntry {
+            key: Vec::from("ProcSet"),
+            chk: mk_generic_array_typchk(tctx),
+            opt: DictKeySpec::Optional,
+        };
+        let properties = DictEntry {
+            key: Vec::from("Properties"),
+            chk: mk_generic_dict_typchk(tctx),
+            opt: DictKeySpec::Optional,
+        };
+        TypeCheck::new(
+            tctx,
+            "page",
+            Rc::new(PDFType::Dict(vec![
+                extgstate, colorspace, pattern, shading, xobject, font, procset, properties,
+            ])),
+        )
+    }
+
     // A generic dictionary, typically used for out-of-scope
     // dictionary values.
     pub fn mk_generic_dict_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {

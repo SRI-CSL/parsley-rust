@@ -241,7 +241,10 @@ impl PartialEq for TypeCheckRep {
 
 impl std::fmt::Debug for TypeCheckRep {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("TypeCheck").field("name", &self.name).field("typ", &self.typ).finish()
+        f.debug_struct("TypeCheck")
+            .field("name", &self.name)
+            .field("typ", &self.typ)
+            .finish()
     }
 }
 
@@ -302,6 +305,7 @@ fn get_next_check(state: &mut State, check_error: &Option<TypeCheckError>) -> Ge
     loop {
         if let Some((pending, next_idx)) = state.get_mut(0) {
             if let Some((obj, tc)) = pending.pop_front() {
+                println!("Pending {:?}", tc);
                 match tc.as_ref() {
                     TypeCheck::Rep(chk) => {
                         match chk.as_ref().typ() {
@@ -535,8 +539,7 @@ fn resolve(
 ) -> Result<Rc<TypeCheckRep>, TypeCheckError> {
     match chk.as_ref() {
         TypeCheck::Rep(r) => Ok(Rc::clone(r)),
-        TypeCheck::Named(n) =>
-        {
+        TypeCheck::Named(n) => {
             println!(" resolving {}", n);
             match tctx.lookup(n) {
                 None => Err(TypeCheckError::UnknownTypeCheck(format!(
@@ -581,6 +584,7 @@ pub fn check_type(
         }
 
         let next = next.unwrap();
+        println!("Next {:?}", next);
         if next.is_none() {
             // if there are no more checks left, all checks must have
             // passed.
@@ -594,7 +598,7 @@ pub fn check_type(
             Err(err) => return Some(err),
         };
 
-        println!("\nchecking {:?}\n against {:?}\n\n", o.val(), c);
+        //println!("\nchecking {:?}\n against {:?}\n\n", o.val(), c);
 
         // reset for the next check.
         result = None;
@@ -735,6 +739,7 @@ pub fn check_type(
                     }
                 }
                 if result.is_none() {
+                    println!("Checks {:?}", chks);
                     push_checks(&mut state, chks)
                 }
             },
