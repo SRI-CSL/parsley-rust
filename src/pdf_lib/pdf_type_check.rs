@@ -1,5 +1,5 @@
 use super::super::pcore::parsebuffer::LocatedVal;
-use super::pdf_obj::{PDFObjContext, PDFObjT, ReferenceT};
+use super::pdf_obj::{DictKey, PDFObjContext, PDFObjT, ReferenceT};
 use std::collections::{BTreeMap, VecDeque};
 use std::rc::Rc;
 
@@ -53,8 +53,8 @@ pub enum PDFType {
 pub enum TypeCheckError {
     RefNotFound(ReferenceT),
     ArraySizeMismatch(/* expected */ usize, /* found */ usize),
-    MissingKey(Vec<u8>),
-    ForbiddenKey(Vec<u8>),
+    MissingKey(DictKey),
+    ForbiddenKey(DictKey),
     TypeMismatch(/* expected */ Rc<PDFType>, /* found */ PDFType),
     ValueMismatch(/* found */ Rc<LocatedVal<PDFObjT>>, String),
     PredicateError(String),
@@ -642,11 +642,11 @@ pub fn check_type(
                         (None, DictKeySpec::Optional, _) => continue,
                         (None, DictKeySpec::Forbidden, _) => continue,
                         (None, DictKeySpec::Required, _) => {
-                            let key = ent.key.clone();
+                            let key = DictKey::new(ent.key.clone());
                             result = Some(TypeCheckError::MissingKey(key))
                         },
                         (Some(_), DictKeySpec::Forbidden, _) => {
-                            let key = ent.key.clone();
+                            let key = DictKey::new(ent.key.clone());
                             result = Some(TypeCheckError::ForbiddenKey(key))
                         },
                         (Some(_), _, PDFType::Any) => continue,
@@ -670,11 +670,11 @@ pub fn check_type(
                         (None, DictKeySpec::Optional, _) => continue,
                         (None, DictKeySpec::Forbidden, _) => continue,
                         (None, DictKeySpec::Required, _) => {
-                            let key = ent.key.clone();
+                            let key = DictKey::new(ent.key.clone());
                             result = Some(TypeCheckError::MissingKey(key));
                         },
                         (Some(_), DictKeySpec::Forbidden, _) => {
-                            let key = ent.key.clone();
+                            let key = DictKey::new(ent.key.clone());
                             result = Some(TypeCheckError::ForbiddenKey(key))
                         },
                         (Some(_), _, PDFType::Any) => continue,
@@ -719,7 +719,7 @@ mod test_pdf_types {
         PDFType, Predicate, TypeCheck, TypeCheckContext, TypeCheckError,
     };
     use crate::pcore::parsebuffer::{LocatedVal, ParseBuffer};
-    use crate::pdf_lib::pdf_obj::{parse_pdf_obj, IndirectT, PDFObjContext, PDFObjT};
+    use crate::pdf_lib::pdf_obj::{parse_pdf_obj, DictKey, IndirectT, PDFObjContext, PDFObjT};
     use crate::pdf_lib::pdf_prim::{IntegerT, NameT};
     use std::rc::Rc;
 
@@ -888,7 +888,7 @@ mod test_pdf_types {
         let typ = TypeCheck::new(&mut tctx, "dict", Rc::new(PDFType::Dict(vec![ent])));
         assert_eq!(
             check_type(&ctxt, &tctx, Rc::new(obj), typ),
-            Some(TypeCheckError::MissingKey(Vec::from("Dummy")))
+            Some(TypeCheckError::MissingKey(DictKey::new(Vec::from("Dummy"))))
         );
     }
 
@@ -908,7 +908,9 @@ mod test_pdf_types {
         let typ = TypeCheck::new(&mut tctx, "dict", Rc::new(PDFType::Dict(vec![ent])));
         assert_eq!(
             check_type(&ctxt, &tctx, Rc::new(obj), typ),
-            Some(TypeCheckError::ForbiddenKey(Vec::from("Entry")))
+            Some(TypeCheckError::ForbiddenKey(DictKey::new(Vec::from(
+                "Entry"
+            ))))
         );
     }
 
@@ -982,7 +984,9 @@ mod test_pdf_types {
         let typ = TypeCheck::new(&mut tctx, "dict", Rc::new(PDFType::Dict(vec![ent])));
         assert_eq!(
             check_type(&ctxt, &tctx, Rc::new(obj), typ),
-            Some(TypeCheckError::ForbiddenKey(Vec::from("PageMode")))
+            Some(TypeCheckError::ForbiddenKey(DictKey::new(Vec::from(
+                "PageMode"
+            ))))
         );
 
         // invalid value for optional key

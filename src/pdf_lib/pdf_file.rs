@@ -552,7 +552,9 @@ mod test_pdf_file {
     use super::super::super::pcore::parsebuffer::{
         locate_value, ErrorKind, LocatedVal, ParseBuffer, ParseBufferT, ParsleyParser,
     };
-    use super::super::super::pdf_lib::pdf_obj::{DictT, PDFObjContext, PDFObjT, ReferenceT};
+    use super::super::super::pdf_lib::pdf_obj::{
+        DictKey, DictT, PDFObjContext, PDFObjT, ReferenceT,
+    };
     use super::super::super::pdf_lib::pdf_prim::{IntegerT, NameT};
     use super::super::pdf_streams::XrefEntStatus;
     use super::InvalidXrefSect;
@@ -925,12 +927,12 @@ endobj"
         let mut map = BTreeMap::new();
         let key = NameT::new(Vec::from("Size".as_bytes()));
         map.insert(
-            LocatedVal::new(key, 12, 17).val().normalize(),
+            DictKey::new(LocatedVal::new(key, 12, 17).val().normalize()),
             Rc::new(LocatedVal::new(PDFObjT::Integer(IntegerT::new(8)), 18, 19)),
         );
         let key = NameT::new(Vec::from("Root".as_bytes()));
         map.insert(
-            LocatedVal::new(key, 21, 26).val().normalize(),
+            DictKey::new(LocatedVal::new(key, 21, 26).val().normalize()),
             Rc::new(LocatedVal::new(
                 PDFObjT::Reference(ReferenceT::new(1, 0)),
                 27,

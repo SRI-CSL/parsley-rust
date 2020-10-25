@@ -1,5 +1,5 @@
 use super::super::pcore::parsebuffer::LocatedVal;
-use super::pdf_obj::PDFObjT;
+use super::pdf_obj::{DictKey, PDFObjT};
 use crate::pdf_lib::pdf_type_check::{
     PDFType, Predicate, TypeCheck, TypeCheckContext, TypeCheckError,
 };
@@ -10,7 +10,7 @@ impl Predicate for NameTreePredicate {
     fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
         if let PDFObjT::Dict(ref s) = obj.val() {
             let mappings = s.map();
-            if let Some(a) = mappings.get(&Vec::from("Names")) {
+            if let Some(a) = mappings.get(&DictKey::new(Vec::from("Names"))) {
                 if let PDFObjT::Array(ref s) = a.val() {
                     if s.objs().len() % 2 == 0 {
                         for c in (0 .. s.objs().len()).step_by(2) {
@@ -38,7 +38,7 @@ impl Predicate for NameTreePredicate {
                     ))
                 }
             }
-            if let Some(a) = mappings.get(&Vec::from("Limits")) {
+            if let Some(a) = mappings.get(&DictKey::new(Vec::from("Limits"))) {
                 if let PDFObjT::Array(ref s) = a.val() {
                     for c in s.objs() {
                         if let PDFObjT::String(ref _s1) = c.val() {
@@ -55,7 +55,7 @@ impl Predicate for NameTreePredicate {
                     }
                 }
             }
-            if let Some(a) = mappings.get(&Vec::from("Kids")) {
+            if let Some(a) = mappings.get(&DictKey::new(Vec::from("Kids"))) {
                 if let PDFObjT::Array(ref s) = a.val() {
                     for c in s.objs() {
                         if let PDFObjT::Reference(ref _s2) = c.val() {
@@ -72,18 +72,18 @@ impl Predicate for NameTreePredicate {
                 }
             }
 
-            if (mappings.contains_key(&Vec::from("Names"))
-                && mappings.contains_key(&Vec::from("Limits"))
-                && !mappings.contains_key(&Vec::from("Kids")))
-                || (!mappings.contains_key(&Vec::from("Names"))
-                    && mappings.contains_key(&Vec::from("Limits"))
-                    && mappings.contains_key(&Vec::from("Kids")))
-                || (!mappings.contains_key(&Vec::from("Names"))
-                    && !mappings.contains_key(&Vec::from("Limits"))
-                    && mappings.contains_key(&Vec::from("Kids")))
-                || (mappings.contains_key(&Vec::from("Names"))
-                    && !mappings.contains_key(&Vec::from("Limits"))
-                    && !mappings.contains_key(&Vec::from("Kids")))
+            if (mappings.contains_key(&DictKey::new(Vec::from("Names")))
+                && mappings.contains_key(&DictKey::new(Vec::from("Limits")))
+                && !mappings.contains_key(&DictKey::new(Vec::from("Kids"))))
+                || (!mappings.contains_key(&DictKey::new(Vec::from("Names")))
+                    && mappings.contains_key(&DictKey::new(Vec::from("Limits")))
+                    && mappings.contains_key(&DictKey::new(Vec::from("Kids"))))
+                || (!mappings.contains_key(&DictKey::new(Vec::from("Names")))
+                    && !mappings.contains_key(&DictKey::new(Vec::from("Limits")))
+                    && mappings.contains_key(&DictKey::new(Vec::from("Kids"))))
+                || (mappings.contains_key(&DictKey::new(Vec::from("Names")))
+                    && !mappings.contains_key(&DictKey::new(Vec::from("Limits")))
+                    && !mappings.contains_key(&DictKey::new(Vec::from("Kids"))))
             {
                 None
             } else {

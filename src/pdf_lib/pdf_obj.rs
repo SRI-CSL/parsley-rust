@@ -128,16 +128,33 @@ impl ArrayP<'_> {
     }
 }
 
+/* Wrap keys to get legible displays when possible. */
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+pub struct DictKey(Vec<u8>);
+impl DictKey {
+    pub fn new(v: Vec<u8>) -> DictKey { DictKey(v) }
+}
+impl std::fmt::Debug for DictKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match std::str::from_utf8(&self.0) {
+            Ok(s) => f.write_str(s),
+            Err(_) => f.debug_list().entries(self.0.iter()).finish(),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DictT {
-    map: BTreeMap<Vec<u8>, Rc<LocatedVal<PDFObjT>>>,
+    map: BTreeMap<DictKey, Rc<LocatedVal<PDFObjT>>>,
 }
 
 impl DictT {
-    pub fn new(map: BTreeMap<Vec<u8>, Rc<LocatedVal<PDFObjT>>>) -> DictT { DictT { map } }
-    pub fn map(&self) -> &BTreeMap<Vec<u8>, Rc<LocatedVal<PDFObjT>>> { &self.map }
-    pub fn map_mut(&mut self) -> &mut BTreeMap<Vec<u8>, Rc<LocatedVal<PDFObjT>>> { &mut self.map }
-    pub fn get(&self, k: &[u8]) -> Option<&Rc<LocatedVal<PDFObjT>>> { self.map.get(&Vec::from(k)) }
+    pub fn new(map: BTreeMap<DictKey, Rc<LocatedVal<PDFObjT>>>) -> DictT { DictT { map } }
+    pub fn map(&self) -> &BTreeMap<DictKey, Rc<LocatedVal<PDFObjT>>> { &self.map }
+    pub fn map_mut(&mut self) -> &mut BTreeMap<DictKey, Rc<LocatedVal<PDFObjT>>> { &mut self.map }
+    pub fn get(&self, k: &[u8]) -> Option<&Rc<LocatedVal<PDFObjT>>> {
+        self.map.get(&DictKey::new(Vec::from(k)))
+    }
     // conveniences:
     // get the usize value of a key
     pub fn get_usize(&self, k: &[u8]) -> Option<usize> {
@@ -226,7 +243,7 @@ impl DictP<'_> {
                     // Drop the entry.
                 } else {
                     names.insert(key.clone());
-                    map.insert(key, Rc::new(o));
+                    map.insert(DictKey(key), Rc::new(o));
                 }
             } else {
                 end = true;
@@ -747,8 +764,8 @@ mod test_pdf_obj {
     };
     use super::super::pdf_prim::{IntegerT, NameT, RealT, StreamContentT};
     use super::{
-        parse_pdf_obj, ArrayT, DictT, IndirectP, IndirectT, PDFObjContext, PDFObjT, ReferenceT,
-        StreamT,
+        parse_pdf_obj, ArrayT, DictKey, DictT, IndirectP, IndirectT, PDFObjContext, PDFObjT,
+        ReferenceT, StreamT,
     };
     use std::borrow::Borrow;
     use std::collections::BTreeMap;
@@ -958,7 +975,7 @@ mod test_pdf_obj {
         )));
         let entval = LocatedVal::new(PDFObjT::Array(ArrayT::new(objs)), 10, 19);
         let mut map = BTreeMap::new();
-        map.insert(Vec::from("Entry".as_bytes()), Rc::new(entval));
+        map.insert(DictKey::new(Vec::from("Entry".as_bytes())), Rc::new(entval));
         let val = PDFObjT::Dict(DictT::new(map));
         assert_eq!(parse_pdf_obj(&mut ctxt, &mut pb), Ok(LocatedVal::new(val, 0, 25)));
         assert_eq!(pb.get_cursor(), vlen);
@@ -979,7 +996,7 @@ mod test_pdf_obj {
         let mut map = BTreeMap::new();
         let key = NameT::new(Vec::from("Entry".as_bytes()));
         map.insert(
-            LocatedVal::new(key, 2, 8).val().normalize(),
+            DictKey::new(LocatedVal::new(key, 2, 8).val().normalize()),
             Rc::new(entval),
         );
         let val = PDFObjT::Dict(DictT::new(map));
@@ -1011,7 +1028,7 @@ mod test_pdf_obj {
         let mut map = BTreeMap::new();
         let key = NameT::new(Vec::from("Inner".as_bytes()));
         map.insert(
-            LocatedVal::new(key, 2, 8).val().normalize(),
+            DictKey::new(LocatedVal::new(key, 2, 8).val().normalize()),
             Rc::new(LocatedVal::new(inner, 9, 14)),
         );
         let outer = PDFObjT::Dict(DictT::new(map));
@@ -1035,7 +1052,7 @@ mod test_pdf_obj {
         let mut map = BTreeMap::new();
         let key = NameT::new(Vec::from("Entry".as_bytes()));
         map.insert(
-            LocatedVal::new(key, 2, 8).val().normalize(),
+            DictKey::new(LocatedVal::new(key, 2, 8).val().normalize()),
             Rc::new(entval),
         );
         let val = PDFObjT::Dict(DictT::new(map));
@@ -1045,7 +1062,9 @@ mod test_pdf_obj {
             // 2, 8))); different located key with the same val
             //assert!(d.map().contains_key(&LocatedVal::new(Vec::from("Entry".as_bytes()),
             // 0, 0))); the same key val but not located
-            assert!(d.map().contains_key(&Vec::from("Entry".as_bytes())));
+            assert!(d
+                .map()
+                .contains_key(&DictKey::new(Vec::from("Entry".as_bytes()))));
         }
     }
 
@@ -1057,13 +1076,13 @@ mod test_pdf_obj {
         let key = NameT::new(Vec::from("Entry1".as_bytes()));
         let entval = LocatedVal::new(PDFObjT::Null(()), 9, 16);
         map.insert(
-            LocatedVal::new(key, 2, 8).val().normalize(),
+            DictKey::new(LocatedVal::new(key, 2, 8).val().normalize()),
             Rc::new(entval),
         );
         let key = NameT::new(Vec::from("Entry2".as_bytes()));
         let entval = LocatedVal::new(PDFObjT::Boolean(true), 9, 16);
         map.insert(
-            LocatedVal::new(key, 2, 8).val().normalize(),
+            DictKey::new(LocatedVal::new(key, 2, 8).val().normalize()),
             Rc::new(entval),
         );
         let l = PDFObjT::Dict(DictT::new(map));
@@ -1072,13 +1091,13 @@ mod test_pdf_obj {
         let key = NameT::new(Vec::from("Entry2".as_bytes()));
         let entval = LocatedVal::new(PDFObjT::Boolean(true), 9, 16);
         map.insert(
-            LocatedVal::new(key, 2, 8).val().normalize(),
+            DictKey::new(LocatedVal::new(key, 2, 8).val().normalize()),
             Rc::new(entval),
         );
         let key = NameT::new(Vec::from("Entry1".as_bytes()));
         let entval = LocatedVal::new(PDFObjT::Null(()), 9, 16);
         map.insert(
-            LocatedVal::new(key, 2, 8).val().normalize(),
+            DictKey::new(LocatedVal::new(key, 2, 8).val().normalize()),
             Rc::new(entval),
         );
         let r = PDFObjT::Dict(DictT::new(map));
@@ -1106,7 +1125,7 @@ mod test_pdf_obj {
         let mut map = BTreeMap::new();
         let key = NameT::new(Vec::from("Entry".as_bytes()));
         map.insert(
-            LocatedVal::new(key, 11, 17).val().normalize(),
+            DictKey::new(LocatedVal::new(key, 11, 17).val().normalize()),
             Rc::new(entval),
         );
         let dict = Rc::new(LocatedVal::new(PDFObjT::Dict(DictT::new(map)), 8, 33));
@@ -1138,7 +1157,7 @@ mod test_pdf_obj {
         let mut map = BTreeMap::new();
         let key = NameT::new(Vec::from("Entry".as_bytes()));
         map.insert(
-            LocatedVal::new(key, 11, 17).val().normalize(),
+            DictKey::new(LocatedVal::new(key, 11, 17).val().normalize()),
             Rc::new(entval),
         );
         let dict = Rc::new(LocatedVal::new(DictT::new(map), 8, 30));
@@ -1167,7 +1186,7 @@ mod test_pdf_obj {
         let mut map = BTreeMap::new();
         let key = NameT::new(Vec::from("Type".as_bytes()));
         map.insert(
-            LocatedVal::new(key, 14, 19).val().normalize(),
+            DictKey::new(LocatedVal::new(key, 14, 19).val().normalize()),
             Rc::new(LocatedVal::new(
                 PDFObjT::Name(NameT::new(Vec::from("Catalog".as_bytes()))),
                 20,
@@ -1176,7 +1195,7 @@ mod test_pdf_obj {
         );
         let key = NameT::new(Vec::from("Pages".as_bytes()));
         map.insert(
-            LocatedVal::new(key, 31, 37).val().normalize(),
+            DictKey::new(LocatedVal::new(key, 31, 37).val().normalize()),
             Rc::new(LocatedVal::new(
                 PDFObjT::Reference(ReferenceT::new(2, 0)),
                 38,
@@ -1202,7 +1221,7 @@ mod test_pdf_obj {
         let mut map = BTreeMap::new();
         let key = NameT::new(Vec::from("Type".as_bytes()));
         map.insert(
-            LocatedVal::new(key, 14, 19).val().normalize(),
+            DictKey::new(LocatedVal::new(key, 14, 19).val().normalize()),
             Rc::new(LocatedVal::new(
                 PDFObjT::Name(NameT::new(Vec::from("Catalog".as_bytes()))),
                 20,
@@ -1230,7 +1249,7 @@ mod test_pdf_obj {
         let mut map = BTreeMap::new();
         let key = NameT::new(Vec::from("Type".as_bytes()));
         map.insert(
-            LocatedVal::new(key, 27, 32).val().normalize(),
+            DictKey::new(LocatedVal::new(key, 27, 32).val().normalize()),
             Rc::new(LocatedVal::new(
                 PDFObjT::Name(NameT::new(Vec::from("Catalog".as_bytes()))),
                 33,
@@ -1239,7 +1258,7 @@ mod test_pdf_obj {
         );
         let key = NameT::new(Vec::from("Pages".as_bytes()));
         map.insert(
-            LocatedVal::new(key, 44, 50).val().normalize(),
+            DictKey::new(LocatedVal::new(key, 44, 50).val().normalize()),
             Rc::new(LocatedVal::new(
                 PDFObjT::Reference(ReferenceT::new(2, 0)),
                 51,
@@ -1296,7 +1315,7 @@ mod test_pdf_obj {
         let mut map = BTreeMap::new();
         let key = NameT::new(Vec::from(""));
         map.insert(
-            LocatedVal::new(key, 15, 16).val().normalize(),
+            DictKey::new(LocatedVal::new(key, 15, 16).val().normalize()),
             Rc::new(LocatedVal::new(
                 PDFObjT::Array(ArrayT::new(Vec::new())),
                 16,
@@ -1349,7 +1368,7 @@ mod test_pdf_obj {
         let mut map = BTreeMap::new();
         let key = NameT::new(Vec::from("".as_bytes()));
         map.insert(
-            LocatedVal::new(key, 10, 11).val().normalize(),
+            DictKey::new(LocatedVal::new(key, 10, 11).val().normalize()),
             Rc::new(LocatedVal::new(
                 PDFObjT::Name(NameT::new(Vec::from("".as_bytes()))),
                 11,
@@ -1372,7 +1391,7 @@ mod test_pdf_obj {
         let mut map = BTreeMap::new();
         let key = NameT::new(Vec::from("".as_bytes()));
         map.insert(
-            LocatedVal::new(key, 10, 11).val().normalize(),
+            DictKey::new(LocatedVal::new(key, 10, 11).val().normalize()),
             Rc::new(LocatedVal::new(
                 PDFObjT::String(Vec::from("".as_bytes())),
                 11,

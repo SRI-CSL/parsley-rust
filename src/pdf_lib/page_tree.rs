@@ -1,5 +1,5 @@
 use super::super::pcore::parsebuffer::LocatedVal;
-use super::pdf_obj::PDFObjT;
+use super::pdf_obj::{DictKey, PDFObjT};
 use crate::pdf_lib::page::{page_type, template_type};
 use crate::pdf_lib::pdf_prim::NameT;
 use crate::pdf_lib::pdf_type_check::{
@@ -119,13 +119,13 @@ impl Predicate for PageTreePredicate {
     fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
         if let PDFObjT::Dict(ref s) = obj.val() {
             let mappings = s.map();
-            if let Some(a) = mappings.get(&Vec::from("Count")) {
+            if let Some(a) = mappings.get(&DictKey::new(Vec::from("Count"))) {
                 if let PDFObjT::Integer(ref _s) = a.val() {}
                 return Some(TypeCheckError::PredicateError(
                     "Integer expected".to_string(),
                 ))
             }
-            if let Some(a) = mappings.get(&Vec::from("Kids")) {
+            if let Some(a) = mappings.get(&DictKey::new(Vec::from("Kids"))) {
                 if let PDFObjT::Array(ref s) = a.val() {
                     for c in s.objs() {
                         if let PDFObjT::Reference(ref _s2) = c.val() {
@@ -141,7 +141,7 @@ impl Predicate for PageTreePredicate {
                     ))
                 }
             }
-            if let Some(a) = mappings.get(&Vec::from("Parent")) {
+            if let Some(a) = mappings.get(&DictKey::new(Vec::from("Parent"))) {
                 if let PDFObjT::Array(ref s) = a.val() {
                     for c in s.objs() {
                         if let PDFObjT::Reference(ref _s2) = c.val() {
@@ -157,22 +157,22 @@ impl Predicate for PageTreePredicate {
                     ))
                 }
             }
-            if (mappings.contains_key(&Vec::from("Parent"))
-                && mappings.contains_key(&Vec::from("Kids"))
-                && mappings.contains_key(&Vec::from("Count"))
-                && mappings.contains_key(&Vec::from("Parent")))
-                || (mappings.contains_key(&Vec::from("Parent"))
-                    && mappings.contains_key(&Vec::from("Kids"))
-                    && mappings.contains_key(&Vec::from("Count"))
-                    && mappings.contains_key(&Vec::from("Parent")))
-                || (mappings.contains_key(&Vec::from("Parent"))
-                    && mappings.contains_key(&Vec::from("Kids"))
-                    && mappings.contains_key(&Vec::from("Count"))
-                    && mappings.contains_key(&Vec::from("Parent")))
-                || (mappings.contains_key(&Vec::from("Parent"))
-                    && mappings.contains_key(&Vec::from("Kids"))
-                    && mappings.contains_key(&Vec::from("Count"))
-                    && mappings.contains_key(&Vec::from("Parent")))
+            if (mappings.contains_key(&DictKey::new(Vec::from("Parent")))
+                && mappings.contains_key(&DictKey::new(Vec::from("Kids")))
+                && mappings.contains_key(&DictKey::new(Vec::from("Count")))
+                && mappings.contains_key(&DictKey::new(Vec::from("Parent"))))
+                || (mappings.contains_key(&DictKey::new(Vec::from("Parent")))
+                    && mappings.contains_key(&DictKey::new(Vec::from("Kids")))
+                    && mappings.contains_key(&DictKey::new(Vec::from("Count")))
+                    && mappings.contains_key(&DictKey::new(Vec::from("Parent"))))
+                || (mappings.contains_key(&DictKey::new(Vec::from("Parent")))
+                    && mappings.contains_key(&DictKey::new(Vec::from("Kids")))
+                    && mappings.contains_key(&DictKey::new(Vec::from("Count")))
+                    && mappings.contains_key(&DictKey::new(Vec::from("Parent"))))
+                || (mappings.contains_key(&DictKey::new(Vec::from("Parent")))
+                    && mappings.contains_key(&DictKey::new(Vec::from("Kids")))
+                    && mappings.contains_key(&DictKey::new(Vec::from("Count")))
+                    && mappings.contains_key(&DictKey::new(Vec::from("Parent"))))
             {
             } else {
                 return Some(TypeCheckError::PredicateError(
