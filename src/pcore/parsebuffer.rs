@@ -424,13 +424,14 @@ impl ParseBufferT for ParseBuffer {
 
     fn scan(&mut self, tag: &[u8]) -> ParseResult<usize> {
         let start = self.get_cursor();
-        let mut skip = 0;
-        for w in self.buf[(self.start + self.ofs) .. (self.start + self.size)].windows(tag.len()) {
+        for (skip, w) in self.buf[(self.start + self.ofs) .. (self.start + self.size)]
+            .windows(tag.len())
+            .enumerate()
+        {
             if w.starts_with(tag) {
                 self.ofs += skip;
                 return Ok(skip)
             }
-            skip += 1;
         }
         Err(locate_value(ErrorKind::EndOfBuffer, start, start))
     }

@@ -439,7 +439,10 @@ impl PDFObjP<'_> {
                 // 'n'
                 let mut np = Null;
                 let n = np.parse(buf)?;
-                Ok(PDFObjT::Null(n.unwrap()))
+                Ok({
+                    n.unwrap();
+                    PDFObjT::Null(())
+                })
             },
             Some(40) => {
                 // '('

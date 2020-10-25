@@ -256,8 +256,12 @@ fn flate_lzw_filter(
                 row_data.clear();
 
                 // get a row
-                for k in row_length * i .. row_length * (i + 1) {
-                    row_data.push(decoded[k]);
+                for d in decoded
+                    .iter()
+                    .take(row_length * (i + 1))
+                    .skip(row_length * i)
+                {
+                    row_data.push(*d);
                 }
                 // Predicts based on the sample to the left,
                 // interleaved by colors.
@@ -294,8 +298,12 @@ fn flate_lzw_filter(
             let mut prev_row = vec![0; row_length];
             for r in 0 .. rows {
                 row_data.clear();
-                for j in row_length * r .. row_length * (r + 1) {
-                    row_data.push(decoded[j]);
+                for d in decoded
+                    .iter()
+                    .take(row_length * (r + 1))
+                    .skip(row_length * r)
+                {
+                    row_data.push(*d)
                 }
                 match predictor {
                     10 => {
@@ -380,12 +388,10 @@ fn flate_lzw_filter(
                     },
                 }
                 // update prev row
-                for j in 0 .. row_length {
-                    prev_row[j] = row_data[j];
-                }
+                prev_row[.. row_length].clone_from_slice(&row_data[.. row_length]);
                 // put data in output buffer
-                for j in 1 .. row_length {
-                    out_buffer.push(row_data[j]);
+                for d in row_data.iter().take(row_length).skip(1) {
+                    out_buffer.push(*d);
                 }
             }
             return Ok(ParseBuffer::new(out_buffer))
