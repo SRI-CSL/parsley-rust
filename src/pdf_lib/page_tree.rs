@@ -1,6 +1,6 @@
 use super::super::pcore::parsebuffer::LocatedVal;
 use super::pdf_obj::PDFObjT;
-use crate::pdf_lib::page::page_type;
+use crate::pdf_lib::page::{page_type, template_type};
 use crate::pdf_lib::pdf_prim::NameT;
 use crate::pdf_lib::pdf_type_check::{
     ChoicePred, DictEntry, DictKeySpec, IndirectSpec, PDFPrimType, PDFType, Predicate, TypeCheck,
@@ -52,6 +52,7 @@ pub fn root_page_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     };
     let opts = Rc::new(PDFType::Disjunct(vec![
         page_type(tctx),
+        template_type(tctx),
         non_root_page_tree(tctx),
     ]));
     let elem = TypeCheck::new_all(tctx, "kids", opts, None, IndirectSpec::Required);
@@ -89,6 +90,7 @@ pub fn non_root_page_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     };
     let opts = Rc::new(PDFType::Disjunct(vec![
         page_type(tctx),
+        template_type(tctx),
         TypeCheck::new_named("root-non-page-tree"),
     ]));
     let kids = DictEntry {
