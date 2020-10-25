@@ -288,7 +288,7 @@ impl Predicate for DateStringPredicate {
 
 #[cfg(test)]
 mod test {
-    use super::mk_date_typchk;
+    use super::{mk_date_typchk, mk_rectangle_typchk};
     use crate::pcore::parsebuffer::{LocatedVal, ParseBuffer};
     use crate::pdf_lib::pdf_obj::{parse_pdf_obj, PDFObjContext};
     use crate::pdf_lib::pdf_type_check::{check_type, TypeCheckContext, TypeCheckError};
@@ -340,5 +340,25 @@ mod test {
         for d in incorrect_test_cases.iter() {
             assert!(run_date_type_check(d).is_some());
         }
+    }
+
+    #[test]
+    fn test_rectangle() {
+        let mut ctxt = mk_new_context();
+        let v = Vec::from("[1 2 3 4]".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+
+        let mut tctx = TypeCheckContext::new();
+        let typ = mk_rectangle_typchk(&mut tctx);
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), None);
+
+        let v = Vec::from("[1 2.0 3 4.5]".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+
+        let mut tctx = TypeCheckContext::new();
+        let typ = mk_rectangle_typchk(&mut tctx);
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), None);
     }
 }
