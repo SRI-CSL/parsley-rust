@@ -1,7 +1,7 @@
 use super::pdf_obj::PDFObjT;
 use crate::pdf_lib::common_data_structures::{
     mk_generic_array_typchk, mk_generic_dict_typchk, mk_generic_indirect_array_typchk,
-    mk_generic_indirect_dict_typchk, mk_name_check, name_dictionary,
+    mk_generic_indirect_dict_typchk, mk_generic_indirect_stream_typchk, mk_name_check, name_dictionary,
 };
 use crate::pdf_lib::number_tree::number_tree;
 use crate::pdf_lib::page_tree::root_page_tree;
@@ -149,7 +149,7 @@ pub fn catalog_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     // pieceinfo, ocproperties,
     let metadata = DictEntry {
         key: Vec::from("Metadata"),
-        chk: TypeCheck::new(tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Bool))), /* FIXME: this needs to be a generic indirect stream */
+        chk: mk_generic_indirect_stream_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let structtreeroot = DictEntry {

@@ -75,6 +75,23 @@ pub fn mk_generic_indirect_dict_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCh
     )
 }
 
+// A generic stream, typically used for out-of-scope
+// stream values.
+pub fn mk_generic_stream_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+    TypeCheck::new(tctx, "", Rc::new(PDFType::Stream(vec![])))
+}
+
+// A generic stream that is required to be an indirect reference,
+// typically used for out-of-scope dictionary values.
+pub fn mk_generic_indirect_stream_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+    TypeCheck::new_indirect(
+        tctx,
+        "",
+        Rc::new(PDFType::Stream(vec![])),
+        IndirectSpec::Required,
+    )
+}
+
 // A generic array, typically used for out-of-scope
 // array values.
 pub fn mk_generic_array_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
