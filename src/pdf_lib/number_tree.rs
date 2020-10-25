@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 struct NumberTreePredicate;
 impl Predicate for NumberTreePredicate {
-    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
+    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<LocatedVal<TypeCheckError>> {
         if let PDFObjT::Dict(ref s) = obj.val() {
             let mappings = s.map();
             if let Some(a) = mappings.get(&DictKey::new(Vec::from("Names"))) {
@@ -17,25 +17,25 @@ impl Predicate for NumberTreePredicate {
                             if let PDFObjT::Integer(ref _s1) = s.objs()[c].val() {
                                 if let PDFObjT::Reference(ref _s2) = s.objs()[c + 1].val() {
                                 } else {
-                                    return Some(TypeCheckError::PredicateError(
+                                    return Some(obj.place(TypeCheckError::PredicateError(
                                         "Reference not found in Num Tree".to_string(),
-                                    ))
+                                    )))
                                 }
                             } else {
-                                return Some(TypeCheckError::PredicateError(
+                                return Some(obj.place(TypeCheckError::PredicateError(
                                     "String not found in num tree".to_string(),
-                                ))
+                                )))
                             }
                         }
                     } else {
-                        return Some(TypeCheckError::PredicateError(
+                        return Some(obj.place(TypeCheckError::PredicateError(
                             "Array found but not correct length in Num Tree".to_string(),
-                        ))
+                        )))
                     }
                 } else {
-                    return Some(TypeCheckError::PredicateError(
+                    return Some(obj.place(TypeCheckError::PredicateError(
                         "Array not found in Num Tree".to_string(),
-                    ))
+                    )))
                 }
             }
             if let Some(a) = mappings.get(&DictKey::new(Vec::from("Limits"))) {
@@ -43,15 +43,15 @@ impl Predicate for NumberTreePredicate {
                     for c in s.objs() {
                         if let PDFObjT::Integer(ref _s1) = c.val() {
                         } else {
-                            return Some(TypeCheckError::PredicateError(
+                            return Some(obj.place(TypeCheckError::PredicateError(
                                 "TypeMismatch: Integer expected".to_string(),
-                            ))
+                            )))
                         }
                     }
                     if s.objs().len() != 2 {
-                        return Some(TypeCheckError::PredicateError(
+                        return Some(obj.place(TypeCheckError::PredicateError(
                             "Length Mismatch".to_string(),
-                        ))
+                        )))
                     }
                 }
             }
@@ -60,15 +60,15 @@ impl Predicate for NumberTreePredicate {
                     for c in s.objs() {
                         if let PDFObjT::Reference(ref _s2) = c.val() {
                         } else {
-                            return Some(TypeCheckError::PredicateError(
+                            return Some(obj.place(TypeCheckError::PredicateError(
                                 "Reference expected".to_string(),
-                            ))
+                            )))
                         }
                     }
                 } else {
-                    return Some(TypeCheckError::PredicateError(
+                    return Some(obj.place(TypeCheckError::PredicateError(
                         "Reference wasn't an Array".to_string(),
-                    ))
+                    )))
                 }
             }
 
@@ -87,14 +87,14 @@ impl Predicate for NumberTreePredicate {
             {
                 None
             } else {
-                Some(TypeCheckError::PredicateError(
+                Some(obj.place(TypeCheckError::PredicateError(
                     "Missing field or Forbidden field".to_string(),
-                ))
+                )))
             }
         } else {
-            Some(TypeCheckError::PredicateError(
+            Some(obj.place(TypeCheckError::PredicateError(
                 "No Dictionary, no Nums Tree".to_string(),
-            ))
+            )))
         }
     }
 }
@@ -109,54 +109,54 @@ pub fn number_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
 struct ReferencePredicate;
 
 impl Predicate for ReferencePredicate {
-    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
+    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<LocatedVal<TypeCheckError>> {
         if let PDFObjT::Array(ref s) = obj.val() {
             for c in s.objs() {
                 if let PDFObjT::Reference(ref _s2) = c.val() {
                 } else {
-                    return Some(TypeCheckError::PredicateError(
+                    return Some(obj.place(TypeCheckError::PredicateError(
                         "Reference expected".to_string(),
-                    ))
+                    )))
                 }
             }
             None
         } else {
-            Some(TypeCheckError::PredicateError(
+            Some(obj.place(TypeCheckError::PredicateError(
                 "Reference wasn't an Array".to_string(),
-            ))
+            )))
         }
     }
 }
 
 struct NumsPredicate;
 impl Predicate for NumsPredicate {
-    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
+    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<LocatedVal<TypeCheckError>> {
         if let PDFObjT::Array(ref s) = obj.val() {
             if s.objs().len() % 2 == 0 {
                 for c in (0 .. s.objs().len()).step_by(2) {
                     if let PDFObjT::Integer(ref _s1) = s.objs()[c].val() {
                         if let PDFObjT::Reference(ref _s2) = s.objs()[c + 1].val() {
                         } else {
-                            return Some(TypeCheckError::PredicateError(
+                            return Some(obj.place(TypeCheckError::PredicateError(
                                 "Reference not found in Number Tree".to_string(),
-                            ))
+                            )))
                         }
                     } else {
-                        return Some(TypeCheckError::PredicateError(
+                        return Some(obj.place(TypeCheckError::PredicateError(
                             "Integer not found in Number tree".to_string(),
-                        ))
+                        )))
                     }
                 }
                 None
             } else {
-                Some(TypeCheckError::PredicateError(
+                Some(obj.place(TypeCheckError::PredicateError(
                     "Array found but not correct length in Number Tree".to_string(),
-                ))
+                )))
             }
         } else {
-            Some(TypeCheckError::PredicateError(
+            Some(obj.place(TypeCheckError::PredicateError(
                 "Array not found in Number Tree".to_string(),
-            ))
+            )))
         }
     }
 }
@@ -221,12 +221,10 @@ mod test_number_tree {
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         //let v = Vec::from("<< /Count 3 >>".as_bytes());
         let typ = number_tree(&mut tctx);
-        assert_eq!(
-            check_type(&ctxt, &tctx, Rc::new(obj), typ),
-            Some(TypeCheckError::PredicateError(
-                "Missing field or Forbidden field".to_string()
-            ))
-        );
+        let err = obj.place(TypeCheckError::PredicateError(
+            "Missing field or Forbidden field".to_string(),
+        ));
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), Some(err));
     }
     #[test]
     fn test_root_kids_forbidden_num_tree() {
@@ -319,12 +317,10 @@ mod test_number_tree {
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let typ = number_tree(&mut tctx);
-        assert_eq!(
-            check_type(&ctxt, &tctx, Rc::new(obj), typ),
-            Some(TypeCheckError::PredicateError(
-                "TypeMismatch: Integer expected".to_string()
-            ))
-        );
+        let err = obj.place(TypeCheckError::PredicateError(
+            "TypeMismatch: Integer expected".to_string(),
+        ));
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), Some(err));
     }
 
     #[test]
@@ -357,12 +353,10 @@ mod test_number_tree {
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let typ = number_tree(&mut tctx);
-        assert_eq!(
-            check_type(&ctxt, &tctx, Rc::new(obj), typ),
-            Some(TypeCheckError::PredicateError(
-                "TypeMismatch: Integer expected".to_string()
-            ))
-        );
+        let err = obj.place(TypeCheckError::PredicateError(
+            "TypeMismatch: Integer expected".to_string(),
+        ));
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), Some(err));
     }
 
     #[test]
@@ -410,12 +404,10 @@ mod test_number_tree {
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let typ = number_tree(&mut tctx);
-        assert_eq!(
-            check_type(&ctxt, &tctx, Rc::new(obj), typ),
-            Some(TypeCheckError::PredicateError(
-                "TypeMismatch: Integer expected".to_string()
-            ))
-        );
+        let err = obj.place(TypeCheckError::PredicateError(
+            "TypeMismatch: Integer expected".to_string(),
+        ));
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), Some(err));
     }
 
     #[test]
@@ -448,11 +440,9 @@ mod test_number_tree {
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let typ = number_tree(&mut tctx);
-        assert_eq!(
-            check_type(&ctxt, &tctx, Rc::new(obj), typ),
-            Some(TypeCheckError::PredicateError(
-                "Missing field or Forbidden field".to_string()
-            ))
-        );
+        let err = obj.place(TypeCheckError::PredicateError(
+            "Missing field or Forbidden field".to_string(),
+        ));
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), Some(err));
     }
 }

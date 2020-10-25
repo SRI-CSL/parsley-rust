@@ -827,9 +827,9 @@ fn parse_file(test_file: &str) {
     let typ = catalog_type(&mut tctx);
     if let Some(err) = check_type(&ctxt, &tctx, Rc::clone(root_obj), typ) {
         exit_log!(
-            fi.file_offset(root_obj.loc_start()),
+            fi.file_offset(err.loc_start()),
             "Type Check Error: {:?}",
-            err
+            err.val()
         );
     }
 }

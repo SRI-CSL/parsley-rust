@@ -116,29 +116,29 @@ pub fn non_root_page_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
 
 struct PageTreePredicate;
 impl Predicate for PageTreePredicate {
-    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
+    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<LocatedVal<TypeCheckError>> {
         if let PDFObjT::Dict(ref s) = obj.val() {
             let mappings = s.map();
             if let Some(a) = mappings.get(&DictKey::new(Vec::from("Count"))) {
                 if let PDFObjT::Integer(ref _s) = a.val() {}
-                return Some(TypeCheckError::PredicateError(
+                return Some(obj.place(TypeCheckError::PredicateError(
                     "Integer expected".to_string(),
-                ))
+                )))
             }
             if let Some(a) = mappings.get(&DictKey::new(Vec::from("Kids"))) {
                 if let PDFObjT::Array(ref s) = a.val() {
                     for c in s.objs() {
                         if let PDFObjT::Reference(ref _s2) = c.val() {
                         } else {
-                            return Some(TypeCheckError::PredicateError(
+                            return Some(obj.place(TypeCheckError::PredicateError(
                                 "Reference expected".to_string(),
-                            ))
+                            )))
                         }
                     }
                 } else {
-                    return Some(TypeCheckError::PredicateError(
+                    return Some(obj.place(TypeCheckError::PredicateError(
                         "Reference wasn't an Array".to_string(),
-                    ))
+                    )))
                 }
             }
             if let Some(a) = mappings.get(&DictKey::new(Vec::from("Parent"))) {
@@ -146,15 +146,15 @@ impl Predicate for PageTreePredicate {
                     for c in s.objs() {
                         if let PDFObjT::Reference(ref _s2) = c.val() {
                         } else {
-                            return Some(TypeCheckError::PredicateError(
+                            return Some(obj.place(TypeCheckError::PredicateError(
                                 "Reference expected".to_string(),
-                            ))
+                            )))
                         }
                     }
                 } else {
-                    return Some(TypeCheckError::PredicateError(
+                    return Some(obj.place(TypeCheckError::PredicateError(
                         "Reference wasn't an Array".to_string(),
-                    ))
+                    )))
                 }
             }
             if (mappings.contains_key(&DictKey::new(Vec::from("Parent")))
@@ -175,16 +175,16 @@ impl Predicate for PageTreePredicate {
                     && mappings.contains_key(&DictKey::new(Vec::from("Parent"))))
             {
             } else {
-                return Some(TypeCheckError::PredicateError(
+                return Some(obj.place(TypeCheckError::PredicateError(
                     "Missing field or Forbidden field".to_string(),
-                ))
+                )))
             }
             None
         } else {
             // Not a dictionary
-            Some(TypeCheckError::PredicateError(
+            Some(obj.place(TypeCheckError::PredicateError(
                 "No Dictionary, no Page Tree".to_string(),
-            ))
+            )))
         }
     }
 }
@@ -201,21 +201,21 @@ pub fn page_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
 struct ReferencePredicate;
 
 impl Predicate for ReferencePredicate {
-    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
+    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<LocatedVal<TypeCheckError>> {
         if let PDFObjT::Array(ref s) = obj.val() {
             for c in s.objs() {
                 if let PDFObjT::Reference(ref _s2) = c.val() {
                 } else {
-                    return Some(TypeCheckError::PredicateError(
+                    return Some(obj.place(TypeCheckError::PredicateError(
                         "Reference expected".to_string(),
-                    ))
+                    )))
                 }
             }
             None
         } else {
-            Some(TypeCheckError::PredicateError(
+            Some(obj.place(TypeCheckError::PredicateError(
                 "Reference wasn't an Array".to_string(),
-            ))
+            )))
         }
     }
 }
@@ -243,12 +243,10 @@ mod test_page_tree {
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let typ = page_tree(&mut tctx);
-        assert_eq!(
-            check_type(&ctxt, &tctx, Rc::new(obj), typ),
-            Some(TypeCheckError::PredicateError(
-                "Integer expected".to_string()
-            ))
-        );
+        let err = obj.place(TypeCheckError::PredicateError(
+            "Integer expected".to_string(),
+        ));
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), Some(err));
     }
     #[test]
     fn test_non_root_page_tree_not_wrong() {
@@ -263,12 +261,10 @@ mod test_page_tree {
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let typ = page_tree(&mut tctx);
-        assert_eq!(
-            check_type(&ctxt, &tctx, Rc::new(obj), typ),
-            Some(TypeCheckError::PredicateError(
-                "Integer expected".to_string()
-            ))
-        );
+        let err = obj.place(TypeCheckError::PredicateError(
+            "Integer expected".to_string(),
+        ));
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), Some(err));
     }
     // Page Tree Non Root Node Tests End
 
@@ -281,12 +277,10 @@ mod test_page_tree {
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let typ = page_tree(&mut tctx);
-        assert_eq!(
-            check_type(&ctxt, &tctx, Rc::new(obj), typ),
-            Some(TypeCheckError::PredicateError(
-                "Integer expected".to_string()
-            ))
-        );
+        let err = obj.place(TypeCheckError::PredicateError(
+            "Integer expected".to_string(),
+        ));
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), Some(err));
     }
     // Page Tree Root Node Tests End
 }

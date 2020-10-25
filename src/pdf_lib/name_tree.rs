@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 struct NameTreePredicate;
 impl Predicate for NameTreePredicate {
-    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
+    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<LocatedVal<TypeCheckError>> {
         if let PDFObjT::Dict(ref s) = obj.val() {
             let mappings = s.map();
             if let Some(a) = mappings.get(&DictKey::new(Vec::from("Names"))) {
@@ -17,25 +17,25 @@ impl Predicate for NameTreePredicate {
                             if let PDFObjT::String(ref _s1) = s.objs()[c].val() {
                                 if let PDFObjT::Reference(ref _s2) = s.objs()[c + 1].val() {
                                 } else {
-                                    return Some(TypeCheckError::PredicateError(
+                                    return Some(obj.place(TypeCheckError::PredicateError(
                                         "Reference not found in Name Tree".to_string(),
-                                    ))
+                                    )))
                                 }
                             } else {
-                                return Some(TypeCheckError::PredicateError(
+                                return Some(obj.place(TypeCheckError::PredicateError(
                                     "String not found in name tree".to_string(),
-                                ))
+                                )))
                             }
                         }
                     } else {
-                        return Some(TypeCheckError::PredicateError(
+                        return Some(obj.place(TypeCheckError::PredicateError(
                             "Array found but not correct length in Name Tree".to_string(),
-                        ))
+                        )))
                     }
                 } else {
-                    return Some(TypeCheckError::PredicateError(
+                    return Some(obj.place(TypeCheckError::PredicateError(
                         "Array not found in Name Tree".to_string(),
-                    ))
+                    )))
                 }
             }
             if let Some(a) = mappings.get(&DictKey::new(Vec::from("Limits"))) {
@@ -43,15 +43,15 @@ impl Predicate for NameTreePredicate {
                     for c in s.objs() {
                         if let PDFObjT::String(ref _s1) = c.val() {
                         } else {
-                            return Some(TypeCheckError::PredicateError(
+                            return Some(obj.place(TypeCheckError::PredicateError(
                                 "TypeMismatch: String expected".to_string(),
-                            ))
+                            )))
                         }
                     }
                     if s.objs().len() != 2 {
-                        return Some(TypeCheckError::PredicateError(
+                        return Some(obj.place(TypeCheckError::PredicateError(
                             "Length Mismatch".to_string(),
-                        ))
+                        )))
                     }
                 }
             }
@@ -60,15 +60,15 @@ impl Predicate for NameTreePredicate {
                     for c in s.objs() {
                         if let PDFObjT::Reference(ref _s2) = c.val() {
                         } else {
-                            return Some(TypeCheckError::PredicateError(
+                            return Some(obj.place(TypeCheckError::PredicateError(
                                 "Reference expected".to_string(),
-                            ))
+                            )))
                         }
                     }
                 } else {
-                    return Some(TypeCheckError::PredicateError(
+                    return Some(obj.place(TypeCheckError::PredicateError(
                         "Reference wasn't an Array".to_string(),
-                    ))
+                    )))
                 }
             }
 
@@ -87,46 +87,46 @@ impl Predicate for NameTreePredicate {
             {
                 None
             } else {
-                Some(TypeCheckError::PredicateError(
+                Some(obj.place(TypeCheckError::PredicateError(
                     "Missing field or Forbidden field".to_string(),
-                ))
+                )))
             }
         } else {
-            Some(TypeCheckError::PredicateError(
+            Some(obj.place(TypeCheckError::PredicateError(
                 "No Dictionary, no Name Tree".to_string(),
-            ))
+            )))
         }
     }
 }
 struct NamesPredicate;
 impl Predicate for NamesPredicate {
-    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
+    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<LocatedVal<TypeCheckError>> {
         if let PDFObjT::Array(ref s) = obj.val() {
             if s.objs().len() % 2 == 0 {
                 for c in (0 .. s.objs().len()).step_by(2) {
                     if let PDFObjT::String(ref _s1) = s.objs()[c].val() {
                         if let PDFObjT::Reference(ref _s2) = s.objs()[c + 1].val() {
                         } else {
-                            return Some(TypeCheckError::PredicateError(
+                            return Some(obj.place(TypeCheckError::PredicateError(
                                 "Reference not found in Name Tree".to_string(),
-                            ))
+                            )))
                         }
                     } else {
-                        return Some(TypeCheckError::PredicateError(
+                        return Some(obj.place(TypeCheckError::PredicateError(
                             "String not found in name tree".to_string(),
-                        ))
+                        )))
                     }
                 }
                 None
             } else {
-                Some(TypeCheckError::PredicateError(
+                Some(obj.place(TypeCheckError::PredicateError(
                     "Array found but not correct length in Name Tree".to_string(),
-                ))
+                )))
             }
         } else {
-            Some(TypeCheckError::PredicateError(
+            Some(obj.place(TypeCheckError::PredicateError(
                 "Array not found in Name Tree".to_string(),
-            ))
+            )))
         }
     }
 }
@@ -202,12 +202,10 @@ mod test_name_tree {
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         //let v = Vec::from("<< /Count 3 >>".as_bytes());
         let typ = name_tree(&mut tctx);
-        assert_eq!(
-            check_type(&ctxt, &tctx, Rc::new(obj), typ),
-            Some(TypeCheckError::PredicateError(
-                "Missing field or Forbidden field".to_string()
-            ))
-        );
+        let err = obj.place(TypeCheckError::PredicateError(
+            "Missing field or Forbidden field".to_string(),
+        ));
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), Some(err));
     }
     #[test]
     fn test_root_kids_forbidden_name_tree() {
@@ -300,12 +298,10 @@ mod test_name_tree {
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let typ = name_tree(&mut tctx);
-        assert_eq!(
-            check_type(&ctxt, &tctx, Rc::new(obj), typ),
-            Some(TypeCheckError::PredicateError(
-                "TypeMismatch: String expected".to_string()
-            ))
-        );
+        let err = obj.place(TypeCheckError::PredicateError(
+            "TypeMismatch: String expected".to_string(),
+        ));
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), Some(err));
     }
 
     #[test]
@@ -338,12 +334,10 @@ mod test_name_tree {
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let typ = name_tree(&mut tctx);
-        assert_eq!(
-            check_type(&ctxt, &tctx, Rc::new(obj), typ),
-            Some(TypeCheckError::PredicateError(
-                "Missing field or Forbidden field".to_string()
-            ))
-        );
+        let err = obj.place(TypeCheckError::PredicateError(
+            "Missing field or Forbidden field".to_string(),
+        ));
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), Some(err));
     }
 
     #[test]
@@ -389,12 +383,10 @@ mod test_name_tree {
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let typ = name_tree(&mut tctx);
-        assert_eq!(
-            check_type(&ctxt, &tctx, Rc::new(obj), typ),
-            Some(TypeCheckError::PredicateError(
-                "TypeMismatch: String expected".to_string()
-            ))
-        );
+        let err = obj.place(TypeCheckError::PredicateError(
+            "TypeMismatch: String expected".to_string(),
+        ));
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), Some(err));
     }
 
     #[test]
@@ -427,11 +419,9 @@ mod test_name_tree {
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
         let typ = name_tree(&mut tctx);
-        assert_eq!(
-            check_type(&ctxt, &tctx, Rc::new(obj), typ),
-            Some(TypeCheckError::PredicateError(
-                "Missing field or Forbidden field".to_string()
-            ))
-        );
+        let err = obj.place(TypeCheckError::PredicateError(
+            "Missing field or Forbidden field".to_string(),
+        ));
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), Some(err));
     }
 }

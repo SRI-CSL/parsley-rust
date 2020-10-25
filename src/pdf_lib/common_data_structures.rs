@@ -185,12 +185,12 @@ pub fn name_dictionary(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
 struct SingleReferencePredicate;
 
 impl Predicate for SingleReferencePredicate {
-    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
+    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<LocatedVal<TypeCheckError>> {
         if let PDFObjT::Reference(ref _s2) = obj.val() {
         } else {
-            return Some(TypeCheckError::PredicateError(
+            return Some(obj.place(TypeCheckError::PredicateError(
                 "Reference expected".to_string(),
-            ))
+            )))
         }
         None
     }
@@ -198,21 +198,21 @@ impl Predicate for SingleReferencePredicate {
 struct ReferencePredicate;
 
 impl Predicate for ReferencePredicate {
-    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
+    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<LocatedVal<TypeCheckError>> {
         if let PDFObjT::Array(ref s) = obj.val() {
             for c in s.objs() {
                 if let PDFObjT::Reference(ref _s2) = c.val() {
                 } else {
-                    return Some(TypeCheckError::PredicateError(
+                    return Some(obj.place(TypeCheckError::PredicateError(
                         "Reference expected".to_string(),
-                    ))
+                    )))
                 }
             }
             None
         } else {
-            Some(TypeCheckError::PredicateError(
+            Some(obj.place(TypeCheckError::PredicateError(
                 "Reference wasn't an Array".to_string(),
-            ))
+            )))
         }
     }
 }
@@ -244,7 +244,7 @@ pub fn mk_date_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
 }
 struct DateStringPredicate;
 impl Predicate for DateStringPredicate {
-    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
+    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<LocatedVal<TypeCheckError>> {
         /*
          * PDF spec 7.9.4 defines the date format like:
          *  (D:YYYYMMDDHHmmSSOHH'mm)
@@ -254,15 +254,15 @@ impl Predicate for DateStringPredicate {
             let re = regex::Regex::new(r"^D:\d{4}(([0][1-9]|[1][0-2])(([0][1-9]|[1-2][0-9]|[3][0-1])(([0-1][0-9]|[2][0-3])(([0-5][0-9])(([0-5][0-9])([+\-Z](([0-1][0-9]'|[2][0-3]')([0-5][0-9])?)?)?)?)?)?)?)?$").unwrap();
             let date_string = std::str::from_utf8(s).unwrap_or("");
             if !re.is_match(date_string) {
-                return Some(TypeCheckError::PredicateError(
+                return Some(obj.place(TypeCheckError::PredicateError(
                     "Not a Date string.".to_string(),
-                ))
+                )))
             }
             None
         } else {
-            Some(TypeCheckError::PredicateError(
+            Some(obj.place(TypeCheckError::PredicateError(
                 "Not an Date string.".to_string(),
-            ))
+            )))
         }
     }
 }
@@ -270,7 +270,7 @@ impl Predicate for DateStringPredicate {
 #[cfg(test)]
 mod test {
     use super::mk_date_typchk;
-    use crate::pcore::parsebuffer::ParseBuffer;
+    use crate::pcore::parsebuffer::{LocatedVal, ParseBuffer};
     use crate::pdf_lib::pdf_obj::{parse_pdf_obj, PDFObjContext};
     use crate::pdf_lib::pdf_type_check::{check_type, TypeCheckContext, TypeCheckError};
     use std::rc::Rc;
@@ -279,7 +279,7 @@ mod test {
 
     #[test]
     fn test_date_string() {
-        fn run_date_type_check(raw_pdf_date_string: &str) -> Option<TypeCheckError> {
+        fn run_date_type_check(raw_pdf_date_string: &str) -> Option<LocatedVal<TypeCheckError>> {
             let mut ctxt = mk_new_context();
             let mut tctx = TypeCheckContext::new();
             let v = Vec::from(raw_pdf_date_string.as_bytes());

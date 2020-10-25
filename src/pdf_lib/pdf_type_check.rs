@@ -63,7 +63,7 @@ pub enum TypeCheckError {
 
 // trait wrapper around predicate function
 pub trait Predicate {
-    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError>;
+    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<LocatedVal<TypeCheckError>>;
 }
 
 // typecheck context containing the named checks
@@ -238,7 +238,7 @@ fn type_of(obj: &PDFObjT) -> PDFType {
 
 fn check_predicate(
     obj: &Rc<LocatedVal<PDFObjT>>, pred: &Option<Rc<dyn Predicate>>,
-) -> Option<TypeCheckError> {
+) -> Option<LocatedVal<TypeCheckError>> {
     match pred {
         None => None,
         Some(pred) => pred.check(obj),
@@ -265,7 +265,9 @@ type GetResult = Result<Option<PendingCheck>, ()>;
 
 /* This picks the next check from the given state, given the current
  * check error if any. */
-fn get_next_check(state: &mut State, check_error: &Option<TypeCheckError>) -> GetResult {
+fn get_next_check(
+    state: &mut State, check_error: &Option<LocatedVal<TypeCheckError>>,
+) -> GetResult {
     loop {
         if let Some((pending, next_idx)) = state.get_mut(0) {
             if let Some((obj, tc)) = pending.pop_front() {
@@ -502,11 +504,11 @@ fn resolve(
 /* checks a parsed PDF object against its expected type */
 pub fn check_type(
     ctxt: &PDFObjContext, tctx: &TypeCheckContext, obj: Rc<LocatedVal<PDFObjT>>, chk: Rc<TypeCheck>,
-) -> Option<TypeCheckError> {
+) -> Option<LocatedVal<TypeCheckError>> {
     // Resolve the check if needed.
     let rep = match resolve(tctx, chk) {
         Ok(rep) => rep,
-        Err(err) => return Some(err),
+        Err(err) => return Some(obj.place(err)),
     };
 
     /* normalize the given type */
@@ -541,7 +543,7 @@ pub fn check_type(
 
         let c = match resolve(tctx, tc) {
             Ok(rep) => rep,
-            Err(err) => return Some(err),
+            Err(err) => return Some(o.place(err)),
         };
 
         // reset for the next check.
@@ -558,27 +560,27 @@ pub fn check_type(
                         let chk = Rc::new(TypeCheck::Rep(c.allow_indirect()));
                         return_check(&mut state, (Rc::clone(obj), chk));
                     },
-                    None => return Some(TypeCheckError::RefNotFound(*refnc)),
+                    None => return Some(o.place(TypeCheckError::RefNotFound(*refnc))),
                 }
             },
             (PDFObjT::Reference(_), _, IndirectSpec::Forbidden) => {
-                result = Some(TypeCheckError::ValueMismatch(
+                result = Some(o.place(TypeCheckError::ValueMismatch(
                     Rc::clone(&o),
                     String::from("An indirect reference was forbidden"),
-                ))
+                )))
             },
             (_, _, IndirectSpec::Required) => {
-                result = Some(TypeCheckError::ValueMismatch(
+                result = Some(o.place(TypeCheckError::ValueMismatch(
                     Rc::clone(&o),
                     String::from("An indirect reference was required"),
-                ))
+                )))
             },
 
             (_, PDFType::Disjunct(_), _) => {
                 // We should not get Disjuncts directly.
-                return Some(TypeCheckError::PredicateError(
+                return Some(o.place(TypeCheckError::PredicateError(
                     "Unsupported disjunct type, most likely unnormalized.".to_string(),
-                ))
+                )))
             },
 
             (_, PDFType::Any, _) => result = check_predicate(&o, c.pred()),
@@ -608,7 +610,9 @@ pub fn check_type(
                 match size {
                     Some(sz) => {
                         if ao.objs().len() != *sz {
-                            result = Some(TypeCheckError::ArraySizeMismatch(*sz, ao.objs().len()));
+                            result = Some(
+                                o.place(TypeCheckError::ArraySizeMismatch(*sz, ao.objs().len())),
+                            );
                             continue
                         }
                     },
@@ -617,7 +621,7 @@ pub fn check_type(
                 /* optimize PDFType::Any */
                 let elem_rep = match resolve(tctx, Rc::clone(elem)) {
                     Ok(rep) => rep,
-                    Err(err) => return Some(err),
+                    Err(err) => return Some(o.place(err)),
                 };
                 if let PDFType::Any = elem_rep.typ() {
                     result = check_predicate(&o, c.pred());
@@ -636,18 +640,18 @@ pub fn check_type(
                     let val = dict.get(&ent.key);
                     let chk = match resolve(tctx, Rc::clone(&ent.chk)) {
                         Ok(rep) => rep,
-                        Err(err) => return Some(err),
+                        Err(err) => return Some(o.place(err)),
                     };
                     match (val, ent.opt, chk.typ()) {
                         (None, DictKeySpec::Optional, _) => continue,
                         (None, DictKeySpec::Forbidden, _) => continue,
                         (None, DictKeySpec::Required, _) => {
                             let key = DictKey::new(ent.key.clone());
-                            result = Some(TypeCheckError::MissingKey(key))
+                            result = Some(o.place(TypeCheckError::MissingKey(key)))
                         },
                         (Some(_), DictKeySpec::Forbidden, _) => {
                             let key = DictKey::new(ent.key.clone());
-                            result = Some(TypeCheckError::ForbiddenKey(key))
+                            result = Some(o.place(TypeCheckError::ForbiddenKey(key)))
                         },
                         (Some(_), _, PDFType::Any) => continue,
                         (Some(v), _, _) => chks.push((Rc::clone(v), Rc::clone(&ent.chk))),
@@ -664,18 +668,18 @@ pub fn check_type(
                     let val = s.dict().val().get(&ent.key);
                     let chk = match resolve(tctx, Rc::clone(&ent.chk)) {
                         Ok(rep) => rep,
-                        Err(err) => return Some(err),
+                        Err(err) => return Some(o.place(err)),
                     };
                     match (val, ent.opt, chk.typ()) {
                         (None, DictKeySpec::Optional, _) => continue,
                         (None, DictKeySpec::Forbidden, _) => continue,
                         (None, DictKeySpec::Required, _) => {
                             let key = DictKey::new(ent.key.clone());
-                            result = Some(TypeCheckError::MissingKey(key));
+                            result = Some(o.place(TypeCheckError::MissingKey(key)))
                         },
                         (Some(_), DictKeySpec::Forbidden, _) => {
                             let key = DictKey::new(ent.key.clone());
-                            result = Some(TypeCheckError::ForbiddenKey(key))
+                            result = Some(o.place(TypeCheckError::ForbiddenKey(key)))
                         },
                         (Some(_), _, PDFType::Any) => continue,
                         (Some(v), _, _) => chks.push((Rc::clone(v), Rc::clone(&ent.chk))),
@@ -686,10 +690,10 @@ pub fn check_type(
                 }
             },
             (obj, _, _) => {
-                result = Some(TypeCheckError::TypeMismatch(
+                result = Some(o.place(TypeCheckError::TypeMismatch(
                     Rc::clone(&c.typ),
                     type_of(obj),
-                ))
+                )))
             },
         }
     }
@@ -699,15 +703,15 @@ pub fn check_type(
 pub struct ChoicePred(pub String, pub Vec<PDFObjT>);
 
 impl Predicate for ChoicePred {
-    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
+    fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<LocatedVal<TypeCheckError>> {
         let vec = &self.1;
         if vec.iter().any(|c| obj.val() == c) {
             None
         } else {
-            Some(TypeCheckError::ValueMismatch(
+            Some(obj.place(TypeCheckError::ValueMismatch(
                 Rc::clone(obj),
                 self.0.clone(),
-            ))
+            )))
         }
     }
 }
@@ -815,10 +819,10 @@ mod test_pdf_types {
             None,
             IndirectSpec::Forbidden,
         );
-        let err = TypeCheckError::ValueMismatch(
+        let err = obj.place(TypeCheckError::ValueMismatch(
             Rc::clone(&obj),
             String::from("An indirect reference was forbidden"),
-        );
+        ));
         assert_eq!(check_type(&ctxt, &tctx, Rc::clone(&obj), typ), Some(err));
 
         // check required error.
@@ -833,10 +837,10 @@ mod test_pdf_types {
             None,
             IndirectSpec::Required,
         );
-        let err = TypeCheckError::ValueMismatch(
+        let err = obj.place(TypeCheckError::ValueMismatch(
             Rc::clone(&obj),
             String::from("An indirect reference was required"),
-        );
+        ));
         assert_eq!(check_type(&ctxt, &tctx, Rc::clone(&obj), typ), Some(err));
     }
 
@@ -886,10 +890,8 @@ mod test_pdf_types {
             opt: DictKeySpec::Required,
         };
         let typ = TypeCheck::new(&mut tctx, "dict", Rc::new(PDFType::Dict(vec![ent])));
-        assert_eq!(
-            check_type(&ctxt, &tctx, Rc::new(obj), typ),
-            Some(TypeCheckError::MissingKey(DictKey::new(Vec::from("Dummy"))))
-        );
+        let err = obj.place(TypeCheckError::MissingKey(DictKey::new(Vec::from("Dummy"))));
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), Some(err));
     }
 
     #[test]
@@ -906,12 +908,10 @@ mod test_pdf_types {
             opt: DictKeySpec::Forbidden,
         };
         let typ = TypeCheck::new(&mut tctx, "dict", Rc::new(PDFType::Dict(vec![ent])));
-        assert_eq!(
-            check_type(&ctxt, &tctx, Rc::new(obj), typ),
-            Some(TypeCheckError::ForbiddenKey(DictKey::new(Vec::from(
-                "Entry"
-            ))))
-        );
+        let err = obj.place(TypeCheckError::ForbiddenKey(DictKey::new(Vec::from(
+            "Entry",
+        ))));
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), Some(err));
     }
 
     fn mk_pagemode_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
@@ -982,12 +982,10 @@ mod test_pdf_types {
             opt: DictKeySpec::Forbidden,
         };
         let typ = TypeCheck::new(&mut tctx, "dict", Rc::new(PDFType::Dict(vec![ent])));
-        assert_eq!(
-            check_type(&ctxt, &tctx, Rc::new(obj), typ),
-            Some(TypeCheckError::ForbiddenKey(DictKey::new(Vec::from(
-                "PageMode"
-            ))))
-        );
+        let err = obj.place(TypeCheckError::ForbiddenKey(DictKey::new(Vec::from(
+            "PageMode",
+        ))));
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), Some(err));
 
         // invalid value for optional key
         let v = Vec::from("<< /PageMode /Dummy >>".as_bytes());
@@ -1004,31 +1002,29 @@ mod test_pdf_types {
             0,
         ));
         let typ = TypeCheck::new(&mut tctx, "dict", Rc::new(PDFType::Dict(vec![ent])));
-        assert_eq!(
-            check_type(&ctxt, &tctx, Rc::new(obj), typ),
-            Some(TypeCheckError::ValueMismatch(
-                val,
-                String::from("Invalid PageMode")
-            ))
-        );
+        let err = obj.place(TypeCheckError::ValueMismatch(
+            val,
+            String::from("Invalid PageMode"),
+        ));
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), Some(err));
     }
 
     struct AsciiStringPredicate;
     impl Predicate for AsciiStringPredicate {
-        fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
+        fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<LocatedVal<TypeCheckError>> {
             if let PDFObjT::String(ref s) = obj.val() {
                 for c in s {
                     if *c >= 128 {
-                        return Some(TypeCheckError::PredicateError(
+                        return Some(obj.place(TypeCheckError::PredicateError(
                             "Not an ASCII string.".to_string(),
-                        ))
+                        )))
                     }
                 }
                 None
             } else {
-                return Some(TypeCheckError::PredicateError(
+                return Some(obj.place(TypeCheckError::PredicateError(
                     "Not an ASCII string.".to_string(),
-                ))
+                )))
             }
         }
     }
@@ -1059,7 +1055,9 @@ mod test_pdf_types {
         let v: Vec<u8> = vec![40, 129, 255, 0, 41];
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
-        let err = TypeCheckError::PredicateError("Not an ASCII string.".to_string());
+        let err = obj.place(TypeCheckError::PredicateError(
+            "Not an ASCII string.".to_string(),
+        ));
         assert_eq!(
             check_type(&ctxt, &tctx, Rc::new(obj), Rc::clone(&chk)),
             Some(err)
@@ -1075,7 +1073,9 @@ mod test_pdf_types {
         assert_eq!(pred.check(&Rc::new(obj)), None);
 
         let obj = LocatedVal::new(PDFObjT::Null(()), 0, 0);
-        let err = TypeCheckError::PredicateError("Not an ASCII string.".to_string());
+        let err = obj.place(TypeCheckError::PredicateError(
+            "Not an ASCII string.".to_string(),
+        ));
         assert_eq!(pred.check(&Rc::new(obj)), Some(err));
     }
 
@@ -1101,7 +1101,9 @@ mod test_pdf_types {
         let v = Vec::from("10".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
-        let err = TypeCheckError::PredicateError("Not an ASCII string.".to_string());
+        let err = obj.place(TypeCheckError::PredicateError(
+            "Not an ASCII string.".to_string(),
+        ));
         assert_eq!(
             check_type(&ctxt, &tctx, Rc::new(obj), Rc::clone(&chk)),
             Some(err)
@@ -1110,13 +1112,13 @@ mod test_pdf_types {
 
     struct OrTestPredicate;
     impl Predicate for OrTestPredicate {
-        fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<TypeCheckError> {
+        fn check(&self, obj: &Rc<LocatedVal<PDFObjT>>) -> Option<LocatedVal<TypeCheckError>> {
             if let PDFObjT::String(ref s) = obj.val() {
                 for c in s {
                     if *c >= 128 {
-                        return Some(TypeCheckError::PredicateError(
+                        return Some(obj.place(TypeCheckError::PredicateError(
                             "Not an ASCII string.".to_string(),
-                        ))
+                        )))
                     }
                 }
                 return None
@@ -1124,9 +1126,9 @@ mod test_pdf_types {
             if let PDFObjT::Integer(_) = obj.val() {
                 None
             } else {
-                Some(TypeCheckError::PredicateError(
+                Some(obj.place(TypeCheckError::PredicateError(
                     "Not an ASCII string or an integer.".to_string(),
-                ))
+                )))
             }
         }
     }
@@ -1257,13 +1259,13 @@ mod test_pdf_types {
         let opts = vec![Rc::clone(&date), Rc::clone(&int)];
         let chk = TypeCheck::new(&mut tctx, "opt", Rc::new(PDFType::Disjunct(opts)));
         // should return the error for the last disjunct, i.e. int
-        let err = TypeCheckError::TypeMismatch(
+        let err = obj.place(TypeCheckError::TypeMismatch(
             Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
             PDFType::Array {
                 elem: TypeCheck::new(&mut tctx, "", Rc::new(PDFType::Any)),
                 size: None,
             },
-        );
+        ));
         assert_eq!(check_type(&ctxt, &tctx, Rc::clone(&obj), chk), Some(err));
     }
 
