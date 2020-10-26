@@ -28,11 +28,24 @@ pub enum DictKeySpec {
     Forbidden,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub struct DictEntry {
     pub key: Vec<u8>,
     pub chk: Rc<TypeCheck>,
     pub opt: DictKeySpec,
+}
+impl std::fmt::Debug for DictEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let key = match std::str::from_utf8(&self.key) {
+            Ok(s) => String::from(s),
+            Err(_) => format!("{:?}", self.key),
+        };
+        f.debug_struct("DictEntry")
+            .field("key", &key)
+            .field("chk", &self.chk)
+            .field("opt", &self.opt)
+            .finish()
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -208,6 +221,7 @@ impl std::fmt::Debug for TypeCheckRep {
         f.debug_struct("TypeCheck")
             .field("name", &self.name)
             .field("typ", &self.typ)
+            .field("indirect", &self.indirect)
             .finish()
     }
 }
