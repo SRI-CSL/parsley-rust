@@ -1,7 +1,7 @@
 use crate::pdf_lib::common_data_structures::{
     mk_array_of_dict_typchk, mk_date_typchk, mk_generic_array_typchk, mk_generic_dict_typchk,
-    mk_generic_stream_typchk, mk_name_check, mk_number_typchk, mk_rectangle_typchk, resources,
-    mk_parent_typchk,
+    mk_generic_stream_typchk, mk_name_check, mk_number_typchk, mk_parent_typchk,
+    mk_rectangle_typchk, resources,
 };
 use crate::pdf_lib::pdf_obj::PDFObjT;
 use crate::pdf_lib::pdf_prim::NameT;
@@ -516,7 +516,7 @@ mod test_page {
             "
         <<
         /CropBox [ 0 0 792 612 ]
-        /Annots 741 0 R
+        /Annots [741 0 R]
         /Parent 1 0 R
         /StructParents 127
         /Contents 750 0 R
@@ -564,7 +564,7 @@ mod test_page {
         let v = Vec::from(
             "<<
         /CropBox [ 0 0 792 612 ]
-        /Annots 39 0 R
+        /Annots [39 0 R]
         /Parent 1 0 R
         /StructParents 68
         /Contents 48 0 R

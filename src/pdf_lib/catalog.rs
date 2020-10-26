@@ -288,7 +288,7 @@ mod test_name_tree {
         let v = Vec::from(
             "<<
         /CropBox [ 0 0 792 612 ]
-        /Annots 39 0 R
+        /Annots [39 0 R]
         /Parent 1 0 R
         /StructParents 68
         /Contents 48 0 R
