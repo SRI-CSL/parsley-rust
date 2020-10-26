@@ -5,8 +5,7 @@ use crate::pdf_lib::common_data_structures::{
 use crate::pdf_lib::pdf_obj::PDFObjT;
 use crate::pdf_lib::pdf_prim::NameT;
 use crate::pdf_lib::pdf_type_check::{
-    ChoicePred, DictEntry, DictKeySpec, IndirectSpec, PDFPrimType, PDFType, TypeCheck,
-    TypeCheckContext,
+    ChoicePred, DictEntry, DictKeySpec, PDFPrimType, PDFType, TypeCheck, TypeCheckContext,
 };
 use std::rc::Rc;
 

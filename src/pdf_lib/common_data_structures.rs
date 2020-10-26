@@ -117,7 +117,10 @@ pub fn mk_array_of_dict_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
 }
 
 pub fn mk_name_check(name: &str, msg: &str, tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
-    let pred = ChoicePred(String::from(msg), vec![PDFObjT::Name(NameT::new(Vec::from(name)))]);
+    let pred = ChoicePred(
+        String::from(msg),
+        vec![PDFObjT::Name(NameT::new(Vec::from(name)))],
+    );
     TypeCheck::new_refined(
         tctx,
         "",
