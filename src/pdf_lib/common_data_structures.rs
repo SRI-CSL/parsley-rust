@@ -102,10 +102,11 @@ pub fn mk_generic_array_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
 // A generic array that is required to be an indirect reference,
 // typically used for out-of-scope array values.
 pub fn mk_generic_indirect_array_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+    let elem = TypeCheck::new(tctx, "", Rc::new(PDFType::Any));
     TypeCheck::new_indirect(
         tctx,
         "",
-        Rc::new(PDFType::Dict(vec![])),
+        Rc::new(PDFType::Array { elem, size: None }),
         IndirectSpec::Required,
     )
 }
