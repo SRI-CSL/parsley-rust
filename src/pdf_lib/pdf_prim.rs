@@ -544,7 +544,7 @@ impl ParsleyParser for RawLiteralString {
 
 // Raw names: does not perform UTF decoding, and the representation
 // does not include the leading '/'.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct NameT {
     raw_bytes: Vec<u8>,
 }
@@ -563,6 +563,15 @@ impl NameT {
         match std::str::from_utf8(&self.raw_bytes) {
             Ok(v) => v.to_string(),
             Err(e) => format!("(cannot convert name: {})", e),
+        }
+    }
+}
+
+impl std::fmt::Debug for NameT {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match std::str::from_utf8(&self.raw_bytes) {
+            Ok(s) => f.write_str(s),
+            Err(_) => f.debug_list().entries(self.raw_bytes.iter()).finish(),
         }
     }
 }
