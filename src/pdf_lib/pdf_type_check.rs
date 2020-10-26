@@ -30,9 +30,9 @@ pub enum DictKeySpec {
 
 #[derive(PartialEq)]
 pub struct DictEntry {
-    pub key: Vec<u8>,
-    pub chk: Rc<TypeCheck>,
-    pub opt: DictKeySpec,
+    pub(super) key: Vec<u8>,
+    pub(super) chk: Rc<TypeCheck>,
+    pub(super) opt: DictKeySpec,
 }
 impl std::fmt::Debug for DictEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
