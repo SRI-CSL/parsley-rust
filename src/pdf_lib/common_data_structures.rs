@@ -51,7 +51,7 @@ pub fn resources(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     };
     TypeCheck::new(
         tctx,
-        "page",
+        "resources",
         Rc::new(PDFType::Dict(vec![
             extgstate, colorspace, pattern, shading, xobject, font, procset, properties,
         ])),
@@ -111,8 +111,13 @@ pub fn mk_generic_indirect_array_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeC
     )
 }
 
-pub fn mk_name_check(msg: String, name: String, tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
-    let pred = ChoicePred(msg, vec![PDFObjT::Name(NameT::new(Vec::from(name)))]);
+pub fn mk_array_of_dict_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+    let elem = mk_generic_dict_typchk(tctx);
+    TypeCheck::new(tctx, "AF", Rc::new(PDFType::Array { elem, size: None }))
+}
+
+pub fn mk_name_check(name: &str, msg: &str, tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+    let pred = ChoicePred(String::from(msg), vec![PDFObjT::Name(NameT::new(Vec::from(name)))]);
     TypeCheck::new_refined(
         tctx,
         "",
@@ -120,14 +125,15 @@ pub fn mk_name_check(msg: String, name: String, tctx: &mut TypeCheckContext) -> 
         Rc::new(pred),
     )
 }
+
+pub fn mk_number_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+    let int = TypeCheck::new(tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Integer)));
+    let real = TypeCheck::new(tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Real)));
+    TypeCheck::new(tctx, "", Rc::new(PDFType::Disjunct(vec![int, real])))
+}
+
 pub fn mk_rectangle_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
-    let int_elem = TypeCheck::new(tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Integer)));
-    let real_elem = TypeCheck::new(tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Real)));
-    let elem = TypeCheck::new(
-        tctx,
-        "",
-        Rc::new(PDFType::Disjunct(vec![int_elem, real_elem])),
-    );
+    let elem = mk_number_typchk(tctx);
     TypeCheck::new(
         tctx,
         "rectangle",

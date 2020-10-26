@@ -1,6 +1,6 @@
 use crate::pdf_lib::common_data_structures::{
-    mk_date_typchk, mk_generic_array_typchk, mk_generic_dict_typchk, mk_name_check,
-    mk_rectangle_typchk, resources,
+    mk_array_of_dict_typchk, mk_date_typchk, mk_generic_array_typchk, mk_generic_dict_typchk,
+    mk_generic_stream_typchk, mk_name_check, mk_number_typchk, mk_rectangle_typchk, resources,
 };
 use crate::pdf_lib::pdf_obj::PDFObjT;
 use crate::pdf_lib::pdf_prim::NameT;
@@ -32,28 +32,12 @@ fn mk_tabs_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
 pub fn template_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     let typ = DictEntry {
         key: Vec::from("Type"),
-        chk: mk_name_check("Not a Template".to_string(), "Template".to_string(), tctx),
+        chk: mk_name_check("Template", "Not a Template", tctx),
         opt: DictKeySpec::Required,
     };
     let parent = DictEntry {
         key: Vec::from("Parent"),
-        chk: TypeCheck::new_all(
-            tctx,
-            "",
-            Rc::new(PDFType::Any),
-            None,
-            IndirectSpec::Forbidden,
-        ),
-        /* FIXME
-         * */
-        //chk: Rc::new(TypeCheck::new_all(
-        //Rc::new(PDFType::Disjunct(vec![
-        //root_page_tree(),
-        //non_root_page_tree(),
-        //])),
-        //None,
-        //IndirectSpec::Required,
-        //)),
+        chk: TypeCheck::new(tctx, "", Rc::new(PDFType::Any)),
         opt: DictKeySpec::Forbidden,
     };
     let lastmodified = DictEntry {
@@ -120,7 +104,7 @@ pub fn template_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     };
     let thumb = DictEntry {
         key: Vec::from("Thumb"),
-        chk: TypeCheck::new(tctx, "thumb", Rc::new(PDFType::Stream(vec![]))),
+        chk: mk_generic_stream_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let b = DictEntry {
@@ -130,11 +114,7 @@ pub fn template_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     };
     let dur = DictEntry {
         key: Vec::from("Dur"),
-        chk: TypeCheck::new(
-            tctx,
-            "dur",
-            Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
-        ),
+        chk: mk_number_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let trans = DictEntry {
@@ -144,11 +124,7 @@ pub fn template_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     };
     let annots = DictEntry {
         key: Vec::from("Annots"),
-        chk: TypeCheck::new(tctx, "annots", Rc::new(PDFType::Any)), /* FIXME: It can be a
-                                                                     * single
-                                                                     * indirect reference
-                                                                     * or an array
-                                                                     * of them */
+        chk: mk_generic_array_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let aa = DictEntry {
@@ -158,7 +134,7 @@ pub fn template_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     };
     let metadata = DictEntry {
         key: Vec::from("Metadata"),
-        chk: TypeCheck::new(tctx, "metadata", Rc::new(PDFType::Stream(vec![]))),
+        chk: mk_generic_stream_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let pieceinfo = DictEntry {
@@ -183,7 +159,7 @@ pub fn template_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     };
     let pz = DictEntry {
         key: Vec::from("PZ"),
-        chk: TypeCheck::new(tctx, "pz", Rc::new(PDFType::PrimType(PDFPrimType::Integer))),
+        chk: mk_number_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let separationinfo = DictEntry {
@@ -198,7 +174,7 @@ pub fn template_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     };
     let templateinstantiated = DictEntry {
         key: Vec::from("TemplateInstantiated"),
-        chk: TypeCheck::new(tctx, "templateinst", Rc::new(PDFType::Any)),
+        chk: TypeCheck::new(tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Name))),
         opt: DictKeySpec::Optional,
     };
     let pressteps = DictEntry {
@@ -208,11 +184,7 @@ pub fn template_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     };
     let userunit = DictEntry {
         key: Vec::from("UserUnit"),
-        chk: TypeCheck::new(
-            tctx,
-            "userunit",
-            Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
-        ),
+        chk: mk_number_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let vp = DictEntry {
@@ -222,7 +194,7 @@ pub fn template_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     };
     let af = DictEntry {
         key: Vec::from("AF"),
-        chk: TypeCheck::new(tctx, "af", Rc::new(PDFType::Any)),
+        chk: mk_array_of_dict_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let outputintents = DictEntry {
@@ -231,7 +203,7 @@ pub fn template_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
         opt: DictKeySpec::Optional,
     };
     let dpart = DictEntry {
-        key: Vec::from("DpPart"),
+        key: Vec::from("DPart"),
         chk: mk_generic_dict_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
@@ -278,28 +250,14 @@ pub fn template_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
 pub fn page_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     let typ = DictEntry {
         key: Vec::from("Type"),
-        chk: mk_name_check("Not a Page".to_string(), "Page".to_string(), tctx),
+        chk: mk_name_check("Page", "Not a Page", tctx),
         opt: DictKeySpec::Required,
     };
+    // Don't check upwards in the page tree to avoid loops, just
+    // ensure the key is present.
     let parent = DictEntry {
         key: Vec::from("Parent"),
-        chk: TypeCheck::new_all(
-            tctx,
-            "",
-            Rc::new(PDFType::Any),
-            None,
-            IndirectSpec::Forbidden,
-        ),
-        /* FIXME
-         * */
-        //chk: Rc::new(TypeCheck::new_all(
-        //Rc::new(PDFType::Disjunct(vec![
-        //root_page_tree(),
-        //non_root_page_tree(),
-        //])),
-        //None,
-        //IndirectSpec::Required,
-        //)),
+        chk: TypeCheck::new(tctx, "", Rc::new(PDFType::Any)),
         opt: DictKeySpec::Required,
     };
     let lastmodified = DictEntry {

@@ -1,8 +1,8 @@
 use super::pdf_obj::PDFObjT;
 use crate::pdf_lib::common_data_structures::{
-    mk_generic_array_typchk, mk_generic_dict_typchk, mk_generic_indirect_array_typchk,
-    mk_generic_indirect_dict_typchk, mk_generic_indirect_stream_typchk, mk_name_check,
-    name_dictionary,
+    mk_array_of_dict_typchk, mk_generic_array_typchk, mk_generic_dict_typchk,
+    mk_generic_indirect_array_typchk, mk_generic_indirect_dict_typchk,
+    mk_generic_indirect_stream_typchk, mk_name_check, name_dictionary,
 };
 use crate::pdf_lib::number_tree::number_tree;
 use crate::pdf_lib::page_tree::root_page_tree;
@@ -12,10 +12,6 @@ use crate::pdf_lib::pdf_type_check::{
 };
 use std::rc::Rc;
 
-fn mk_af_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
-    let elem = mk_generic_dict_typchk(tctx);
-    TypeCheck::new(tctx, "", Rc::new(PDFType::Array { elem, size: None }))
-}
 fn mk_pagemode_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     let pred = ChoicePred(
         String::from("Invalid PageMode"),
@@ -62,7 +58,7 @@ pub fn catalog_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     // pagelabels, names, dests, viewerpreferences, pagelayout,
     let typ = DictEntry {
         key: Vec::from("Type"),
-        chk: mk_name_check("Not a Catalog".to_string(), "Catalog".to_string(), tctx),
+        chk: mk_name_check("Catalog", "Not a Catalog", tctx),
         opt: DictKeySpec::Required,
     };
     let version = DictEntry {
@@ -131,7 +127,7 @@ pub fn catalog_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     };
     let aa = DictEntry {
         key: Vec::from("AA"),
-        chk: mk_generic_array_typchk(tctx),
+        chk: mk_generic_dict_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let uri = DictEntry {
@@ -209,7 +205,7 @@ pub fn catalog_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     };
     let collection = DictEntry {
         key: Vec::from("Collection"),
-        chk: mk_generic_array_typchk(tctx),
+        chk: mk_generic_dict_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let needsrendering = DictEntry {
@@ -224,7 +220,7 @@ pub fn catalog_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     };
     let af = DictEntry {
         key: Vec::from("AF"),
-        chk: mk_af_typchk(tctx),
+        chk: mk_array_of_dict_typchk(tctx),
         opt: DictKeySpec::Optional,
     };
     let dpartroot = DictEntry {
