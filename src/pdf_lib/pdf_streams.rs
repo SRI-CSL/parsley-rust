@@ -44,21 +44,22 @@ impl ObjStreamT {
 }
 
 pub struct ObjStreamP<'a> {
-    ctxt: &'a mut PDFObjContext,
-    dict: Rc<LocatedVal<DictT>>,
+    ctxt:   &'a mut PDFObjContext,
+    stream: &'a StreamT,
 }
 
 impl ObjStreamP<'_> {
-    pub fn new(ctxt: &mut PDFObjContext, dict: Rc<LocatedVal<DictT>>) -> ObjStreamP {
-        ObjStreamP { ctxt, dict }
+    pub fn new<'a>(ctxt: &'a mut PDFObjContext, stream: &'a StreamT) -> ObjStreamP<'a> {
+        ObjStreamP { ctxt, stream }
     }
 
     fn get_dict_info(&self) -> ParseResult<(usize, usize)> {
-        let stream_type = self.dict.val().get_name(b"Type");
+        let dict = self.stream.dict();
+        let stream_type = dict.val().get_name(b"Type");
         if stream_type.is_none() {
             let msg = "No valid /Type in object stream dictionary.".to_string();
             let err = ErrorKind::GuardError(msg);
-            return Err(locate_value(err, self.dict.start(), self.dict.end()))
+            return Err(locate_value(err, dict.start(), dict.end()))
         }
         let stream_type = stream_type.unwrap();
         if stream_type != b"ObjStm" {
@@ -68,22 +69,22 @@ impl ObjStreamP<'_> {
             };
             let msg = format!("Invalid /Type in object stream dictionary: {}", t_str);
             let err = ErrorKind::GuardError(msg);
-            return Err(locate_value(err, self.dict.start(), self.dict.end()))
+            return Err(locate_value(err, dict.start(), dict.end()))
         }
 
-        let num_objs = self.dict.val().get_usize(b"N");
+        let num_objs = dict.val().get_usize(b"N");
         if num_objs.is_none() {
             let msg = "No valid /N in object stream dictionary.".to_string();
             let err = ErrorKind::GuardError(msg);
-            return Err(locate_value(err, self.dict.start(), self.dict.end()))
+            return Err(locate_value(err, dict.start(), dict.end()))
         }
         let num_objs = num_objs.unwrap();
 
-        let first = self.dict.val().get_usize(b"First");
+        let first = dict.val().get_usize(b"First");
         if first.is_none() {
             let msg = "No valid /First in object stream dictionary.".to_string();
             let err = ErrorKind::GuardError(msg);
-            return Err(locate_value(err, self.dict.start(), self.dict.end()))
+            return Err(locate_value(err, dict.start(), dict.end()))
         }
         let first = first.unwrap();
         Ok((num_objs, first))
@@ -207,6 +208,37 @@ impl ParsleyParser for ObjStreamP<'_> {
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let (num_objs, first) = self.get_dict_info()?;
+        let filters = self.stream.filters()?;
+
+        // Handle filters, using the approach used in XrefStreamP.
+        let input = buf;
+        let mut views: Vec<ParseBuffer> = Vec::new();
+        // Selects the input for the iteration from the view stack.
+        fn get_input<'a>(
+            inp: &'a mut dyn ParseBufferT, views: &'a mut Vec<ParseBuffer>,
+        ) -> &'a mut dyn ParseBufferT {
+            if views.is_empty() {
+                inp
+            } else {
+                let last = views.len() - 1;
+                &mut views[last]
+            }
+        }
+        for filter in &filters {
+            let f = filter.name().as_string();
+            let mut decoder = match f.as_str() {
+                "FlateDecode" => FlateDecode::new(filter.options()),
+                s => {
+                    let msg = format!("Cannot handle filter {} in xref stream", s);
+                    let err = ErrorKind::GuardError(msg);
+                    return Err(self.stream.dict().place(err))
+                },
+            };
+            let input = get_input(input, &mut views);
+            let output = decoder.transform(input)?;
+            views.push(output);
+        }
+        let buf = get_input(input, &mut views);
 
         // TODO: the error-chaining from transforms to parse-errors
         // needs to compose with the ? operator in a way that allows
@@ -242,7 +274,7 @@ impl ParsleyParser for ObjStreamP<'_> {
         let objs = self.parse_stream(&mut objs_buf, &meta)?;
         let end = buf.get_cursor();
         Ok(LocatedVal::new(
-            ObjStreamT::new(Rc::clone(&self.dict), objs),
+            ObjStreamT::new(Rc::clone(&self.stream.dict()), objs),
             start,
             end,
         ))
@@ -589,11 +621,12 @@ mod test_object_stream {
     use std::io::Read;
     use std::rc::Rc;
 
-    use super::super::super::pcore::parsebuffer::{
+    use crate::pcore::parsebuffer::{
         locate_value, ErrorKind, LocatedVal, ParseBuffer, ParsleyParser,
     };
-    use super::super::pdf_obj::{
-        ArrayT, DictP, DictT, IndirectP, IndirectT, PDFObjContext, PDFObjT,
+    use crate::pdf_lib::pdf_prim::{StreamContentT};
+    use crate::pdf_lib::pdf_obj::{
+        ArrayT, DictP, DictT, StreamT, IndirectP, IndirectT, PDFObjContext, PDFObjT,
     };
     use super::{ObjStreamP, ObjStreamT, XrefStreamP};
 
@@ -611,21 +644,26 @@ mod test_object_stream {
         let mut dp = DictP::new(&mut ctxt);
         Rc::new(LocatedVal::new(dp.parse(&mut buf).unwrap(), 0, len))
     }
+    fn mk_objstm(n: usize, first: usize) -> StreamT {
+        let dict = mk_dict(n, first);
+        let content = StreamContentT::new(0, 0, Vec::new());
+        StreamT::new(dict, LocatedVal::new(content, 0, 0))
+    }
 
     #[test]
     fn test_dict_info() {
-        let d = mk_dict(3, 10);
+        let s = mk_objstm(3, 10);
         let mut ctxt = mk_new_context();
-        let osp = ObjStreamP::new(&mut ctxt, d);
+        let osp = ObjStreamP::new(&mut ctxt, &s);
         let chk = osp.get_dict_info();
         assert_eq!(chk, Ok((3, 10)));
     }
 
     #[test]
     fn test_metadata() {
-        let d = mk_dict(3, 10);
+        let s = mk_objstm(3, 10);
         let mut ctxt = mk_new_context();
-        let mut osp = ObjStreamP::new(&mut ctxt, d);
+        let mut osp = ObjStreamP::new(&mut ctxt, &s);
 
         // valid
         let mut buf = ParseBuffer::new(Vec::from("10 0 20 1 30 2".as_bytes()));
@@ -669,9 +707,9 @@ mod test_object_stream {
         let content = "<<>> [] ()";
         let mut cbuf = ParseBuffer::new(Vec::from(content));
 
-        let d = mk_dict(3, 14);
+        let s = mk_objstm(3, 14);
         let mut ctxt = mk_new_context();
-        let mut osp = ObjStreamP::new(&mut ctxt, d);
+        let mut osp = ObjStreamP::new(&mut ctxt, &s);
 
         let md = osp.parse_metadata(&mut mbuf, 3).unwrap();
         assert_eq!(md, vec![(10, 0), (20, 5), (30, 8)]);
@@ -700,9 +738,9 @@ mod test_object_stream {
         buf.append(&mut Vec::from(content));
         let mut buf = ParseBuffer::new(buf);
 
-        let d = mk_dict(3, 14);
+        let s = mk_objstm(3, 14);
         let mut ctxt = mk_new_context();
-        let mut osp = ObjStreamP::new(&mut ctxt, Rc::clone(&d));
+        let mut osp = ObjStreamP::new(&mut ctxt, &s);
 
         let val = osp.parse(&mut buf).unwrap();
 
@@ -716,6 +754,8 @@ mod test_object_stream {
         let o = LocatedVal::new(PDFObjT::String(vec![]), 8, 10);
         let o = IndirectT::new(30, 0, Rc::new(o));
         exp.push(LocatedVal::new(o, 8, 10));
+
+        let d = mk_dict(3, 14);
         let os = ObjStreamT::new(Rc::clone(&d), exp);
         let os = LocatedVal::new(os, 0, 24);
         assert_eq!(val, os);
@@ -814,7 +854,7 @@ endobj");
         if let PDFObjT::Stream(ref s) = io.obj().val() {
             let content = s.stream().val();
             let mut stream_buf = ParseBuffer::new_view(&pb, content.start(), content.size());
-            let mut osp = ObjStreamP::new(&mut ctxt, Rc::clone(s.dict()));
+            let mut osp = ObjStreamP::new(&mut ctxt, s);
             let ost = osp.parse(&mut stream_buf);
             let ost = ost.unwrap();
             assert_eq!(ost.val().objs().len(), 73)

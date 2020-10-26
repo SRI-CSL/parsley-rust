@@ -523,7 +523,7 @@ fn parse_objects(
         if let PDFObjT::Stream(ref s) = obj.val() {
             let content = s.stream().val();
             let mut obj_buf = ParseBuffer::new_view(pb, content.start(), content.size());
-            let mut op = ObjStreamP::new(ctxt, Rc::clone(s.dict()));
+            let mut op = ObjStreamP::new(ctxt, s);
             let obj_stm = op.parse(&mut obj_buf);
             if let Err(e) = obj_stm {
                 ta3_log!(
