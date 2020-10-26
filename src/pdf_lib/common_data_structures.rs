@@ -113,7 +113,7 @@ pub fn mk_generic_indirect_array_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeC
 
 pub fn mk_array_of_dict_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     let elem = mk_generic_dict_typchk(tctx);
-    TypeCheck::new(tctx, "AF", Rc::new(PDFType::Array { elem, size: None }))
+    TypeCheck::new(tctx, "", Rc::new(PDFType::Array { elem, size: None }))
 }
 
 pub fn mk_name_check(name: &str, msg: &str, tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
@@ -298,6 +298,17 @@ impl Predicate for DateStringPredicate {
             )))
         }
     }
+}
+
+// used to prevent checks going upwards in a tree by allowing a
+// generic reference.
+pub fn mk_parent_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+    TypeCheck::new_indirect(
+        tctx,
+        "parent",
+        Rc::new(PDFType::Any),
+        IndirectSpec::Required,
+    )
 }
 
 #[cfg(test)]

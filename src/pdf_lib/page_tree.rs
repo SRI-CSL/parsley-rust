@@ -1,5 +1,6 @@
 use super::super::pcore::parsebuffer::LocatedVal;
 use super::pdf_obj::{DictKey, PDFObjT};
+use crate::pdf_lib::common_data_structures::{mk_parent_typchk};
 use crate::pdf_lib::page::{page_type, template_type};
 use crate::pdf_lib::pdf_prim::NameT;
 use crate::pdf_lib::pdf_type_check::{
@@ -29,16 +30,6 @@ fn mk_count_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     )
 }
 
-fn mk_indirect_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
-    let elem = TypeCheck::new(tctx, "elem", Rc::new(PDFType::Any));
-    TypeCheck::new_refined(
-        tctx,
-        "indirect",
-        Rc::new(PDFType::Array { elem, size: None }),
-        Rc::new(ReferencePredicate),
-    )
-}
-
 pub fn root_page_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     let pages = DictEntry {
         key: Vec::from("Type"),
@@ -64,7 +55,7 @@ pub fn root_page_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     };
     let parent = DictEntry {
         key: Vec::from("Parent"),
-        chk: mk_indirect_typchk(tctx),
+        chk: mk_parent_typchk(tctx),
         opt: DictKeySpec::Forbidden,
     };
     TypeCheck::new(
@@ -101,12 +92,7 @@ pub fn non_root_page_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     // infinite loop.  Just ensure that the key is present.
     let parent = DictEntry {
         key: Vec::from("Parent"),
-        chk: TypeCheck::new_indirect(
-            tctx,
-            "parent",
-            Rc::new(PDFType::Any),
-            IndirectSpec::Required,
-        ),
+        chk: mk_parent_typchk(tctx),
         opt: DictKeySpec::Required,
     };
     TypeCheck::new(

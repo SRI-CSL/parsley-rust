@@ -1,6 +1,7 @@
 use crate::pdf_lib::common_data_structures::{
     mk_array_of_dict_typchk, mk_date_typchk, mk_generic_array_typchk, mk_generic_dict_typchk,
     mk_generic_stream_typchk, mk_name_check, mk_number_typchk, mk_rectangle_typchk, resources,
+    mk_parent_typchk,
 };
 use crate::pdf_lib::pdf_obj::PDFObjT;
 use crate::pdf_lib::pdf_prim::NameT;
@@ -252,11 +253,9 @@ pub fn page_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
         chk: mk_name_check("Page", "Not a Page", tctx),
         opt: DictKeySpec::Required,
     };
-    // Don't check upwards in the page tree to avoid loops, just
-    // ensure the key is present.
     let parent = DictEntry {
         key: Vec::from("Parent"),
-        chk: TypeCheck::new(tctx, "", Rc::new(PDFType::Any)),
+        chk: mk_parent_typchk(tctx),
         opt: DictKeySpec::Required,
     };
     let lastmodified = DictEntry {
