@@ -122,7 +122,11 @@ pub fn mk_name_check(msg: String, name: String, tctx: &mut TypeCheckContext) -> 
 pub fn mk_rectangle_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     let int_elem = TypeCheck::new(tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Integer)));
     let real_elem = TypeCheck::new(tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Real)));
-    let elem = TypeCheck::new(tctx, "", Rc::new(PDFType::Disjunct(vec![int_elem, real_elem])));
+    let elem = TypeCheck::new(
+        tctx,
+        "",
+        Rc::new(PDFType::Disjunct(vec![int_elem, real_elem])),
+    );
     TypeCheck::new(
         tctx,
         "rectangle",

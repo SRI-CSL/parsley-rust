@@ -621,14 +621,14 @@ mod test_object_stream {
     use std::io::Read;
     use std::rc::Rc;
 
+    use super::{ObjStreamP, ObjStreamT, XrefStreamP};
     use crate::pcore::parsebuffer::{
         locate_value, ErrorKind, LocatedVal, ParseBuffer, ParsleyParser,
     };
-    use crate::pdf_lib::pdf_prim::{StreamContentT};
     use crate::pdf_lib::pdf_obj::{
-        ArrayT, DictP, DictT, StreamT, IndirectP, IndirectT, PDFObjContext, PDFObjT,
+        ArrayT, DictP, DictT, IndirectP, IndirectT, PDFObjContext, PDFObjT, StreamT,
     };
-    use super::{ObjStreamP, ObjStreamT, XrefStreamP};
+    use crate::pdf_lib::pdf_prim::StreamContentT;
 
     fn mk_new_context() -> PDFObjContext { PDFObjContext::new(10) }
 
