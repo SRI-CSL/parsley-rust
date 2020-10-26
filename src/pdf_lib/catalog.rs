@@ -269,9 +269,9 @@ pub fn catalog_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
 }
 #[cfg(test)]
 mod test_name_tree {
-    use super::super::super::pcore::parsebuffer::{LocatedVal, ParseBuffer};
-    use super::super::pdf_obj::{parse_pdf_obj, IndirectT, PDFObjContext};
-    use super::super::pdf_type_check::{check_type, TypeCheckContext};
+    use crate::pcore::parsebuffer::{ParseBuffer};
+    use crate::pdf_lib::pdf_obj::{parse_pdf_obj, parse_pdf_indirect_obj, PDFObjContext};
+    use crate::pdf_lib::pdf_type_check::{check_type, TypeCheckContext};
     use super::catalog_type;
     use std::rc::Rc;
 
@@ -279,14 +279,15 @@ mod test_name_tree {
 
     #[test]
     fn test_catalog() {
+        // set up the context
         let mut ctxt = mk_new_context();
-        let mut tctx = TypeCheckContext::new();
-        let v = Vec::from("<</Type /Pages /Kids [4 0 R] /Count 1 >>".as_bytes());
+
+        let v = Vec::from("2 0 obj <</Type /Pages /Kids [4 0 R] /Count 1 >> endobj".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
-        let i1 = IndirectT::new(2, 0, Rc::new(obj));
+        let _root = parse_pdf_indirect_obj(&mut ctxt, &mut pb).unwrap();
+
         let v = Vec::from(
-            "<<
+            "4 0 obj <<
         /CropBox [ 0 0 792 612 ]
         /Annots [39 0 R]
         /Parent 1 0 R
@@ -324,35 +325,29 @@ mod test_name_tree {
         >>
         >>
         /Type /Page
-        >>
+        >> endobj
         "
             .as_bytes(),
         );
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
-        let outline = Vec::from(
-            "<</Title ( Chapter 1 )
+        let _page = parse_pdf_indirect_obj(&mut ctxt, &mut pb).unwrap();
+
+        let v = Vec::from(
+            "3 0 obj <</Title ( Chapter 1 )
         /Parent 21 0 R
         /Next 26 0 R
         /First 23 0 R
         /Last 25 0 R
         /Count 3
         /Dest [3 0 R /XYZ 0 792 0]
-        >>
+        >> endobj
         "
             .as_bytes(),
         );
-        let mut outline_pb = ParseBuffer::new(outline);
-        let outline_obj = parse_pdf_obj(&mut ctxt, &mut outline_pb).unwrap();
-        let l1 = LocatedVal::new(i1, 0, 4);
+        let mut pb = ParseBuffer::new(v);
+        let _outline = parse_pdf_indirect_obj(&mut ctxt, &mut pb).unwrap();
 
-        let i2 = IndirectT::new(4, 0, Rc::new(obj));
-        let i3 = IndirectT::new(3, 0, Rc::new(outline_obj));
-        let l2 = LocatedVal::new(i2, 0, 4);
-        let l3 = LocatedVal::new(i3, 0, 4);
-        ctxt.register_obj(&l1);
-        ctxt.register_obj(&l2);
-        ctxt.register_obj(&l3);
+        // parse the test object
         let v = Vec::from(
             "<</Type /Catalog
   /Pages 2 0 R
@@ -363,6 +358,9 @@ mod test_name_tree {
         );
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+
+        // check
+        let mut tctx = TypeCheckContext::new();
         let typ = catalog_type(&mut tctx);
         assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), None);
     }

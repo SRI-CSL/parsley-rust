@@ -757,6 +757,13 @@ impl ParsleyParser for IndirectP<'_> {
     }
 }
 
+pub fn parse_pdf_indirect_obj(
+    ctxt: &mut PDFObjContext, buf: &mut dyn ParseBufferT,
+) -> ParseResult<LocatedVal<IndirectT>> {
+    let mut p = IndirectP::new(ctxt);
+    p.parse(buf)
+}
+
 #[cfg(test)]
 mod test_pdf_obj {
     use super::super::super::pcore::parsebuffer::{

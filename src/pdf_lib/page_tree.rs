@@ -127,8 +127,8 @@ impl Predicate for ReferencePredicate {
 #[cfg(test)]
 
 mod test_page_tree {
-    use super::super::super::pcore::parsebuffer::{LocatedVal, ParseBuffer};
-    use super::super::pdf_obj::{parse_pdf_obj, IndirectT, PDFObjContext};
+    use super::super::super::pcore::parsebuffer::ParseBuffer;
+    use super::super::pdf_obj::{parse_pdf_indirect_obj, parse_pdf_obj, PDFObjContext};
     use super::super::pdf_type_check::{check_type, TypeCheckContext};
     use super::{non_root_page_tree, root_page_tree};
     use std::rc::Rc;
@@ -138,10 +138,10 @@ mod test_page_tree {
     // Page Tree Non-Root Node Tests
     #[test]
     fn test_root_page_tree() {
-        let mut tctx = TypeCheckContext::new();
+        // setup the context
         let mut ctxt = mk_new_context();
         let page_1 = Vec::from(
-            "<<
+            "4 0 obj <<
         /Parent 3 0 R
         /Annots [7 0 R 8 0 R 9 0 R 10 0 R 11 0 R 12 0 R]
         /Resources <<
@@ -166,30 +166,30 @@ mod test_page_tree {
         /Contents [19 0 R 20 0 R]
         /Type /Page
         /MediaBox [0.00000 0.00000 612.00000 792.00000]
-        >>
+        >> endobj
         "
             .as_bytes(),
         );
-        let mut page1_pb = ParseBuffer::new(page_1);
-        let page1_obj = parse_pdf_obj(&mut ctxt, &mut page1_pb).unwrap();
-        let i1 = IndirectT::new(4, 0, Rc::new(page1_obj));
-        let l1 = LocatedVal::new(i1, 0, 4);
-        ctxt.register_obj(&l1);
-        //let v = Vec::from("<</Type /Pages /Kids [4 0 R  10 0 R 24 0 R ] /Count 3
-        // >>".as_bytes());
-        let v = Vec::from("<</Type /Pages /Kids [4 0 R ] /Count 3 >>".as_bytes());
-        //let v = Vec::from("<< /Count 3 >>".as_bytes());
-        let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let mut page_1 = ParseBuffer::new(page_1);
+        let _page_1 = parse_pdf_indirect_obj(&mut ctxt, &mut page_1).unwrap();
+
+        // parse the test object
+        let pt_root = Vec::from("<</Type /Pages /Kids [4 0 R ] /Count 3 >>".as_bytes());
+        let mut pt_root = ParseBuffer::new(pt_root);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pt_root).unwrap();
+
+        // check
+        let mut tctx = TypeCheckContext::new();
         let typ = root_page_tree(&mut tctx);
         assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), None);
     }
+
     #[test]
     fn test_non_root_page_tree_not_wrong() {
-        let mut tctx = TypeCheckContext::new();
+        // set up the context
         let mut ctxt = mk_new_context();
         let page_1 = Vec::from(
-            "<<
+            "10 0 obj <<
         /Parent 3 0 R
         /Annots [7 0 R 8 0 R 9 0 R 10 0 R 11 0 R 12 0 R]
         /Resources <<
@@ -214,21 +214,20 @@ mod test_page_tree {
         /Contents [19 0 R 20 0 R]
         /Type /Page
         /MediaBox [0.00000 0.00000 612.00000 792.00000]
-        >>
+        >> endobj
         "
             .as_bytes(),
         );
-        let mut page1_pb = ParseBuffer::new(page_1);
-        let page1_obj = parse_pdf_obj(&mut ctxt, &mut page1_pb).unwrap();
-        let i1 = IndirectT::new(10, 0, Rc::new(page1_obj));
-        let l1 = LocatedVal::new(i1, 0, 4);
-        ctxt.register_obj(&l1);
-        //let v = Vec::from("<</Type /Pages /Kids [4 0 R  10 0 R 24 0 R ] /Count 3
-        // >>".as_bytes());
+        let mut page_1 = ParseBuffer::new(page_1);
+        let _page_1 = parse_pdf_indirect_obj(&mut ctxt, &mut page_1).unwrap();
+
+        // parse the test object
         let v = Vec::from("<</Type /Pages /Parent [4 0 R] /Kids [10 0 R ] /Count 3 >>".as_bytes());
-        //let v = Vec::from("<< /Count 3 >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+
+        // check
+        let mut tctx = TypeCheckContext::new();
         let typ = non_root_page_tree(&mut tctx);
         assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), None);
     }
@@ -236,10 +235,10 @@ mod test_page_tree {
 
     #[test]
     fn test_page_tree_not_wrong() {
-        let mut tctx = TypeCheckContext::new();
+        // set up the context
         let mut ctxt = mk_new_context();
         let page_1 = Vec::from(
-            "<<
+            "10 0 obj <<
         /Parent 3 0 R
         /Annots [7 0 R 8 0 R 9 0 R 10 0 R 11 0 R 12 0 R]
         /Resources <<
@@ -264,30 +263,31 @@ mod test_page_tree {
         /Contents [19 0 R 20 0 R]
         /Type /Page
         /MediaBox [0.00000 0.00000 612.00000 792.00000]
-        >>
+        >> endobj
         "
             .as_bytes(),
         );
-        let mut page1_pb = ParseBuffer::new(page_1);
-        let page1_obj = parse_pdf_obj(&mut ctxt, &mut page1_pb).unwrap();
-        let i1 = IndirectT::new(10, 0, Rc::new(page1_obj));
-        let l1 = LocatedVal::new(i1, 0, 4);
-        ctxt.register_obj(&l1);
-        let page_2 = Vec::from("<< /Type /Page
+        let mut page_1 = ParseBuffer::new(page_1);
+        let _page_1 = parse_pdf_indirect_obj(&mut ctxt, &mut page_1).unwrap();
+
+        let page_2 = Vec::from(
+            "24 0 obj <<
+        /Type /Page
         /Parent 3 0 R
         /Annots [ 13 0 R 15 0 R 17 0 R 19 0 R 21 0 R 23 0 R 25 0 R 27 0 R 29 0 R 31 0 R 35 0 R 39 0 R ]
         /Contents 7 0 R
-        >>
+        >> endobj
         ".as_bytes());
-        let mut page2_pb = ParseBuffer::new(page_2);
-        let page2_obj = parse_pdf_obj(&mut ctxt, &mut page2_pb).unwrap();
-        let i2 = IndirectT::new(24, 0, Rc::new(page2_obj));
-        let l2 = LocatedVal::new(i2, 0, 4);
-        ctxt.register_obj(&l2);
+        let mut page_2 = ParseBuffer::new(page_2);
+        let _page_2 = parse_pdf_indirect_obj(&mut ctxt, &mut page_2).unwrap();
+
+        // parse the test object
         let v = Vec::from("<</Type /Pages /Kids [10 0 R 24 0 R ] /Count 3 >>".as_bytes());
-        //let v = Vec::from("<< /Count 3 >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+
+        // check
+        let mut tctx = TypeCheckContext::new();
         let typ = root_page_tree(&mut tctx);
         assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), None);
     }

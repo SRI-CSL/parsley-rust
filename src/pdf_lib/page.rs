@@ -468,13 +468,10 @@ pub fn page_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
 #[cfg(test)]
 
 mod test_page {
-    use super::super::super::pcore::parsebuffer::{LocatedVal, ParseBuffer};
-    use super::super::pdf_obj::{parse_pdf_obj, IndirectT, PDFObjContext, PDFObjT};
-    use crate::pdf_lib::pdf_obj::DictT;
-    use std::collections::BTreeMap;
-
-    use super::super::pdf_type_check::{check_type, TypeCheckContext};
     use super::page_type;
+    use crate::pcore::parsebuffer::ParseBuffer;
+    use crate::pdf_lib::pdf_obj::{parse_pdf_indirect_obj, parse_pdf_obj, PDFObjContext};
+    use crate::pdf_lib::pdf_type_check::{check_type, TypeCheckContext};
     use std::rc::Rc;
 
     fn mk_new_context() -> PDFObjContext { PDFObjContext::new(10) }
@@ -482,38 +479,37 @@ mod test_page {
     #[test]
     fn test_page() {
         let mut ctxt = mk_new_context();
-        let mut tctx = TypeCheckContext::new();
-        let v = Vec::from("<</Type /Page /Parent 4 0 R /MediaBox [0 0 612 792] /Resources  <</Font <</F3 7 0 R /F5 9 0 R /F7 11 0 R >>   >>          /Contents 12 0 R /Annots [23 0 R 24 0 R ]       >> ".as_bytes());
+        // populate context
+        let v = Vec::from("4 0 obj << >> endobj");
         let mut pb = ParseBuffer::new(v);
-        let i = IndirectT::new(
-            4,
-            0,
-            Rc::new(LocatedVal::new(
-                PDFObjT::Dict(DictT::new(BTreeMap::new())),
-                0,
-                1,
-            )),
-        );
-        let l = LocatedVal::new(i, 0, 4);
-        ctxt.register_obj(&l);
+        let _parent = parse_pdf_indirect_obj(&mut ctxt, &mut pb).unwrap();
+
+        // parse page object
+        let v = Vec::from("<</Type /Page /Parent 4 0 R /MediaBox [0 0 612 792] /Resources  <</Font <</F3 7 0 R /F5 9 0 R /F7 11 0 R >> >>  /Contents 12 0 R /Annots [23 0 R 24 0 R ]>> ".as_bytes());
+        let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
 
+        // check
+        let mut tctx = TypeCheckContext::new();
         let typ = page_type(&mut tctx);
         assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), None);
     }
     #[test]
     fn test_another_page() {
         let mut ctxt = mk_new_context();
+        // populate context
 
-        let catalog = Vec::from("<<
+        let pt_node = Vec::from("1 0 obj <<
         /Type /Pages
         /Count 118
         /Kids [ 3 0 R 4 0 R 5 0 R 6 0 R 7 0 R 8 0 R 9 0 R 10 0 R 11 0 R 12 0 R 13 0 R 14 0 R 15 0 R 16 0 R 17 0 R 18 0 R 19 0 R 20 0 R 21 0 R 22 0 R 23 0 R 24 0 R 25 0 R 26 0 R 27 0 R 28 0 R 29 0 R 30 0 R 31 0 R 32 0 R 33 0 R 34 0 R 35 0 R 36 0 R 37 0 R 38 0 R 39 0 R 40 0 R 41 0 R 42 0 R 43 0 R 44 0 R 45 0 R 46 0 R 47 0 R 48 0 R 49 0 R 50 0 R 51 0 R 52 0 R 53 0 R 54 0 R 55 0 R 56 0 R 57 0 R 58 0 R 59 0 R 60 0 R 61 0 R 62 0 R 63 0 R 64 0 R 65 0 R 66 0 R 67 0 R 68 0 R 69 0 R 70 0 R 71 0 R 72 0 R 73 0 R 74 0 R 75 0 R 76 0 R 77 0 R 78 0 R 79 0 R 80 0 R 81 0 R 82 0 R 83 0 R 84 0 R 85 0 R 86 0 R 87 0 R 88 0 R 89 0 R 90 0 R 91 0 R 92 0 R 93 0 R 94 0 R 95 0 R 96 0 R 97 0 R 98 0 R 99 0 R 100 0 R 101 0 R 102 0 R 103 0 R 104 0 R 105 0 R 106 0 R 107 0 R 108 0 R 109 0 R 110 0 R 111 0 R 112 0 R 113 0 R 114 0 R 115 0 R 116 0 R 117 0 R 118 0 R 119 0 R 120 0 R ]
-        >>
+        >> endobj
         ".as_bytes());
+        let mut pt_node = ParseBuffer::new(pt_node);
+        let _pt_node = parse_pdf_indirect_obj(&mut ctxt, &mut pt_node).unwrap();
 
-        let page_obj = Vec::from(
-            "
+        let page1 = Vec::from(
+            "39 0 obj
         <<
         /CropBox [ 0 0 792 612 ]
         /Annots [741 0 R]
@@ -556,12 +552,14 @@ mod test_page {
         >>
         >>
         /Type /Page
-        >>
+        >> endobj
         "
             .as_bytes(),
         );
+        let mut page1 = ParseBuffer::new(page1);
+        let _page1 = parse_pdf_indirect_obj(&mut ctxt, &mut page1).unwrap();
 
-        let v = Vec::from(
+        let page2 = Vec::from(
             "<<
         /CropBox [ 0 0 792 612 ]
         /Annots [39 0 R]
@@ -604,20 +602,10 @@ mod test_page {
         "
             .as_bytes(),
         );
-        let mut tctx = TypeCheckContext::new();
-        let mut catalog_pb = ParseBuffer::new(catalog);
-        let mut page_pb = ParseBuffer::new(page_obj);
-        let mut pb = ParseBuffer::new(v);
-        let obj1 = parse_pdf_obj(&mut ctxt, &mut catalog_pb).unwrap();
-        let i1 = IndirectT::new(1, 0, Rc::new(obj1));
-        let l = LocatedVal::new(i1, 0, 4);
-        ctxt.register_obj(&l);
-        let obj2 = parse_pdf_obj(&mut ctxt, &mut page_pb).unwrap();
-        let i2 = IndirectT::new(39, 0, Rc::new(obj2));
-        let l = LocatedVal::new(i2, 0, 4);
-        ctxt.register_obj(&l);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let mut page2 = ParseBuffer::new(page2);
+        let obj = parse_pdf_obj(&mut ctxt, &mut page2).unwrap();
 
+        let mut tctx = TypeCheckContext::new();
         let typ = page_type(&mut tctx);
         assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), None);
     }
