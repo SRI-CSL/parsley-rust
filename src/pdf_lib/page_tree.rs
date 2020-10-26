@@ -51,18 +51,15 @@ pub fn root_page_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
         opt: DictKeySpec::Required,
     };
     let opts = Rc::new(PDFType::Disjunct(vec![
+        non_root_page_tree(tctx),
         page_type(tctx),
         template_type(tctx),
-        non_root_page_tree(tctx),
     ]));
-    let elem = TypeCheck::new_all(tctx, "kids", opts, None, IndirectSpec::Required);
+    let elem = TypeCheck::new_indirect(tctx, "kid", opts, IndirectSpec::Required);
+    let kids = Rc::new(PDFType::Array { elem, size: None });
     let kids = DictEntry {
         key: Vec::from("Kids"),
-        chk: TypeCheck::new(
-            tctx,
-            "kids_each",
-            Rc::new(PDFType::Array { elem, size: None }),
-        ),
+        chk: TypeCheck::new(tctx, "kids", kids),
         opt: DictKeySpec::Required,
     };
     let parent = DictEntry {
@@ -90,21 +87,21 @@ pub fn non_root_page_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     };
     let opts = Rc::new(PDFType::Disjunct(vec![
         page_type(tctx),
-        template_type(tctx),
         TypeCheck::new_named("root-non-page-tree"),
+        template_type(tctx),
     ]));
+    let elem = TypeCheck::new_indirect(tctx, "kid", opts, IndirectSpec::Required);
+    let kids = Rc::new(PDFType::Array { elem , size: None });
     let kids = DictEntry {
         key: Vec::from("Kids"),
-        chk: TypeCheck::new_all(tctx, "kids", opts, None, IndirectSpec::Required),
+        chk: TypeCheck::new(tctx, "kids", kids),
         opt: DictKeySpec::Required,
     };
-    let opts_2 = Rc::new(PDFType::Disjunct(vec![
-        TypeCheck::new_named("root-non-page-tree"),
-        TypeCheck::new_named("root-page-tree"),
-    ]));
+    // Don't apply checks upward in the tree, otherwise we get into an
+    // infinite loop.  Just ensure that the key is present.
     let parent = DictEntry {
         key: Vec::from("Parent"),
-        chk: TypeCheck::new(tctx, "parent", opts_2),
+        chk: TypeCheck::new_indirect(tctx, "parent", Rc::new(PDFType::Any), IndirectSpec::Required),
         opt: DictKeySpec::Required,
     };
     TypeCheck::new(
