@@ -286,6 +286,12 @@ mod test_name_tree {
         let mut pb = ParseBuffer::new(v);
         let _root = parse_pdf_indirect_obj(&mut ctxt, &mut pb).unwrap();
 
+        let v = Vec::from("48 0 obj << >> stream
+         endstream
+         endobj".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let _content = parse_pdf_indirect_obj(&mut ctxt, &mut pb).unwrap();
+
         let v = Vec::from(
             "4 0 obj <<
         /CropBox [ 0 0 792 612 ]

@@ -173,6 +173,18 @@ mod test_page_tree {
         let mut page_1 = ParseBuffer::new(page_1);
         let _page_1 = parse_pdf_indirect_obj(&mut ctxt, &mut page_1).unwrap();
 
+        let v = Vec::from("19 0 obj << >> stream
+         endstream
+         endobj".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let _content1 = parse_pdf_indirect_obj(&mut ctxt, &mut pb).unwrap();
+
+        let v = Vec::from("20 0 obj << >> stream
+         endstream
+         endobj".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let _content1 = parse_pdf_indirect_obj(&mut ctxt, &mut pb).unwrap();
+
         // parse the test object
         let pt_root = Vec::from("<</Type /Pages /Kids [4 0 R ] /Count 3 >>".as_bytes());
         let mut pt_root = ParseBuffer::new(pt_root);
@@ -220,6 +232,18 @@ mod test_page_tree {
         );
         let mut page_1 = ParseBuffer::new(page_1);
         let _page_1 = parse_pdf_indirect_obj(&mut ctxt, &mut page_1).unwrap();
+
+        let v = Vec::from("19 0 obj << >> stream
+         endstream
+         endobj".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let _content1 = parse_pdf_indirect_obj(&mut ctxt, &mut pb).unwrap();
+
+        let v = Vec::from("20 0 obj << >> stream
+         endstream
+         endobj".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let _content1 = parse_pdf_indirect_obj(&mut ctxt, &mut pb).unwrap();
 
         // parse the test object
         let v = Vec::from("<</Type /Pages /Parent [4 0 R] /Kids [10 0 R ] /Count 3 >>".as_bytes());
@@ -270,6 +294,18 @@ mod test_page_tree {
         let mut page_1 = ParseBuffer::new(page_1);
         let _page_1 = parse_pdf_indirect_obj(&mut ctxt, &mut page_1).unwrap();
 
+        let v = Vec::from("19 0 obj << >> stream
+         endstream
+         endobj".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let _content1 = parse_pdf_indirect_obj(&mut ctxt, &mut pb).unwrap();
+
+        let v = Vec::from("20 0 obj << >> stream
+         endstream
+         endobj".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let _content1 = parse_pdf_indirect_obj(&mut ctxt, &mut pb).unwrap();
+
         let page_2 = Vec::from(
             "24 0 obj <<
         /Type /Page
@@ -280,6 +316,12 @@ mod test_page_tree {
         ".as_bytes());
         let mut page_2 = ParseBuffer::new(page_2);
         let _page_2 = parse_pdf_indirect_obj(&mut ctxt, &mut page_2).unwrap();
+
+        let v = Vec::from("7 0 obj << >> stream
+         endstream
+         endobj".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let _content2 = parse_pdf_indirect_obj(&mut ctxt, &mut pb).unwrap();
 
         // parse the test object
         let v = Vec::from("<</Type /Pages /Kids [10 0 R 24 0 R ] /Count 3 >>".as_bytes());
