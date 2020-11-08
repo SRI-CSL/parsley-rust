@@ -19,6 +19,7 @@
 use flate2::write::ZlibDecoder;
 use lzw::{Decoder, DecoderEarlyChange, LsbReader};
 use std::io::Write;
+use binascii::hex2bin;
 
 use super::super::pcore::parsebuffer::{
     locate_value, ErrorKind, Location, ParseBuffer, ParseBufferT,
@@ -399,5 +400,132 @@ fn flate_lzw_filter(
     } else {
         let err = ErrorKind::TransformError(format!("PNG filter: unknown predictor {}", predictor));
         Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+    }
+}
+
+pub struct ASCIIHexDecode<'a> {
+    options: &'a Option<&'a DictT>,
+}
+
+impl ASCIIHexDecode<'_> {
+    pub fn new<'a>(options: &'a Option<&'a DictT>) -> ASCIIHexDecode { ASCIIHexDecode { options } }
+}
+
+impl BufferTransformT for ASCIIHexDecode<'_> {
+    fn transform(&mut self, buf: &dyn ParseBufferT) -> TransformResult {
+        let mut out = Vec::<u8>::new();
+        let size: u8 = 8;
+
+        let input = buf.buf();
+        let loc = &buf.get_location();
+
+        let mut read = 0;
+        let mut octet = Vec::new();
+        let mut EOD = false;
+        loop {
+            octet.clear();
+            if read >= input.len() {
+                break
+            }
+
+            // read 2 bytes
+            let char0 = input[read] as char;
+            let char1;
+
+            // last char uneven append 0
+            if read+1 < input.len() {
+                char1 = input[read+1] as char;
+            } else {
+                // last octet is uneven
+                char1 = '0';
+            }
+
+            // create hex octet
+            octet.push(char0);
+            octet.push(char1);
+
+            let octet_string:String = octet.into_iter().collect();
+            match octet_string.as_str() {
+                // end of stream marker
+                "3E" => EOD = true,
+                v => if EOD {
+                    let err = ErrorKind::TransformError(format!("ERROR! invalid char {} after EOD marker in ascii_decode_hex\n", v));
+                    return Err(locate_value(err, loc.loc_start(), loc.loc_end()));
+                } else {
+                    // decode byte
+                    out.extend(hex2bin(v).as_bytes());
+                }
+            }
+            read += 2;
+        }
+        return Ok(ParseBuffer::new(out));
+    }
+}
+
+
+pub struct ASCII85Decode<'a> {
+    options: &'a Option<&'a DictT>,
+}
+
+impl ASCII85Decode<'_> {
+    pub fn new<'a>(options: &'a Option<&'a DictT>) -> ASCII85Decode { ASCII85Decode { options } }
+}
+
+impl BufferTransformT for ASCII85Decode<'_> {
+    fn transform(&mut self, buf: &dyn ParseBufferT) -> TransformResult {
+        let mut out = Vec::<u8>::new();
+        let size: u8 = 8;
+
+        let input = buf.buf();
+        let loc = &buf.get_location();
+
+        let mut read = 0;
+        let mut octet = Vec::new();
+        let mut EOD_fisrt_char = false;
+        let mut EOD = false;
+        loop {
+            octet.clear();
+            if read >= input.len() {
+                break
+            }
+
+            // read 2 bytes
+            let char0 = input[read] as char;
+            let char1;
+
+            // last char uneven append 0
+            if read+1 < input.len() {
+                char1 = input[read+1] as char;
+            } else {
+                // last octet is uneven
+                char1 = '0';
+            }
+
+            // create hex octet
+            octet.push(char0);
+            octet.push(char1);
+
+            let octet_string:String = octet.into_iter().collect();
+            match octet_string.as_str() {
+                // end of stream marker
+               "7E" => EOD_fisrt_char = true,
+                v => if EOD_fisrt_char && v == "3E" {
+                    EOD = true;
+                } else if EOD {
+                    // already reached EOD
+                    let err = ErrorKind::TransformError(format!("ERROR! invalid char {} after EOD marker in ascii85decode\n", v));
+                    return Err(locate_value(err, loc.loc_start(), loc.loc_end()));
+                } else {
+                    if EOD_fisrt_char {
+                        // sequence with first char common like 0x7E 0xAA
+                        EOD_fisrt_char = false;
+                    } 
+                    // decode byte
+                    out.extend(hex2bin(v).as_bytes());
+                }
+            }
+            read += 2;
+        }
+        return Ok(ParseBuffer::new(out));
     }
 }
