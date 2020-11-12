@@ -670,6 +670,8 @@ pub fn check_type(
                             result = Some(o.place(TypeCheckError::ForbiddenKey(key)))
                         },
                         (Some(_), _, PDFType::Any) => continue,
+                        // Skip optional keys for EvalTwo.
+                        (Some(_), DictKeySpec::Optional, _) => continue,
                         (Some(v), _, _) => chks.push((Rc::clone(v), Rc::clone(&ent.chk))),
                     }
                 }
@@ -698,6 +700,8 @@ pub fn check_type(
                             result = Some(o.place(TypeCheckError::ForbiddenKey(key)))
                         },
                         (Some(_), _, PDFType::Any) => continue,
+                        // Skip optional keys for EvalTwo.
+                        (Some(_), DictKeySpec::Optional, _) => continue,
                         (Some(v), _, _) => chks.push((Rc::clone(v), Rc::clone(&ent.chk))),
                     }
                 }
