@@ -16,6 +16,8 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use ascii85;
+use binascii::hex2bin;
 use flate2::write::ZlibDecoder;
 use lzw::{Decoder, DecoderEarlyChange, LsbReader};
 use std::io::Write;
@@ -399,5 +401,97 @@ fn flate_lzw_filter(
     } else {
         let err = ErrorKind::TransformError(format!("PNG filter: unknown predictor {}", predictor));
         Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+    }
+}
+
+pub struct ASCIIHexDecode<'a> {
+    _options: &'a Option<&'a DictT>,
+}
+
+impl ASCIIHexDecode<'_> {
+    pub fn new<'a>(_options: &'a Option<&'a DictT>) -> ASCIIHexDecode {
+        ASCIIHexDecode { _options }
+    }
+}
+
+impl BufferTransformT for ASCIIHexDecode<'_> {
+    fn transform(&mut self, buf: &dyn ParseBufferT) -> TransformResult {
+        let loc = &buf.get_location();
+        let mut stage = Vec::new();
+        let mut saw_eod = false;
+        for (i, b) in buf.buf().iter().enumerate() {
+            match b {
+                // ignore PDF whitespace
+                0x00 | 0x09 | 0x0A | 0x0C | 0x0D | 0x20 => continue,
+                // handle EOD
+                0x3E => {
+                    saw_eod = true;
+                    if i % 2 == 1 {
+                        stage.push(0x30);
+                    }
+                    break
+                },
+                // legal characters
+                0x30 ..= 0x39 | 0x41 ..= 0x46 | 0x61 ..= 0x66 => {
+                    stage.push(*b);
+                    continue
+                },
+                // illegal characters (we could let hex2bin handle these).
+                c => {
+                    let err = ErrorKind::TransformError(format!(
+                        "ASCIIHexDecode: illegal char {:?} in input",
+                        c
+                    ));
+                    return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+                },
+            }
+        }
+        if !saw_eod {
+            let err = ErrorKind::TransformError(format!("ASCIIHexDecode: no EOD in input"));
+            return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+        }
+        let mut out = Vec::<u8>::with_capacity(stage.len() / 2 + 1);
+        match hex2bin(&stage, &mut out) {
+            Ok(res) => return Ok(ParseBuffer::new(Vec::from(res))),
+            Err(e) => {
+                let err =
+                    ErrorKind::TransformError(format!("ASCIIHexDecode: error decoding: {:?}", e));
+                return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+            },
+        }
+    }
+}
+
+pub struct ASCII85Decode<'a> {
+    _options: &'a Option<&'a DictT>,
+}
+
+impl ASCII85Decode<'_> {
+    pub fn new<'a>(_options: &'a Option<&'a DictT>) -> ASCII85Decode { ASCII85Decode { _options } }
+}
+
+impl BufferTransformT for ASCII85Decode<'_> {
+    fn transform(&mut self, buf: &dyn ParseBufferT) -> TransformResult {
+        let loc = &buf.get_location();
+        let mut stage = String::new();
+
+        for b in buf.buf() {
+            match b {
+                // ignore PDF whitespace ourselves, since the ascii85
+                // crate's definition differs from PDF.
+                0x00 | 0x09 | 0x0A | 0x0C | 0x0D | 0x20 => continue,
+
+                // let the crate handle EOD and illegal characters.
+                c => stage.push(*c as char),
+            }
+        }
+        match ascii85::decode(&stage) {
+            Ok(res) => return Ok(ParseBuffer::new(res)),
+            Err(e) => {
+                let err =
+                    ErrorKind::TransformError(format!("ASCII85Decode: error decoding: {:?}", e));
+                return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+            },
+        }
     }
 }

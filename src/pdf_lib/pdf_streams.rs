@@ -23,7 +23,7 @@ use super::super::pcore::parsebuffer::{
 };
 use super::super::pcore::transforms::{BufferTransformT, RestrictView, RestrictViewFrom};
 
-use super::pdf_filters::FlateDecode;
+use super::pdf_filters::{ASCII85Decode, ASCIIHexDecode, FlateDecode};
 use super::pdf_obj::{parse_pdf_obj, DictT, Filter, IndirectT, PDFObjContext, PDFObjT, StreamT};
 use super::pdf_prim::{IntegerP, WhitespaceEOL};
 
@@ -226,10 +226,12 @@ impl ParsleyParser for ObjStreamP<'_> {
         }
         for filter in &filters {
             let f = filter.name().as_string();
-            let mut decoder = match f.as_str() {
-                "FlateDecode" => FlateDecode::new(filter.options()),
+            let mut decoder: Box<dyn BufferTransformT> = match f.as_str() {
+                "FlateDecode" => Box::new(FlateDecode::new(filter.options())),
+                "ASCII85Decode" => Box::new(ASCII85Decode::new(filter.options())),
+                "ASCIIHexDecode" => Box::new(ASCIIHexDecode::new(filter.options())),
                 s => {
-                    let msg = format!("Cannot handle filter {} in xref stream", s);
+                    let msg = format!("Cannot handle filter {} in object stream", s);
                     let err = ErrorKind::GuardError(msg);
                     return Err(self.stream.dict().place(err))
                 },
@@ -594,8 +596,10 @@ impl ParsleyParser for XrefStreamP<'_> {
         }
         for filter in &meta.filters {
             let f = filter.name().as_string();
-            let mut decoder = match f.as_str() {
-                "FlateDecode" => FlateDecode::new(filter.options()),
+            let mut decoder: Box<dyn BufferTransformT> = match f.as_str() {
+                "FlateDecode" => Box::new(FlateDecode::new(filter.options())),
+                "ASCII85Decode" => Box::new(ASCII85Decode::new(filter.options())),
+                "ASCIIHexDecode" => Box::new(ASCIIHexDecode::new(filter.options())),
                 s => {
                     let msg = format!("Cannot handle filter {} in xref stream", s);
                     let err = ErrorKind::GuardError(msg);
