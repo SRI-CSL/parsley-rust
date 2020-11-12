@@ -409,52 +409,55 @@ pub struct ASCIIHexDecode<'a> {
 }
 
 impl ASCIIHexDecode<'_> {
-    pub fn new<'a>(_options: &'a Option<&'a DictT>) -> ASCIIHexDecode { ASCIIHexDecode { _options } }
+    pub fn new<'a>(_options: &'a Option<&'a DictT>) -> ASCIIHexDecode {
+        ASCIIHexDecode { _options }
+    }
 }
 
 impl BufferTransformT for ASCIIHexDecode<'_> {
     fn transform(&mut self, buf: &dyn ParseBufferT) -> TransformResult {
-        let mut out = Vec::<u8>::new();
-
-        let input = buf.buf();
         let loc = &buf.get_location();
-
-        let mut read = 0;
-        let mut octet = Vec::new();
-        let mut eos = false;
-        loop {
-            octet.clear();
-            if read >= input.len() {
-                break
-            }
-
-            octet.push(input[read]);
-
-            match input[read] {
-                // end of stream marker
-                0x3E => eos = true,
-                _ => {
-                    if eos {
-                        let err = ErrorKind::TransformError(format!(
-                            "ERROR! invalid char {:?} after EOD marker in ascii_decode_hex\n",
-                            octet
-                        ));
-                        return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
-                    } else {
-                        // decode byte and extent output buf with byte
-                        let mut tmp_buffer = [0u8];
-                        out.extend(hex2bin(&octet, &mut tmp_buffer).unwrap().to_vec());
+        let mut stage = Vec::new();
+        let mut saw_eod = false;
+        for (i, b) in buf.buf().iter().enumerate() {
+            match b {
+                // ignore PDF whitespace
+                0x00 | 0x09 | 0x0A | 0x0C | 0x0D | 0x20 => continue,
+                // handle EOD
+                0x3E => {
+                    saw_eod = true;
+                    if i % 2 == 1 {
+                        stage.push(0x30);
                     }
+                    break
+                },
+                // legal characters
+                0x30 ..= 0x39 | 0x41 ..= 0x46 | 0x61 ..= 0x66 => {
+                    stage.push(*b);
+                    continue
+                },
+                // illegal characters (we could let hex2bin handle these).
+                c => {
+                    let err = ErrorKind::TransformError(format!(
+                        "ASCIIHexDecode: illegal char {:?} in input",
+                        c
+                    ));
+                    return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
                 },
             }
-            read += 1;
         }
-        if eos {
-            return Ok(ParseBuffer::new(out))
-        } else {
-            let err =
-                ErrorKind::TransformError(String::from("Missing EOS marker in ascii_decode_hex\n"));
+        if !saw_eod {
+            let err = ErrorKind::TransformError(format!("ASCIIHexDecode: no EOD in input"));
             return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+        }
+        let mut out = Vec::<u8>::with_capacity(stage.len() / 2 + 1);
+        match hex2bin(&stage, &mut out) {
+            Ok(res) => return Ok(ParseBuffer::new(Vec::from(res))),
+            Err(e) => {
+                let err =
+                    ErrorKind::TransformError(format!("ASCIIHexDecode: error decoding: {:?}", e));
+                return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+            },
         }
     }
 }
@@ -469,30 +472,25 @@ impl ASCII85Decode<'_> {
 
 impl BufferTransformT for ASCII85Decode<'_> {
     fn transform(&mut self, buf: &dyn ParseBufferT) -> TransformResult {
-        let mut out = Vec::<u8>::new();
-
-        let input = buf.buf();
         let loc = &buf.get_location();
+        let mut stage = String::new();
 
-        if input.len() == 0 {
-            let err = ErrorKind::TransformError(format!(
-                "ERROR! ascii85decode input buf len {} is empty...\n",
-                input.len()
-            ));
-            return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+        for b in buf.buf() {
+            match b {
+                // ignore PDF whitespace ourselves, since the ascii85
+                // crate's definition differs from PDF.
+                0x00 | 0x09 | 0x0A | 0x0C | 0x0D | 0x20 => continue,
+
+                // let the crate handle EOD and illegal characters.
+                c => stage.push(*c as char),
+            }
         }
-
-        let asciibufstr = input.iter().map(|&x| x as char).collect::<String>();
-
-        match ascii85::decode(&asciibufstr) {
+        match ascii85::decode(&stage) {
+            Ok(res) => return Ok(ParseBuffer::new(res)),
             Err(e) => {
-                let err = ErrorKind::TransformError(format!("ascii85 decoder finish error: {}", e));
-                let loc = buf.get_location();
+                let err =
+                    ErrorKind::TransformError(format!("ASCII85Decode: error decoding: {:?}", e));
                 return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
-            },
-            Ok(decoded) => {
-                out.extend(decoded);
-                return Ok(ParseBuffer::new(out))
             },
         }
     }
