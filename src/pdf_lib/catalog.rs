@@ -269,10 +269,10 @@ pub fn catalog_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
 }
 #[cfg(test)]
 mod test_name_tree {
-    use crate::pcore::parsebuffer::{ParseBuffer};
-    use crate::pdf_lib::pdf_obj::{parse_pdf_obj, parse_pdf_indirect_obj, PDFObjContext};
-    use crate::pdf_lib::pdf_type_check::{check_type, TypeCheckContext};
     use super::catalog_type;
+    use crate::pcore::parsebuffer::ParseBuffer;
+    use crate::pdf_lib::pdf_obj::{parse_pdf_indirect_obj, parse_pdf_obj, PDFObjContext};
+    use crate::pdf_lib::pdf_type_check::{check_type, TypeCheckContext};
     use std::rc::Rc;
 
     fn mk_new_context() -> PDFObjContext { PDFObjContext::new(10) }
@@ -286,9 +286,12 @@ mod test_name_tree {
         let mut pb = ParseBuffer::new(v);
         let _root = parse_pdf_indirect_obj(&mut ctxt, &mut pb).unwrap();
 
-        let v = Vec::from("48 0 obj << >> stream
+        let v = Vec::from(
+            "48 0 obj << >> stream
          endstream
-         endobj".as_bytes());
+         endobj"
+                .as_bytes(),
+        );
         let mut pb = ParseBuffer::new(v);
         let _content = parse_pdf_indirect_obj(&mut ctxt, &mut pb).unwrap();
 

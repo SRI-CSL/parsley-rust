@@ -16,11 +16,11 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use ascii85;
+use binascii::hex2bin;
 use flate2::write::ZlibDecoder;
 use lzw::{Decoder, DecoderEarlyChange, LsbReader};
 use std::io::Write;
-use binascii::hex2bin;
-use ascii85;
 
 use super::super::pcore::parsebuffer::{
     locate_value, ErrorKind, Location, ParseBuffer, ParseBufferT,
@@ -405,11 +405,11 @@ fn flate_lzw_filter(
 }
 
 pub struct ASCIIHexDecode<'a> {
-    options: &'a Option<&'a DictT>,
+    _options: &'a Option<&'a DictT>,
 }
 
 impl ASCIIHexDecode<'_> {
-    pub fn new<'a>(options: &'a Option<&'a DictT>) -> ASCIIHexDecode { ASCIIHexDecode { options } }
+    pub fn new<'a>(_options: &'a Option<&'a DictT>) -> ASCIIHexDecode { ASCIIHexDecode { _options } }
 }
 
 impl BufferTransformT for ASCIIHexDecode<'_> {
@@ -433,33 +433,38 @@ impl BufferTransformT for ASCIIHexDecode<'_> {
             match input[read] {
                 // end of stream marker
                 0x3E => eos = true,
-                _ => if eos {
-                    let err = ErrorKind::TransformError(format!("ERROR! invalid char {:?} after EOD marker in ascii_decode_hex\n", octet));
-                    return Err(locate_value(err, loc.loc_start(), loc.loc_end()));
-                } else {
-                    // decode byte and extent output buf with byte
-                    let mut tmp_buffer = [0u8];
-                    out.extend(hex2bin(&octet, &mut tmp_buffer).unwrap().to_vec());
-                }
+                _ => {
+                    if eos {
+                        let err = ErrorKind::TransformError(format!(
+                            "ERROR! invalid char {:?} after EOD marker in ascii_decode_hex\n",
+                            octet
+                        ));
+                        return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+                    } else {
+                        // decode byte and extent output buf with byte
+                        let mut tmp_buffer = [0u8];
+                        out.extend(hex2bin(&octet, &mut tmp_buffer).unwrap().to_vec());
+                    }
+                },
             }
             read += 1;
         }
         if eos {
-            return Ok(ParseBuffer::new(out));
+            return Ok(ParseBuffer::new(out))
         } else {
-            let err = ErrorKind::TransformError(String::from("Missing EOS marker in ascii_decode_hex\n"));
-            return Err(locate_value(err, loc.loc_start(), loc.loc_end()));
+            let err =
+                ErrorKind::TransformError(String::from("Missing EOS marker in ascii_decode_hex\n"));
+            return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
         }
     }
 }
 
-
 pub struct ASCII85Decode<'a> {
-    options: &'a Option<&'a DictT>,
+    _options: &'a Option<&'a DictT>,
 }
 
 impl ASCII85Decode<'_> {
-    pub fn new<'a>(options: &'a Option<&'a DictT>) -> ASCII85Decode { ASCII85Decode { options } }
+    pub fn new<'a>(_options: &'a Option<&'a DictT>) -> ASCII85Decode { ASCII85Decode { _options } }
 }
 
 impl BufferTransformT for ASCII85Decode<'_> {
@@ -470,8 +475,11 @@ impl BufferTransformT for ASCII85Decode<'_> {
         let loc = &buf.get_location();
 
         if input.len() == 0 {
-            let err = ErrorKind::TransformError(format!("ERROR! ascii85decode input buf len {} is empty...\n", input.len()));
-            return Err(locate_value(err, loc.loc_start(), loc.loc_end()));
+            let err = ErrorKind::TransformError(format!(
+                "ERROR! ascii85decode input buf len {} is empty...\n",
+                input.len()
+            ));
+            return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
         }
 
         let asciibufstr = input.iter().map(|&x| x as char).collect::<String>();
@@ -480,10 +488,12 @@ impl BufferTransformT for ASCII85Decode<'_> {
             Err(e) => {
                 let err = ErrorKind::TransformError(format!("ascii85 decoder finish error: {}", e));
                 let loc = buf.get_location();
-                return Err(locate_value(err, loc.loc_start(), loc.loc_end()));
+                return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
             },
-            Ok(decoded) => { out.extend(decoded);
-                             return Ok(ParseBuffer::new(out));}
+            Ok(decoded) => {
+                out.extend(decoded);
+                return Ok(ParseBuffer::new(out))
+            },
         }
     }
 }
