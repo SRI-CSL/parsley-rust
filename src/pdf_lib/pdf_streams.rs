@@ -995,27 +995,38 @@ endobj");
         }
     }
 
-    #[test]
-    fn test_decode_stream() {
-        let v = get_test_data("tests/test_files/xref_stm_flate.obj");
+    fn do_test_decode_stream(file: &str, has_decode_parms: bool, decompress: bool) {
+        let v = get_test_data(file);
         let mut pb = ParseBuffer::new(v);
         let mut ctxt = mk_new_context();
         let mut p = IndirectP::new(&mut ctxt);
         let io = p
             .parse(&mut pb)
-            .expect("unable to parse tests/test_files/xref_stm_flate.obj");
+            .expect(&format!("unable to parse {}", file));
         let io = io.val();
         if let PDFObjT::Stream(ref s) = io.obj().val() {
             assert!(s.dict().val().get(b"Filter").is_some());
-            assert!(s.dict().val().get(b"DecodeParms").is_some());
+            if has_decode_parms {
+                assert!(s.dict().val().get(b"DecodeParms").is_some())
+            };
             let old_size = s.stream().val().size();
             let s = decode_stream(s).unwrap();
             let new_size = s.stream().val().size();
             assert!(s.dict().val().get(b"Filter").is_none());
             assert!(s.dict().val().get(b"DecodeParms").is_none());
-            assert!(old_size < new_size);
+            if decompress {
+                assert!(old_size <= new_size)
+            } else {
+                assert!(old_size >= new_size)
+            }
         } else {
             assert!(false)
         }
+    }
+
+    #[test]
+    fn test_decode_stream() {
+        do_test_decode_stream("tests/test_files/xref_stm_flate.obj", true, true);
+        do_test_decode_stream("tests/test_files/xobject_stm_ascii85.obj", false, false);
     }
 }
