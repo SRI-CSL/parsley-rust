@@ -134,6 +134,9 @@ pub struct DictKey(Vec<u8>);
 impl DictKey {
     pub fn new(v: Vec<u8>) -> DictKey { DictKey(v) }
 }
+impl Clone for DictKey {
+    fn clone(&self) -> Self { DictKey(self.0.clone()) }
+}
 impl std::fmt::Debug for DictKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match std::str::from_utf8(&self.0) {
