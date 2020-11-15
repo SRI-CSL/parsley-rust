@@ -995,29 +995,55 @@ endobj");
         }
     }
 
-    fn do_test_decode_stream(file: &str, has_decode_parms: bool, decompress: bool) {
-        let v = get_test_data(file);
+    fn do_test_decode_stream(
+        test_file: &str, ans_file: &str, has_decode_parms: bool, decompress: bool,
+        chk_content: bool,
+    ) {
+        // parse the test data
+        let v = get_test_data(test_file);
         let mut pb = ParseBuffer::new(v);
         let mut ctxt = mk_new_context();
         let mut p = IndirectP::new(&mut ctxt);
-        let io = p
+        let tio = p
             .parse(&mut pb)
-            .expect(&format!("unable to parse {}", file));
-        let io = io.val();
-        if let PDFObjT::Stream(ref s) = io.obj().val() {
-            assert!(s.dict().val().get(b"Filter").is_some());
+            .expect(&format!("unable to parse {}", test_file));
+        let tio = tio.val();
+
+        // parse the answer data
+        let v = get_test_data(ans_file);
+        let mut pb = ParseBuffer::new(v);
+        let mut ctxt = mk_new_context(); // don't use the old context
+        let mut p = IndirectP::new(&mut ctxt);
+        let aio = p
+            .parse(&mut pb)
+            .expect(&format!("unable to parse {}", ans_file));
+        let aio = aio.val();
+
+        if let PDFObjT::Stream(ref ts) = tio.obj().val() {
+            assert!(ts.dict().val().get(b"Filter").is_some());
             if has_decode_parms {
-                assert!(s.dict().val().get(b"DecodeParms").is_some())
+                assert!(ts.dict().val().get(b"DecodeParms").is_some())
             };
-            let old_size = s.stream().val().size();
-            let s = decode_stream(s).unwrap();
-            let new_size = s.stream().val().size();
-            assert!(s.dict().val().get(b"Filter").is_none());
-            assert!(s.dict().val().get(b"DecodeParms").is_none());
+            let old_size = ts.stream().val().size();
+            let nts = decode_stream(ts).unwrap();
+            let new_size = nts.stream().val().size();
+            assert!(nts.dict().val().get(b"Filter").is_none());
+            assert!(nts.dict().val().get(b"DecodeParms").is_none());
             if decompress {
                 assert!(old_size <= new_size)
             } else {
                 assert!(old_size >= new_size)
+            }
+            if let PDFObjT::Stream(ref s) = aio.obj().val() {
+                // the answer file should not have any filters
+                assert!(s.dict().val().get(b"Filter").is_none());
+                assert!(s.dict().val().get(b"DecodeParms").is_none());
+                // the decoded buffer should match the answer data
+                let our_decode = nts.stream().val().content();
+                let their_decode = s.stream().val().content();
+                assert_eq!(our_decode, their_decode)
+            } else {
+                assert!(false)
             }
         } else {
             assert!(false)
@@ -1026,7 +1052,19 @@ endobj");
 
     #[test]
     fn test_decode_stream() {
-        do_test_decode_stream("tests/test_files/xref_stm_flate.obj", true, true);
-        do_test_decode_stream("tests/test_files/xobject_stm_ascii85.obj", false, false);
+        do_test_decode_stream(
+            "tests/test_files/xref_stm_flate.obj",
+            "tests/test_files/xref_stm.obj",
+            true,  // has decode parms
+            true,  // decompresses
+            false, // FIXME: decoded content doesn't match
+        );
+        do_test_decode_stream(
+            "tests/test_files/xobject_stm_ascii85.obj",
+            "tests/test_files/xobject_stm.obj",
+            false, // no decode parms
+            false, // ascii decompression actually expands data
+            true,  // check content
+        );
     }
 }
