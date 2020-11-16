@@ -536,13 +536,6 @@ impl XrefStreamP<'_> {
                 let field3 = if width > 0 {
                     self.parse_usize_with_width(buf, width)?
                 } else {
-                    if typ == 2 {
-                        // There is no default value for Type 2 entries.
-                        let cur = buf.get_cursor();
-                        let msg = "No Type 2 default for field #3 in xref stream.".to_string();
-                        let err = ErrorKind::GuardError(msg);
-                        return Err(locate_value(err, start, cur))
-                    }
                     0
                 };
 
