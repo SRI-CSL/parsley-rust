@@ -16,6 +16,7 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use super::super::pcore::parsebuffer::{
@@ -24,8 +25,10 @@ use super::super::pcore::parsebuffer::{
 use super::super::pcore::transforms::{BufferTransformT, RestrictView, RestrictViewFrom};
 
 use super::pdf_filters::{ASCII85Decode, ASCIIHexDecode, FlateDecode};
-use super::pdf_obj::{parse_pdf_obj, DictT, Filter, IndirectT, PDFObjContext, PDFObjT, StreamT};
-use super::pdf_prim::{IntegerP, WhitespaceEOL};
+use super::pdf_obj::{
+    parse_pdf_obj, DictKey, DictT, Filter, IndirectT, PDFObjContext, PDFObjT, StreamT,
+};
+use super::pdf_prim::{IntegerP, StreamContentT, WhitespaceEOL};
 
 type ObjStreamMetadata = Vec<(usize, usize)>; // (object#, offset) pairs
 type ObjStreamContent = Vec<LocatedVal<IndirectT>>;
@@ -618,6 +621,74 @@ impl ParsleyParser for XrefStreamP<'_> {
     }
 }
 
+// A function to construct a decoded stream object from a possible
+// encoded one.  The new decoded stream content is given the same
+// location as the old stream content.  This has a few implications:
+// the size in the location information will be inaccurate, and hence
+// it can't be used for creating views into a parsebuffer.  Instead,
+// the content should be used directly.  Similarly, the new stream
+// dictionary will have any filter-specific entries pruned from the
+// old dictionary, but will retain the old location.
+
+pub fn decode_stream(strm: &StreamT) -> ParseResult<StreamT> {
+    let dict = strm.dict().val();
+    let content = strm.stream().val().content();
+    let filters = strm.filters()?;
+
+    // Handle filter sequence.
+    let mut input = ParseBuffer::new(Vec::from(content));
+    let mut views: Vec<ParseBuffer> = Vec::new();
+    // Selects the input for the iteration from the view stack.
+    fn get_input<'a>(
+        inp: &'a mut ParseBuffer, views: &'a mut Vec<ParseBuffer>,
+    ) -> &'a mut dyn ParseBufferT {
+        if views.is_empty() {
+            inp
+        } else {
+            let last = views.len() - 1;
+            &mut views[last]
+        }
+    }
+    // Work through the filter sequence.
+    for filter in &filters {
+        let f = filter.name().as_string();
+        let mut decoder: Box<dyn BufferTransformT> = match f.as_str() {
+            "FlateDecode" => Box::new(FlateDecode::new(filter.options())),
+            "ASCII85Decode" => Box::new(ASCII85Decode::new(filter.options())),
+            "ASCIIHexDecode" => Box::new(ASCIIHexDecode::new(filter.options())),
+            s => {
+                let msg = format!("Cannot handle filter {} in object stream", s);
+                let err = ErrorKind::GuardError(msg);
+                return Err(strm.dict().place(err))
+            },
+        };
+        let input = get_input(&mut input, &mut views);
+        let output = decoder.transform(input)?;
+        views.push(output);
+    }
+    // Get the final decoded buffer.
+    let buf = get_input(&mut input, &mut views);
+    let content = Vec::from(buf.buf());
+    let content = StreamContentT::new(0, content.len(), content);
+    let content = strm.stream().place(content);
+
+    // Create a pruned dictionary.
+    let mut map = BTreeMap::new();
+    for (key, val) in dict.map() {
+        if key == &DictKey::new(Vec::from("Filter"))
+            || key == &DictKey::new(Vec::from("DecodeParms"))
+        {
+            continue
+        }
+        map.insert(key.clone(), Rc::clone(val));
+    }
+    let dict = strm.dict().place(DictT::new(map));
+
+    // Construct the new stream object.
+    let s = StreamT::new(Rc::new(dict), content);
+    Ok(s)
+}
+
 #[cfg(test)]
 mod test_object_stream {
     use std::collections::BTreeMap;
@@ -625,7 +696,7 @@ mod test_object_stream {
     use std::io::Read;
     use std::rc::Rc;
 
-    use super::{ObjStreamP, ObjStreamT, XrefStreamP};
+    use super::{decode_stream, ObjStreamP, ObjStreamT, XrefStreamP};
     use crate::pcore::parsebuffer::{
         locate_value, ErrorKind, LocatedVal, ParseBuffer, ParsleyParser,
     };
@@ -882,7 +953,7 @@ endobj");
 
     #[test]
     fn test_xref_stream() {
-        let v = get_test_data("tests/test_files/xref_stm.obj");
+        let v = get_test_data("tests/test_files/filter_tests/xref_stm.obj");
         let mut pb = ParseBuffer::new(v);
         let mut ctxt = mk_new_context();
         let mut p = IndirectP::new(&mut ctxt);
@@ -903,11 +974,13 @@ endobj");
 
     #[test]
     fn test_xref_stream_flate() {
-        let v = get_test_data("tests/test_files/xref_stm_flate.obj");
+        let v = get_test_data("tests/test_files/filter_tests/xref_stm_flate.obj");
         let mut pb = ParseBuffer::new(v);
         let mut ctxt = mk_new_context();
         let mut p = IndirectP::new(&mut ctxt);
-        let io = p.parse(&mut pb).expect("unable to parse stream");
+        let io = p
+            .parse(&mut pb)
+            .expect("unable to parse tests/test_files/filter_tests/xref_stm_flate.obj");
         let io = io.val();
         if let PDFObjT::Stream(ref s) = io.obj().val() {
             let content = s.stream().val();
@@ -922,28 +995,78 @@ endobj");
         }
     }
 
-    #[test]
-    fn test_ascii85decode() {
-        let v = get_test_data("tests/test_files/ascii85decode.obj");
+    fn do_test_decode_stream(
+        test_file: &str, ans_file: &str, has_decode_parms: bool, decompress: bool,
+        chk_content: bool,
+    ) {
+        // parse the test data
+        let v = get_test_data(test_file);
         let mut pb = ParseBuffer::new(v);
         let mut ctxt = mk_new_context();
         let mut p = IndirectP::new(&mut ctxt);
-        let io = p.parse(&mut pb).expect("unable to parse stream");
-        let io = io.val();
-        if let PDFObjT::Stream(ref s) = io.obj().val() {
-            let content = s.stream().val();
-            let mut stream_buf = ParseBuffer::new_view(&pb, content.start(), content.size());
-            let mut sp = XObjectStreamP::new(&mut ctxt, s);
-            let st = sp.parse(&mut stream_buf);
-            let st = st.unwrap();
-            // let mut xrsp = XrefStreamP::new(s);
-            // let xrt = xrsp.parse(&mut xref_buf).unwrap();
-            // let ents = xrt.val().ents();
-            // let size = s.dict().val().get_usize(b"Size").unwrap();
-            // assert_eq!(size, ents.len())
-            assert_eq!(ost.val().objs().len(), 73)
+        let tio = p
+            .parse(&mut pb)
+            .expect(&format!("unable to parse {}", test_file));
+        let tio = tio.val();
+
+        // parse the answer data
+        let v = get_test_data(ans_file);
+        let mut pb = ParseBuffer::new(v);
+        let mut ctxt = mk_new_context(); // don't use the old context
+        let mut p = IndirectP::new(&mut ctxt);
+        let aio = p
+            .parse(&mut pb)
+            .expect(&format!("unable to parse {}", ans_file));
+        let aio = aio.val();
+
+        if let PDFObjT::Stream(ref ts) = tio.obj().val() {
+            assert!(ts.dict().val().get(b"Filter").is_some());
+            if has_decode_parms {
+                assert!(ts.dict().val().get(b"DecodeParms").is_some())
+            };
+            let old_size = ts.stream().val().size();
+            let nts = decode_stream(ts).unwrap();
+            let new_size = nts.stream().val().size();
+            assert!(nts.dict().val().get(b"Filter").is_none());
+            assert!(nts.dict().val().get(b"DecodeParms").is_none());
+            if decompress {
+                assert!(old_size <= new_size)
+            } else {
+                assert!(old_size >= new_size)
+            }
+            if let PDFObjT::Stream(ref s) = aio.obj().val() {
+                // the answer file should not have any filters
+                assert!(s.dict().val().get(b"Filter").is_none());
+                assert!(s.dict().val().get(b"DecodeParms").is_none());
+                if chk_content {
+                    // the decoded buffer should match the answer data
+                    let our_decode = nts.stream().val().content();
+                    let their_decode = s.stream().val().content();
+                    assert_eq!(our_decode, their_decode)
+                }
+            } else {
+                assert!(false)
+            }
         } else {
-            assert!(false);
+            assert!(false)
         }
+    }
+
+    #[test]
+    fn test_decode_stream() {
+        do_test_decode_stream(
+            "tests/test_files/filter_tests/xref_stm_flate.obj",
+            "tests/test_files/filter_tests/xref_stm.obj",
+            true,  // has decode parms
+            true,  // decompresses
+            false, // FIXME: decoded content doesn't match
+        );
+        do_test_decode_stream(
+            "tests/test_files/filter_tests/xobject_stm_ascii85.obj",
+            "tests/test_files/filter_tests/xobject_stm.obj",
+            false, // no decode parms
+            false, // ascii decompression actually expands data
+            true,  // check content
+        );
     }
 }
