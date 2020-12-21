@@ -39,9 +39,7 @@ use parsley_rust::pcore::parsebuffer::{
 };
 use parsley_rust::pcore::transforms::{BufferTransformT, RestrictView};
 use parsley_rust::pdf_lib::catalog::catalog_type;
-use parsley_rust::pdf_lib::pdf_file::{
-    HeaderP, StartXrefP, TrailerP, TrailerT, XrefSectP, XrefSectT,
-};
+use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, TrailerP, TrailerT, XrefSectP};
 use parsley_rust::pdf_lib::pdf_obj::{IndirectP, PDFObjContext, PDFObjT};
 use parsley_rust::pdf_lib::pdf_streams::{
     ObjStreamP, XrefEntStatus, XrefEntT, XrefStreamP, XrefStreamT,
@@ -102,18 +100,19 @@ enum ObjInfo {
 // The xref tables are arranged with the newest first and oldest last.
 fn parse_xref_with_trailer(
     fi: &FileInfo, ctxt: &mut PDFObjContext, pb: &mut dyn ParseBufferT,
-) -> Option<(Vec<LocatedVal<XrefSectT>>, TrailerT)> {
-    // Collect all xref tables, following the /Prev entries.  This is
-    // not quite the right thing to do for linearized PDF from an
-    // application point-of-view, since they should be loaded lazily,
-    // but that's a difficult use case to support currently.
+) -> Option<(Vec<LocatedVal<XrefEntT>>, TrailerT)> {
+    // Collect all xref tables, following the /XRefStm (if any) and
+    // /Prev entries.  This is not quite the right thing to do for
+    // linearized PDF from an application point-of-view, since they
+    // should be loaded lazily, but that's a difficult use case to
+    // support currently.
     let mut xrefs = Vec::new();
     let mut cursorset = BTreeSet::new(); // to prevent infinite loops
     let mut trlr = None;
     loop {
         let mut p = XrefSectP;
-        let xref = p.parse(pb);
-        if let Err(ref e) = xref {
+        let xrsect = p.parse(pb);
+        if let Err(ref e) = xrsect {
             ta3_log!(
                 Level::Info,
                 fi.file_offset(pb.get_cursor()),
@@ -125,7 +124,12 @@ fn parse_xref_with_trailer(
             );
             return None
         }
-        xrefs.push(xref.unwrap());
+        // Convert the XrefSectT into XrefEntTs so that they can be
+        // merged with any XRefStms.
+        let xrsect = xrsect.unwrap();
+        for e in xrsect.val().ents() {
+            xrefs.push(e);
+        }
         // Get trailer following the xref table.
         match pb.scan(b"trailer") {
             Ok(_) => ta3_log!(
@@ -282,19 +286,16 @@ fn get_xref_info(
 ) -> (Vec<LocatedVal<XrefEntT>>, Rc<LocatedVal<PDFObjT>>) {
     let cursor = pb.get_cursor();
     let info = parse_xref_with_trailer(fi, ctxt, pb);
-    if let Some((xrsects, trailer)) = info {
+    if let Some((xres, trailer)) = info {
         // Collect the entries from possibly multiple xref tables,
         // keeping the newest ones.
         let mut xrents = Vec::new();
         let mut idset = BTreeSet::new();
-        for ls in xrsects {
-            let xrsect = ls.val();
-            for e in xrsect.ents() {
-                let id = (e.val().obj(), e.val().gen());
-                if idset.insert(id) {
-                    // This is the newest version of the object.
-                    xrents.push(e)
-                }
+        for e in xres {
+            let id = (e.val().obj(), e.val().gen());
+            if idset.insert(id) {
+                // This is the newest version of the object.
+                xrents.push(e)
             }
         }
         let root_ref = match trailer.dict().get(b"Root") {
