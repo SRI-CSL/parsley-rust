@@ -42,7 +42,7 @@ use parsley_rust::pdf_lib::catalog::catalog_type;
 use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, TrailerP, TrailerT, XrefSectP};
 use parsley_rust::pdf_lib::pdf_obj::{IndirectP, PDFObjContext, PDFObjT};
 use parsley_rust::pdf_lib::pdf_streams::{
-    ObjStreamP, XrefEntStatus, XrefEntT, XrefStreamP, XrefStreamT,
+    ObjStreamP, XrefEntStatus, XrefEntT, XrefStreamP,
 };
 use parsley_rust::pdf_lib::pdf_type_check::{check_type, TypeCheckContext};
 
@@ -193,11 +193,13 @@ fn parse_xref_with_trailer(
     Some((xrefs, trlr.unwrap().unwrap()))
 }
 
-// This assumes that the parse cursor is set at the startxref location.
+// This assumes that the parse cursor is positioned at the stream
+// object location.
 fn parse_xref_stream(
     fi: &FileInfo, ctxt: &mut PDFObjContext, pb: &mut dyn ParseBufferT,
-) -> Option<Vec<LocatedVal<XrefStreamT>>> {
+) -> Option<(Vec<LocatedVal<XrefEntT>>, Option<Rc<LocatedVal<PDFObjT>>>)> {
     let mut xrefs = Vec::new();
+    let mut root = None;
     let mut cursorset = BTreeSet::new(); // to prevent infinite loops
     loop {
         let mut sp = IndirectP::new(ctxt);
@@ -239,9 +241,21 @@ fn parse_xref_stream(
                     "Found xref stream with {} entries.",
                     xref_stm.val().ents().len()
                 );
+                // Convert the XrefStreamT into XrefEntTs so that they
+                // can be merged with any XrefSectT.
+                for e in xref_stm.val().ents() {
+                    xrefs.push(*e)
+                }
+                // Get a root if we don't have one already.  TODO: the
+                // PDF doesn't specify the handling of inconsistent
+                // roots.  For now, we use the first root specifier we find.
+                if root.is_none() {
+                    if let Some(rt) = xref_stm.val().dict().get(b"Root") {
+                        root = Some(Rc::clone(rt))
+                    }
+                }
                 let prev = xref_stm.val().dict().get_usize(b"Prev");
                 let prev_loc = xref_stm.start();
-                xrefs.push(xref_stm);
                 if let Some(start) = prev {
                     // Go to the next xref table, after ensuring we
                     // are not in an infinite loop.
@@ -275,7 +289,7 @@ fn parse_xref_stream(
         );
         return None
     }
-    Some(xrefs)
+    Some((xrefs, root))
 }
 
 // This assumes that the parse cursor is set at the startxref
@@ -319,24 +333,19 @@ fn get_xref_info(
             "No valid xref information found at startxref."
         )
     }
-    let xrstrms = xrefs.unwrap();
+    let (xrefs, root_opt) = xrefs.unwrap();
     let mut root = None;
     let mut xrents = Vec::new();
     let mut idset = BTreeSet::new();
-    for xrstrm in xrstrms {
-        let xrstrm = xrstrm.val();
-        for e in xrstrm.ents() {
-            let id = (e.val().obj(), e.val().gen());
-            if idset.insert(id) {
-                // This is the newest version of the object.
-                xrents.push(*e)
-            }
+    for e in xrefs {
+        let id = (e.val().obj(), e.val().gen());
+        if idset.insert(id) {
+            // This is the newest version of the object.
+            xrents.push(e)
         }
-        if root.is_none() {
-            if let Some(rt) = xrstrm.dict().get(b"Root") {
-                root = Some(Rc::clone(rt))
-            }
-        }
+    }
+    if let Some(rt) = root_opt {
+        root = Some(Rc::clone(&rt))
     }
     if root.is_none() {
         exit_log!(
