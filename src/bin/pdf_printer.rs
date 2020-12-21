@@ -41,9 +41,7 @@ use parsley_rust::pcore::transforms::{BufferTransformT, RestrictView};
 use parsley_rust::pdf_lib::catalog::catalog_type;
 use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, TrailerP, TrailerT, XrefSectP};
 use parsley_rust::pdf_lib::pdf_obj::{IndirectP, PDFObjContext, PDFObjT};
-use parsley_rust::pdf_lib::pdf_streams::{
-    ObjStreamP, XrefEntStatus, XrefEntT, XrefStreamP,
-};
+use parsley_rust::pdf_lib::pdf_streams::{ObjStreamP, XrefEntStatus, XrefEntT, XrefStreamP};
 use parsley_rust::pdf_lib::pdf_type_check::{check_type, TypeCheckContext};
 
 /* from: https://osr.jpl.nasa.gov/wiki/pages/viewpage.action?spaceKey=SD&title=TA2+PDF+Safe+Parser+Evaluation
@@ -155,6 +153,52 @@ fn parse_xref_with_trailer(
         }
         let t = t.unwrap();
 
+        // Section 7.5.8.4: check for XRefStm in hybrid-reference
+        // file, before processing "Prev".
+        // TODO: This XRefStm block should be conditioned on a flag
+        // for versions < PDF-1.5.
+        let xrefstm = t.val().dict().get_usize(b"XRefStm");
+        let xrefstm_loc = t.start();
+        if let Some(start) = xrefstm {
+            ta3_log!(
+                Level::Info,
+                fi.file_offset(xrefstm_loc),
+                "Found hybrid specifier for XRefStm located at {}",
+                start,
+            );
+            if cursorset.insert(start) {
+                if pb.check_cursor(start) {
+                    pb.set_cursor(start);
+                    let xref_stm = parse_xref_stream(fi, ctxt, pb);
+                    if let Some((xrents, _root)) = xref_stm {
+                        // Ignore the Root specifiers coming from the
+                        // XRefStm.  (This seems to be implicit in the
+                        // spec.)
+                        for e in xrents {
+                            xrefs.push(e);
+                        }
+                    } else {
+                        exit_log!(
+                            fi.file_offset(xrefstm_loc),
+                            "/XRefStm points to an invalid XRefStm at {}",
+                            start
+                        );
+                    }
+                } else {
+                    exit_log!(
+                        fi.file_offset(xrefstm_loc),
+                        "/XRefStm specifies out-of-bounds offset {}",
+                        start
+                    );
+                }
+            } else {
+                exit_log!(
+                    fi.file_offset(tloc),
+                    "Infinite /XRefStm or /Prev loop detected in xref tables."
+                )
+            }
+        }
+
         // update trailer-derived info.
         let prev = t.val().dict().get_usize(b"Prev");
         let prev_loc = t.start();
@@ -184,7 +228,7 @@ fn parse_xref_with_trailer(
             }
             exit_log!(
                 fi.file_offset(tloc),
-                "Infinite /Prev loop detected in xref tables."
+                "Infinite /Prev or /XrefStm loop detected in xref tables."
             )
         }
         // There is no Prev, so this was the last xref table.
