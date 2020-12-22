@@ -237,11 +237,13 @@ fn parse_xref_with_trailer(
     Some((xrefs, trlr.unwrap().unwrap()))
 }
 
+type RootObjRef = Rc<LocatedVal<PDFObjT>>;
+
 // This assumes that the parse cursor is positioned at the stream
 // object location.
 fn parse_xref_stream(
     fi: &FileInfo, ctxt: &mut PDFObjContext, pb: &mut dyn ParseBufferT,
-) -> Option<(Vec<LocatedVal<XrefEntT>>, Option<Rc<LocatedVal<PDFObjT>>>)> {
+) -> Option<(Vec<LocatedVal<XrefEntT>>, Option<RootObjRef>)> {
     let mut xrefs = Vec::new();
     let mut root = None;
     let mut cursorset = BTreeSet::new(); // to prevent infinite loops
@@ -341,7 +343,7 @@ fn parse_xref_stream(
 // failing which it tries getting it from a xref stream.
 fn get_xref_info(
     fi: &FileInfo, ctxt: &mut PDFObjContext, pb: &mut dyn ParseBufferT,
-) -> (Vec<LocatedVal<XrefEntT>>, Rc<LocatedVal<PDFObjT>>) {
+) -> (Vec<LocatedVal<XrefEntT>>, RootObjRef) {
     let cursor = pb.get_cursor();
     let info = parse_xref_with_trailer(fi, ctxt, pb);
     if let Some((xres, trailer)) = info {

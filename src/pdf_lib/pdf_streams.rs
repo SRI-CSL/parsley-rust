@@ -30,7 +30,8 @@ use super::pdf_obj::{
 };
 use super::pdf_prim::{IntegerP, StreamContentT, WhitespaceEOL};
 
-type ObjStreamMetadata = Vec<(usize, usize)>; // (object#, offset) pairs
+type ObjStreamObjInfo = (usize, usize);           // (object#, offset) pairs
+type ObjStreamMetadata = Vec<ObjStreamObjInfo>;
 type ObjStreamContent = Vec<LocatedVal<IndirectT>>;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -162,7 +163,7 @@ impl ObjStreamP<'_> {
     //   of the last offset specified in the metadata
     // [This assumes certain future fixes to the PDF spec.]
     fn parse_stream(
-        &mut self, buf: &mut dyn ParseBufferT, meta: &ObjStreamMetadata,
+        &mut self, buf: &mut dyn ParseBufferT, meta: &[ObjStreamObjInfo],
     ) -> ParseResult<ObjStreamContent> {
         let mut ws = WhitespaceEOL::new(true);
         let mut objs = Vec::new();
