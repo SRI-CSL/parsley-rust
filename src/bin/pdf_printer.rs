@@ -19,6 +19,7 @@
 /// A very basic PDF parser.
 
 #[macro_use]
+extern crate clap;
 extern crate log;
 extern crate env_logger;
 extern crate log_panics;
@@ -32,7 +33,9 @@ use std::process;
 use std::rc::Rc;
 
 use env_logger::Builder;
-use log::{Level, LevelFilter};
+use log::{log, debug, trace, Level, LevelFilter};
+
+use clap::{App, Arg};
 
 use parsley_rust::pcore::parsebuffer::{
     LocatedVal, Location, ParseBuffer, ParseBufferT, ParsleyParser,
@@ -823,50 +826,72 @@ fn parse_file(test_file: &str) {
     };
 
     dump_root(&fi, &ctxt, &root_obj);
-    let mut tctx = TypeCheckContext::new();
-    let typ = catalog_type(&mut tctx);
-    if let Some(err) = check_type(&ctxt, &tctx, Rc::clone(root_obj), typ) {
-        exit_log!(
-            fi.file_offset(err.loc_start()),
-            "Type Check Error: {:?}",
-            err.val()
-        );
-    }
-}
-
-fn print_usage(code: i32) {
-    println!("Usage:\n\t{} <pdf-file>", env::args().next().unwrap());
-    process::exit(code)
+    // let mut tctx = TypeCheckContext::new();
+    // let typ = catalog_type(&mut tctx);
+    // if let Some(err) = check_type(&ctxt, &tctx, Rc::clone(root_obj), typ) {
+    //     exit_log!(
+    //         fi.file_offset(err.loc_start()),
+    //         "Type Check Error: {:?}",
+    //         err.val()
+    //     );
+    // }
 }
 
 fn main() {
-    // TODO: add useful cli options
-    match (env::args().nth(1), env::args().len()) {
-        (Some(s), 2) => {
-            // set up log format with file name (if > TRACE):
-            let filename = Path::new(&s)
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_string();
-            Builder::new()
-                .format(move |buf, record| {
-                    if record.level() == Level::Trace {
-                        writeln!(buf, "{} - {}", record.level(), record.args())
-                    } else if format!("{}", record.args()).contains("panicked") {
-                        // hacking a panic! log message (usually at level Error)
-                        writeln!(buf, "CRITICAL - {} at NaN - {}", filename, record.args())
-                    } else {
-                        writeln!(buf, "{:8} - {} {}", record.level(), filename, record.args())
-                    }
-                })
-                .filter(None, LevelFilter::Trace)
-                .init();
-            log_panics::init(); // cause panic! to log errors instead of simply printing them
+    // parsing command line arguments:
+    let matches = App::new("Parsley PDF Parser")
+        // TODO: use Cargo Metadata here?  See ../../cargo.toml
+        // .version("0.1.0")
+        // .author("Prashanth Mundkur <prashanth.mundkur@gmail.com>")
+        .about("=> parses given PDF file")
+        .arg(Arg::with_name("pdf_file")
+            .value_name("PDF_FILE")
+            .help("the PDF file to parse")
+            .required(true)
+            .index(1))
+        .arg(Arg::with_name("output_json")
+            .short("o")
+            .long("output")
+            .value_name("JSON_FILE")
+            .takes_value(true)
+            .help("output file where to write JSON to"))
+        .arg(Arg::with_name("verbose")
+            .short("v")
+            .multiple(true)
+            .help("verbosity that increases logging level (default: INFO)"))
+        .get_matches();
 
-            parse_file(&s)
-        },
-        (_, _) => print_usage(1),
+    // set logging level based on -v:
+    let log_filter = match matches.occurrences_of("verbose") {
+        0 => LevelFilter::Info,
+        1 => LevelFilter::Debug,
+        2 | _ => LevelFilter::Trace,
+    };
+    // set up log format with file name (if > TRACE):
+    let filename = Path::new(matches.value_of("pdf_file").unwrap())
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    Builder::new()
+        .format(move |buf, record| {
+            if record.level() == Level::Trace {
+                writeln!(buf, "{}", record.args())
+            } else if format!("{}", record.args()).contains("panicked") {
+                // hacking a panic! log message (usually at level Error)
+                writeln!(buf, "CRITICAL - {} at NaN - {}", filename, record.args())
+            } else {
+                writeln!(buf, "{:8} - {} {}", record.level(), filename, record.args())
+            }
+        })
+        .filter(None, log_filter)
+        .init();
+    log_panics::init(); // cause panic! to log errors instead of simply printing them
+
+    if matches.is_present("output_json") {
+        trace!("Writing JSON output to:\t{}", matches.value_of("output_json").unwrap());
     }
+
+    parse_file(matches.value_of("pdf_file").unwrap())
 }

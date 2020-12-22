@@ -2,6 +2,7 @@ use super::super::pcore::parsebuffer::LocatedVal;
 use super::pdf_obj::{DictKey, PDFObjContext, PDFObjT, ReferenceT};
 use std::collections::{BTreeMap, VecDeque};
 use std::rc::Rc;
+use log::trace;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum PDFPrimType {
@@ -563,7 +564,7 @@ pub fn check_type(
         // reset for the next check.
         result = None;
 
-        println!("\n\n checking {:?}\n\n against {:?}\n\n", o.val(), c);
+        trace!("\n\n checking {:?}\n\n against {:?}\n\n", o.val(), c);
 
         match (o.val(), c.typ(), c.indirect()) {
             // Indirects are best handled first.
@@ -717,7 +718,7 @@ pub fn check_type(
             },
         }
 
-        println!("\n\n with result {:?}\n\n", result);
+        trace!("\n\n with result {:?}\n\n", result);
     }
 }
 
