@@ -16,7 +16,6 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use ascii85;
 use binascii::hex2bin;
 use flate2::write::ZlibDecoder;
 use lzw::{Decoder, DecoderEarlyChange, LsbReader};
@@ -447,16 +446,16 @@ impl BufferTransformT for ASCIIHexDecode<'_> {
             }
         }
         if !saw_eod {
-            let err = ErrorKind::TransformError(format!("ASCIIHexDecode: no EOD in input"));
+            let err = ErrorKind::TransformError("ASCIIHexDecode: no EOD in input".to_string());
             return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
         }
         let mut out = Vec::<u8>::with_capacity(stage.len() / 2 + 1);
         match hex2bin(&stage, &mut out) {
-            Ok(res) => return Ok(ParseBuffer::new(Vec::from(res))),
+            Ok(res) => Ok(ParseBuffer::new(Vec::from(res))),
             Err(e) => {
                 let err =
                     ErrorKind::TransformError(format!("ASCIIHexDecode: error decoding: {:?}", e));
-                return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+                Err(locate_value(err, loc.loc_start(), loc.loc_end()))
             },
         }
     }
@@ -486,11 +485,11 @@ impl BufferTransformT for ASCII85Decode<'_> {
             }
         }
         match ascii85::decode(&stage) {
-            Ok(res) => return Ok(ParseBuffer::new(res)),
+            Ok(res) => Ok(ParseBuffer::new(res)),
             Err(e) => {
                 let err =
                     ErrorKind::TransformError(format!("ASCII85Decode: error decoding: {:?}", e));
-                return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+                Err(locate_value(err, loc.loc_start(), loc.loc_end()))
             },
         }
     }

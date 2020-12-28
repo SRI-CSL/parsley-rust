@@ -665,7 +665,7 @@ impl ParsleyParser for NameP {
 pub struct StreamContentT {
     start:   usize, // locations that exclude the 'stream'/'endstream' tokens.
     size:    usize,
-    content: Vec<u8>, // this should be processed using a view; deprecated.
+    content: Vec<u8>,
 }
 
 impl StreamContentT {
@@ -678,6 +678,7 @@ impl StreamContentT {
     }
     pub fn start(&self) -> usize { self.start }
     pub fn size(&self) -> usize { self.size }
+    pub fn content(&self) -> &[u8] { &self.content }
 }
 
 pub struct StreamContentP;
