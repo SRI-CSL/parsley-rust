@@ -33,6 +33,10 @@ or
     $ docker tag pdf_printer safedocs-ta2-docker.cse.sri.com/pdf_printer:latest
     $ docker push safedocs-ta2-docker.cse.sri.com/pdf_printer:latest
 
+To inspect the tags of the Docker image, do:
+
+    $ 
+
 # Running container and checking things...
 
     $ cd etc/docker  # if in top-level directory

@@ -43,6 +43,11 @@ RUN mkdir -p /build-out
 RUN cp target/release/pdf_printer /build-out/
 
 FROM debian:stretch-slim
+LABEL maintainer="linda.briesemeister@sri.com"
+ARG BRANCH="master"
+ARG COMMIT=""
+LABEL com.sri.parsley.branch=${BRANCH}
+LABEL com.sri.parsley.commit=${COMMIT}
 
 COPY --from=builder /build-out/pdf_printer /
 
