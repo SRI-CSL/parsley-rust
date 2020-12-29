@@ -33,6 +33,15 @@ or
     $ docker tag pdf_printer safedocs-ta2-docker.cse.sri.com/pdf_printer:latest
     $ docker push safedocs-ta2-docker.cse.sri.com/pdf_printer:latest
 
+To inspect the tags of the Docker image, do (if you have `jq` installed):
+
+    $ docker inspect pdf_printer | jq '.[0].Config.Labels'
+    {
+        "com.sri.parsley.branch": "evaltwo",
+        "com.sri.parsley.commit": "9d08e28",
+        "maintainer": "linda.briesemeister@sri.com"
+    }
+
 # Running container and checking things...
 
     $ cd etc/docker  # if in top-level directory

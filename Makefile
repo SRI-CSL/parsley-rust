@@ -16,6 +16,20 @@
 #     You should have received a copy of the GNU General Public License
 #     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+# Get docker path or an empty string
+DOCKER := $(shell command -v docker)
+# Try to detect current branch if not provided from environment
+BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
+# Commit hash from git
+COMMIT=$(shell git rev-parse --short HEAD)
+
+# Test if the dependencies we need to run this Makefile are installed
+deps:
+ifndef DOCKER
+	@echo "Docker is not available. Please install docker"
+	@exit 1
+endif
+
 .PHONY: all release clean test fmt
 
 all:
@@ -36,8 +50,8 @@ clippy:
 clean:
 	cargo clean
 
-docker: release etc/docker/Dockerfile
-	docker build -t 'pdf_printer' -f etc/docker/Dockerfile .
+docker: deps release etc/docker/Dockerfile
+	docker build --build-arg=COMMIT=$(COMMIT) --build-arg=BRANCH=$(BRANCH)  -t 'pdf_printer' -f etc/docker/Dockerfile .
 	docker tag pdf_printer safedocs-ta2-docker.cse.sri.com/pdf_printer:latest
 
 deploy: docker
