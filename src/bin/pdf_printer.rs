@@ -33,7 +33,7 @@ use std::process;
 use std::rc::Rc;
 
 use env_logger::Builder;
-use log::{log, debug, trace, Level, LevelFilter};
+use log::{log, debug, Level, LevelFilter};
 
 use clap::{App, Arg};
 
@@ -882,15 +882,15 @@ fn parse_file(test_file: &str) {
     };
 
     dump_root(&fi, &ctxt, &root_obj);
-    // let mut tctx = TypeCheckContext::new();
-    // let typ = catalog_type(&mut tctx);
-    // if let Some(err) = check_type(&ctxt, &tctx, Rc::clone(root_obj), typ) {
-    //     exit_log!(
-    //         fi.file_offset(err.loc_start()),
-    //         "Type Check Error: {:?}",
-    //         err.val()
-    //     );
-    // }
+    let mut tctx = TypeCheckContext::new();
+    let typ = catalog_type(&mut tctx);
+    if let Some(err) = check_type(&ctxt, &tctx, Rc::clone(root_obj), typ) {
+        exit_log!(
+            fi.file_offset(err.loc_start()),
+            "Type Check Error: {:?}",
+            err.val()
+        );
+    }
 }
 
 fn main() {
@@ -946,7 +946,8 @@ fn main() {
     log_panics::init(); // cause panic! to log errors instead of simply printing them
 
     if matches.is_present("output_json") {
-        trace!("Writing JSON output to:\t{}", matches.value_of("output_json").unwrap());
+        debug!("Writing JSON output to:\t{}", matches.value_of("output_json").unwrap());
+        // TODO: actually write something into this file...
     }
 
     parse_file(matches.value_of("pdf_file").unwrap())

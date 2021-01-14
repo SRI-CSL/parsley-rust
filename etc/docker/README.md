@@ -48,14 +48,14 @@ To inspect the tags of the Docker image, do (if you have `jq` installed):
 
 Interactive shell:
 
-    $ docker run -it safedocs-ta2-docker.cse.sri.com/pdf_printer /bin/sh
+    $ docker run -it safedocs-ta2-docker.cse.sri.com/pdf_printer /bin/bash
     / # ls -la /pdf_printer
     -rwxr-xr-x    1 root     root       3080320 Nov 14 15:03 /pdf_printer
     / # exit
 
 With bind mounting a directory containing PDF example files to test:
 
-    $ docker run -v <PATH_TO>/examples:/examples -it safedocs-ta2-docker.cse.sri.com/pdf_printer /bin/sh
+    $ docker run -v <PATH_TO>/examples:/examples -it safedocs-ta2-docker.cse.sri.com/pdf_printer /bin/bash
     # ls -la /examples
     total 16
     drwxr-xr-x 5 root root  160 Jul  8 20:52 .
@@ -73,7 +73,7 @@ With bind mounting a directory containing PDF example files to test:
 
 Or, for example, the latest Eval One data set (downloaded and extracted locally to `~/tmp/2020-03-eval`):
 
-    $ docker run -v ~/tmp/2020-03-eval:/2020-03-eval -it safedocs-ta2-docker.cse.sri.com/pdf_printer /bin/sh
+    $ docker run -v ~/tmp/2020-03-eval:/2020-03-eval -it safedocs-ta2-docker.cse.sri.com/pdf_printer /bin/bash
     # /pdf_printer /2020-03-eval/0011_0000d9d2b298630800d403f88ad148fac1308ef8b0bb4de228947e0426dc28e2.pdf
     ...
 

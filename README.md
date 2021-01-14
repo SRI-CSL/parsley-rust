@@ -69,8 +69,33 @@ for example:
 Or the stand-alone binary:
 
     $ target/release/pdf_printer
-    Usage:
-    	target/release/pdf_printer <pdf-file>
+    error: The following required arguments were not provided:
+        <PDF_FILE>
+    
+    USAGE:
+        pdf_printer [FLAGS] [OPTIONS] <PDF_FILE>
+    
+    For more information try --help
+
+and:
+
+    $ target/release/pdf_printer --help
+    Parsley PDF Parser
+    => parses given PDF file
+    
+    USAGE:
+        pdf_printer [FLAGS] [OPTIONS] <PDF_FILE>
+    
+    FLAGS:
+        -h, --help       Prints help information
+        -V, --version    Prints version information
+        -v               verbosity that increases logging level (default: INFO)
+    
+    OPTIONS:
+        -o, --output <JSON_FILE>    output file where to write JSON to
+    
+    ARGS:
+        <PDF_FILE>    the PDF file to parse
 
 etc.
     
