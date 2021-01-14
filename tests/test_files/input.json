@@ -1,0 +1,4 @@
+{
+  "COMMENT": "Testing capability of PDF parser to consume an input JSON file",
+  "value": 42
+}

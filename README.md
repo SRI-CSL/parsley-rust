@@ -92,12 +92,18 @@ and:
         -v               verbosity that increases logging level (default: INFO)
     
     OPTIONS:
-        -o, --output <JSON_FILE>    output file where to write JSON to
+        -i, --input <JSON_FILE>     input file with TA1 JSON content to guide the parsing
+        -o, --output <JSON_FILE>    output file where to write JSON for TA1 to
     
     ARGS:
         <PDF_FILE>    the PDF file to parse
 
-etc.
+An example of using the new input argument:
+
+    $ target/release/pdf_printer -v tests/test_files/minimal.pdf -i tests/test_files/input.json
+    DEBUG    - minimal.pdf parsed input JSON: {"COMMENT":"Testing capability of PDF parser to consume an input JSON file","value":42}
+    [...]
+
     
 ## Installing a static binary
 

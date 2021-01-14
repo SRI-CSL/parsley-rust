@@ -22,9 +22,12 @@ extern crate clap;
 extern crate log;
 extern crate env_logger;
 extern crate log_panics;
+extern crate serde;
+extern crate serde_json;
 
 use std::collections::{BTreeSet, VecDeque};
 use std::env;
+use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
@@ -32,9 +35,12 @@ use std::process;
 use std::rc::Rc;
 
 use env_logger::Builder;
-use log::{log, debug, Level, LevelFilter};
+use log::{log, debug, error, Level, LevelFilter};
 
 use clap::{App, Arg};
+
+//use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use parsley_rust::pcore::parsebuffer::{
     LocatedVal, Location, ParseBuffer, ParseBufferT, ParsleyParser,
@@ -909,7 +915,13 @@ fn main() {
             .long("output")
             .value_name("JSON_FILE")
             .takes_value(true)
-            .help("output file where to write JSON to"))
+            .help("output file where to write JSON for TA1 to"))
+        .arg(Arg::with_name("input_json")
+            .short("i")
+            .long("input")
+            .value_name("JSON_FILE")
+            .takes_value(true)
+            .help("input file with TA1 JSON content to guide the parsing"))
         .arg(Arg::with_name("verbose")
             .short("v")
             .multiple(true)
@@ -945,8 +957,23 @@ fn main() {
     log_panics::init(); // cause panic! to log errors instead of simply printing them
 
     if matches.is_present("output_json") {
-        debug!("Writing JSON output to:\t{}", matches.value_of("output_json").unwrap());
+        debug!("writing JSON output to:\t{}", matches.value_of("output_json").unwrap());
         // TODO: actually write something into this file...
+    }
+    if matches.is_present("input_json") {
+        // read file to string and parse as JSON, then pass it to `parse_file` as appropriate...
+        let filename = matches.value_of("input_json").unwrap();
+        let path = Path::new(filename);
+
+        // see: https://dev.to/0xbf/day15-load-and-dump-json-100dayofrust-3l1c
+        let json_str = fs::read_to_string(path).unwrap_or("".to_string());
+
+        if json_str.len() == 0 {
+            error!("Could not open input JSON file at:\t{}", filename);
+        } else {
+            let json_input: Value = serde_json::from_str(&json_str).unwrap();
+            debug!("parsed input JSON: {}", json_input);  // TODO: use in parse_file()?
+        }
     }
 
     parse_file(matches.value_of("pdf_file").unwrap())
