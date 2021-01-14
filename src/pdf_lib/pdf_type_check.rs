@@ -2,7 +2,6 @@ use super::super::pcore::parsebuffer::LocatedVal;
 use super::pdf_obj::{DictKey, PDFObjContext, PDFObjT, ReferenceT};
 use std::collections::{BTreeMap, VecDeque};
 use std::rc::Rc;
-use log::trace;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum PDFPrimType {
@@ -564,8 +563,6 @@ pub fn check_type(
         // reset for the next check.
         result = None;
 
-        trace!("\n\n checking {:?}\n\n against {:?}\n\n", o.val(), c);
-
         match (o.val(), c.typ(), c.indirect()) {
             // Indirects are best handled first.
             (PDFObjT::Reference(refnc), _, IndirectSpec::Allowed)
@@ -671,8 +668,6 @@ pub fn check_type(
                             result = Some(o.place(TypeCheckError::ForbiddenKey(key)))
                         },
                         (Some(_), _, PDFType::Any) => continue,
-                        // Skip optional keys for EvalTwo.
-                        (Some(_), DictKeySpec::Optional, _) => continue,
                         (Some(v), _, _) => chks.push((Rc::clone(v), Rc::clone(&ent.chk))),
                     }
                 }
@@ -701,8 +696,6 @@ pub fn check_type(
                             result = Some(o.place(TypeCheckError::ForbiddenKey(key)))
                         },
                         (Some(_), _, PDFType::Any) => continue,
-                        // Skip optional keys for EvalTwo.
-                        (Some(_), DictKeySpec::Optional, _) => continue,
                         (Some(v), _, _) => chks.push((Rc::clone(v), Rc::clone(&ent.chk))),
                     }
                 }
@@ -717,8 +710,6 @@ pub fn check_type(
                 )))
             },
         }
-
-        trace!("\n\n with result {:?}\n\n", result);
     }
 }
 
