@@ -18,7 +18,6 @@
 
 /// A very basic PDF parser.
 
-#[macro_use]
 extern crate clap;
 extern crate log;
 extern crate env_logger;
