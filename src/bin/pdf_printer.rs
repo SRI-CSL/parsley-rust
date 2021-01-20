@@ -939,7 +939,8 @@ fn main() {
     let log_filter = match matches.occurrences_of("verbose") {
         0 => LevelFilter::Info,
         1 => LevelFilter::Debug,
-        2 | _ => LevelFilter::Trace,
+        2 => LevelFilter::Trace,
+        _ => LevelFilter::Trace,
     };
     // set up log format with file name (if > TRACE):
     let filename = Path::new(matches.value_of("pdf_file").unwrap())
@@ -977,9 +978,9 @@ fn main() {
         let path = Path::new(filename);
 
         // see: https://dev.to/0xbf/day15-load-and-dump-json-100dayofrust-3l1c
-        let json_str = fs::read_to_string(path).unwrap_or("".to_string());
+        let json_str = fs::read_to_string(path).unwrap_or_else(|_| "".to_string());
 
-        if json_str.len() == 0 {
+        if json_str.is_empty() {
             error!("Could not open input JSON file at:\t{}", filename);
         } else {
             let json_input: Value = serde_json::from_str(&json_str).unwrap();
