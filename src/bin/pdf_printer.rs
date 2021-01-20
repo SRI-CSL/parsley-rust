@@ -17,10 +17,9 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 /// A very basic PDF parser.
-
 extern crate clap;
-extern crate log;
 extern crate env_logger;
+extern crate log;
 extern crate log_panics;
 extern crate serde;
 extern crate serde_json;
@@ -35,7 +34,7 @@ use std::process;
 use std::rc::Rc;
 
 use env_logger::Builder;
-use log::{log, debug, error, Level, LevelFilter};
+use log::{debug, error, log, Level, LevelFilter};
 
 use clap::{App, Arg};
 
@@ -905,27 +904,35 @@ fn main() {
         // .version("0.1.0")
         // .author("Prashanth Mundkur <prashanth.mundkur@gmail.com>")
         .about("=> parses given PDF file")
-        .arg(Arg::with_name("pdf_file")
-            .value_name("PDF_FILE")
-            .help("the PDF file to parse")
-            .required(true)
-            .index(1))
-        .arg(Arg::with_name("output_json")
-            .short("o")
-            .long("output")
-            .value_name("JSON_FILE")
-            .takes_value(true)
-            .help("output file where to write JSON for TA1 to"))
-        .arg(Arg::with_name("input_json")
-            .short("i")
-            .long("input")
-            .value_name("JSON_FILE")
-            .takes_value(true)
-            .help("input file with TA1 JSON content to guide the parsing"))
-        .arg(Arg::with_name("verbose")
-            .short("v")
-            .multiple(true)
-            .help("verbosity that increases logging level (default: INFO)"))
+        .arg(
+            Arg::with_name("pdf_file")
+                .value_name("PDF_FILE")
+                .help("the PDF file to parse")
+                .required(true)
+                .index(1),
+        )
+        .arg(
+            Arg::with_name("output_json")
+                .short("o")
+                .long("output")
+                .value_name("JSON_FILE")
+                .takes_value(true)
+                .help("output file where to write JSON for TA1 to"),
+        )
+        .arg(
+            Arg::with_name("input_json")
+                .short("i")
+                .long("input")
+                .value_name("JSON_FILE")
+                .takes_value(true)
+                .help("input file with TA1 JSON content to guide the parsing"),
+        )
+        .arg(
+            Arg::with_name("verbose")
+                .short("v")
+                .multiple(true)
+                .help("verbosity that increases logging level (default: INFO)"),
+        )
         .get_matches();
 
     // set logging level based on -v:
@@ -957,11 +964,15 @@ fn main() {
     log_panics::init(); // cause panic! to log errors instead of simply printing them
 
     if matches.is_present("output_json") {
-        debug!("writing JSON output to:\t{}", matches.value_of("output_json").unwrap());
+        debug!(
+            "writing JSON output to:\t{}",
+            matches.value_of("output_json").unwrap()
+        );
         // TODO: actually write something into this file...
     }
     if matches.is_present("input_json") {
-        // read file to string and parse as JSON, then pass it to `parse_file` as appropriate...
+        // read file to string and parse as JSON, then pass it to `parse_file` as
+        // appropriate...
         let filename = matches.value_of("input_json").unwrap();
         let path = Path::new(filename);
 
@@ -972,7 +983,8 @@ fn main() {
             error!("Could not open input JSON file at:\t{}", filename);
         } else {
             let json_input: Value = serde_json::from_str(&json_str).unwrap();
-            debug!("parsed input JSON: {}", json_input);  // TODO: use in parse_file()?
+            debug!("parsed input JSON: {}", json_input); // TODO: use in
+                                                         // parse_file()?
         }
     }
 

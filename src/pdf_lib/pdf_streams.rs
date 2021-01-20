@@ -30,7 +30,7 @@ use super::pdf_obj::{
 };
 use super::pdf_prim::{IntegerP, StreamContentT, WhitespaceEOL};
 
-type ObjStreamObjInfo = (usize, usize);           // (object#, offset) pairs
+type ObjStreamObjInfo = (usize, usize); // (object#, offset) pairs
 type ObjStreamMetadata = Vec<ObjStreamObjInfo>;
 type ObjStreamContent = Vec<LocatedVal<IndirectT>>;
 
