@@ -225,6 +225,12 @@ fn parse_xref_with_trailer(
                 // This is a new location.
                 if pb.check_cursor(start) {
                     pb.set_cursor(start);
+                    ta3_log!(
+                        Level::Info,
+                        fi.file_offset(xrefstm_loc),
+                        "Following /Prev to {}",
+                        start,
+                    );
                     continue
                 }
                 exit_log!(
@@ -256,6 +262,7 @@ fn parse_xref_stream(
     let mut cursorset = BTreeSet::new(); // to prevent infinite loops
     loop {
         let mut sp = IndirectP::new(ctxt);
+        let xref_obj_loc = pb.get_cursor();
         let xref_obj = sp.parse(pb);
         if let Err(e) = xref_obj {
             ta3_log!(
@@ -291,8 +298,9 @@ fn parse_xref_stream(
                 ta3_log!(
                     Level::Info,
                     fi.file_offset(pb.get_cursor()),
-                    "Found xref stream with {} entries.",
-                    xref_stm.val().ents().len()
+                    "Found xref stream with {} entries at {}.",
+                    xref_stm.val().ents().len(),
+                    xref_obj_loc
                 );
                 // Convert the XrefStreamT into XrefEntTs so that they
                 // can be merged with any XrefSectT.
@@ -315,6 +323,12 @@ fn parse_xref_stream(
                     if cursorset.insert(start) {
                         if pb.check_cursor(start) {
                             pb.set_cursor(start);
+                            ta3_log!(
+                                Level::Info,
+                                fi.file_offset(xref_obj_loc),
+                                "Following XRefStm /Prev to {}",
+                                start,
+                            );
                             continue
                         }
                         exit_log!(
