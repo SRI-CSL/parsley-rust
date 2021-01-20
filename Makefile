@@ -23,13 +23,6 @@ BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 # Commit hash from git
 COMMIT=$(shell git rev-parse --short HEAD)
 
-# Test if the dependencies we need to run this Makefile are installed
-deps:
-ifndef DOCKER
-	@echo "Docker is not available. Please install docker"
-	@exit 1
-endif
-
 .PHONY: all release clean test fmt
 
 all:
@@ -49,6 +42,13 @@ clippy:
 
 clean:
 	cargo clean
+
+# Test if the dependencies we need to run this Makefile are installed
+deps:
+ifndef DOCKER
+	@echo "Docker is not available. Please install docker"
+	@exit 1
+endif
 
 docker: deps release etc/docker/Dockerfile
 	docker build --build-arg=COMMIT=$(COMMIT) --build-arg=BRANCH=$(BRANCH)  -t 'pdf_printer' -f etc/docker/Dockerfile .
