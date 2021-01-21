@@ -184,94 +184,101 @@ fn parse_xref_section(
     // First try to parse a conventional xref table.
     let mut p = XrefSectP;
     let xrsect = p.parse(pb);
-    if let Ok(xrs) = xrsect {
-        let mut xrefs = Vec::new();
-        // Convert the XrefSectT into XrefEntTs so that they can be
-        // merged with any XRefStms.
-        for e in xrs.val().ents() {
-            xrefs.push(e);
-        }
-        // Get trailer following the xref table.
-        match pb.scan(b"trailer") {
-            Ok(_) => {
-                let c = pb.get_cursor();
-                ta3_log!(Level::Info, fi.file_offset(c), "Found trailer at {}.", c)
-            },
-            Err(e) => {
-                ta3_log!(
-                    Level::Info,
-                    fi.file_offset(pb.get_cursor()),
-                    "No trailer found: {}",
-                    e.val()
-                );
-                return Some((xrefs, None, None))
-            },
-        }
-        let mut p = TrailerP::new(ctxt);
-        let tloc = pb.get_cursor();
-        let t = p.parse(pb);
-        if let Err(e) = t {
+    if let Err(e) = xrsect {
+        ta3_log!(
+            Level::Info,
+            fi.file_offset(start),
+            "Error parsing xref table, checking for xref stream at {}: {}",
+            start,
+            e.val()
+        );
+        // No xref section; check for xref stream.
+        pb.set_cursor(start);
+        return parse_xref_stream(fi, ctxt, pb)
+    }
+    let xrs = xrsect.unwrap();
+    let mut xrefs = Vec::new();
+    // Convert the XrefSectT into XrefEntTs so that they can be merged
+    // with any XRefStms.
+    for e in xrs.val().ents() {
+        xrefs.push(e);
+    }
+    // Get trailer following the xref table.
+    match pb.scan(b"trailer") {
+        Ok(_) => {
+            let c = pb.get_cursor();
+            ta3_log!(Level::Info, fi.file_offset(c), "Found trailer at {}.", c)
+        },
+        Err(e) => {
             ta3_log!(
-                Level::Error,
-                fi.file_offset(tloc),
-                "Cannot parse trailer: {}",
+                Level::Info,
+                fi.file_offset(pb.get_cursor()),
+                "No trailer found: {}",
                 e.val()
             );
             return Some((xrefs, None, None))
-        }
-        let t = t.unwrap();
+        },
+    }
+    let mut p = TrailerP::new(ctxt);
+    let tloc = pb.get_cursor();
+    let t = p.parse(pb);
+    if let Err(e) = t {
+        ta3_log!(
+            Level::Error,
+            fi.file_offset(tloc),
+            "Cannot parse trailer: {}",
+            e.val()
+        );
+        return Some((xrefs, None, None))
+    }
+    let t = t.unwrap();
 
-        // extract trailer-derived info: /Root and /Prev
-        let prev = t.val().dict().get_usize(b"Prev");
-        let root = t.val().dict().get(b"Root");
-        let root = match root {
-            Some(rt) => Some(Rc::clone(rt)),
-            None => None,
-        };
+    // extract trailer-derived info: /Root and /Prev
+    let prev = t.val().dict().get_usize(b"Prev");
+    let root = t.val().dict().get(b"Root");
+    let root = match root {
+        Some(rt) => Some(Rc::clone(rt)),
+        None => None,
+    };
 
-        // Section 7.5.8.4: check for XRefStm in hybrid-reference
-        // file. TODO: This should be conditioned on a flag for
-        // versions < PDF-1.5.
-        let xrefstm = t.val().dict().get_usize(b"XRefStm");
-        let xrefstm_loc = t.start();
-        if let Some(xrstart) = xrefstm {
-            ta3_log!(
-                Level::Info,
-                fi.file_offset(xrefstm_loc),
-                "Found hybrid specifier for XRefStm located at {}",
-                xrstart,
-            );
-            if pb.check_cursor(xrstart) {
-                pb.set_cursor(xrstart);
-                let xref_stm = parse_xref_stream(fi, ctxt, pb);
-                if let Some((xrents, _root, _prev)) = xref_stm {
-                    // Ignore the /Root and /Prev specifiers coming
-                    // from the XRefStm.  (This seems to be implicit
-                    // in the spec.)
-                    for e in xrents {
-                        xrefs.push(e);
-                    }
-                } else {
-                    exit_log!(
-                        fi.file_offset(xrefstm_loc),
-                        "/XRefStm points to an invalid XRefStm at {}",
-                        xrstart
-                    );
+    // Section 7.5.8.4: check for XRefStm in hybrid-reference
+    // file. TODO: This should be conditioned on a flag for
+    // versions < PDF-1.5.
+    let xrefstm = t.val().dict().get_usize(b"XRefStm");
+    let xrefstm_loc = t.start();
+    if let Some(xrstart) = xrefstm {
+        ta3_log!(
+            Level::Info,
+            fi.file_offset(xrefstm_loc),
+            "Found hybrid specifier for XRefStm located at {}",
+            xrstart,
+        );
+        if pb.check_cursor(xrstart) {
+            pb.set_cursor(xrstart);
+            let xref_stm = parse_xref_stream(fi, ctxt, pb);
+            if let Some((xrents, _root, _prev)) = xref_stm {
+                // Ignore the /Root and /Prev specifiers coming from
+                // the XRefStm.  (This seems to be implicit in the
+                // spec.)
+                for e in xrents {
+                    xrefs.push(e);
                 }
             } else {
                 exit_log!(
                     fi.file_offset(xrefstm_loc),
-                    "/XRefStm specifies out-of-bounds offset {}",
+                    "/XRefStm points to an invalid XRefStm at {}",
                     xrstart
                 );
             }
+        } else {
+            exit_log!(
+                fi.file_offset(xrefstm_loc),
+                "/XRefStm specifies out-of-bounds offset {}",
+                xrstart
+            );
         }
-        return Some((xrefs, root, prev))
     }
-
-    // No xref section; check for xref stream.
-    pb.set_cursor(start);
-    parse_xref_stream(fi, ctxt, pb)
+    Some((xrefs, root, prev))
 }
 
 // This assumes that the parse cursor is set at the startxref
