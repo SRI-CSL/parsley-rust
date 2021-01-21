@@ -46,7 +46,7 @@ use parsley_rust::pcore::parsebuffer::{
 };
 use parsley_rust::pcore::transforms::{BufferTransformT, RestrictView};
 use parsley_rust::pdf_lib::catalog::catalog_type;
-use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, TrailerP, TrailerT, XrefSectP};
+use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, TrailerP, XrefSectP};
 use parsley_rust::pdf_lib::pdf_obj::{IndirectP, PDFObjContext, PDFObjT};
 use parsley_rust::pdf_lib::pdf_streams::{ObjStreamP, XrefEntStatus, XrefEntT, XrefStreamP};
 use parsley_rust::pdf_lib::pdf_type_check::{check_type, TypeCheckContext};
@@ -101,27 +101,45 @@ enum ObjInfo {
     Stream { id: usize, gen: usize },
 }
 
-// This assumes that the parse cursor is set at the startxref location.
-// The xref tables are arranged with the newest first and oldest last.
-fn parse_xref_with_trailer(
+type RootObjRef = Rc<LocatedVal<PDFObjT>>;
+type XRefSectInfo = (Vec<LocatedVal<XrefEntT>>, Option<RootObjRef>, Option<usize>);
+
+// Parse a single xref stream.  It assumes that the parse cursor is
+// positioned at the stream object location, either via a startxref, a
+// /Prev, or a XRefStm entry in a trailer.
+fn parse_xref_stream(
     fi: &FileInfo, ctxt: &mut PDFObjContext, pb: &mut dyn ParseBufferT,
-) -> Option<(Vec<LocatedVal<XrefEntT>>, TrailerT)> {
-    // Collect all xref tables, following the /XRefStm (if any) and
-    // /Prev entries.  This is not quite the right thing to do for
-    // linearized PDF from an application point-of-view, since they
-    // should be loaded lazily, but that's a difficult use case to
-    // support currently.
+) -> Option<XRefSectInfo> {
     let mut xrefs = Vec::new();
-    let mut cursorset = BTreeSet::new(); // to prevent infinite loops
-    let mut trlr = None;
-    loop {
-        let mut p = XrefSectP;
-        let xrsect = p.parse(pb);
-        if let Err(ref e) = xrsect {
+    let mut root = None;
+    let mut prev = None;
+
+    let mut sp = IndirectP::new(ctxt);
+    let xref_obj_loc = pb.get_cursor();
+    let xref_obj = sp.parse(pb);
+    if let Err(e) = xref_obj {
+        ta3_log!(
+            Level::Info,
+            fi.file_offset(pb.get_cursor()),
+            "Could not parse object for xref stream in {} at file-offset {} (pdf-offset {}): {}",
+            fi.display(),
+            fi.file_offset(e.start()),
+            e.start(),
+            e.val()
+        );
+        return None
+    };
+    let xref_obj = xref_obj.unwrap();
+    if let PDFObjT::Stream(ref s) = xref_obj.val().obj().val() {
+        let content = s.stream().val();
+        let mut xref_buf = ParseBuffer::new_view(pb, content.start(), content.size());
+        let mut xp = XrefStreamP::new(s);
+        let xref_stm = xp.parse(&mut xref_buf);
+        if let Err(e) = xref_stm {
             ta3_log!(
                 Level::Info,
                 fi.file_offset(pb.get_cursor()),
-                "Could not parse xref table in {} at file-offset {} (pdf-offset {}): {}",
+                "Cannot parse xref stream in {} at file-offset {} (pdf-offset {}): {}",
                 fi.display(),
                 fi.file_offset(e.start()),
                 e.start(),
@@ -129,299 +147,199 @@ fn parse_xref_with_trailer(
             );
             return None
         }
+        let xref_stm = xref_stm.unwrap();
+        ta3_log!(
+            Level::Info,
+            fi.file_offset(pb.get_cursor()),
+            "Found xref stream with {} entries at {}.",
+            xref_stm.val().ents().len(),
+            xref_obj_loc
+        );
+        // Convert the XrefStreamT into XrefEntTs so that they
+        // can be merged with any XrefSectT.
+        for e in xref_stm.val().ents() {
+            xrefs.push(*e)
+        }
+        // Extract trailer-like entries from the stream dict.
+        root = match xref_stm.val().dict().get(b"Root") {
+            Some(rt) => Some(Rc::clone(rt)),
+            None => None,
+        };
+        prev = xref_stm.val().dict().get_usize(b"Prev");
+    }
+    Some((xrefs, root, prev))
+}
+
+// Parses a single xref section.  This section could be (a) an xref
+// table with trailer, (b) an xref stream, or (c) a hybrid-reference,
+// with an xref table and a trailer with a pointer to an xref stream.
+// It assumes that the parse cursor is set appropriately, either via
+// handling a startxref or a /Prev.
+fn parse_xref_section(
+    fi: &FileInfo, ctxt: &mut PDFObjContext, pb: &mut dyn ParseBufferT,
+) -> Option<XRefSectInfo> {
+    // save the cursor
+    let start = pb.get_cursor();
+
+    // First try to parse a conventional xref table.
+    let mut p = XrefSectP;
+    let xrsect = p.parse(pb);
+    if let Ok(xrs) = xrsect {
+        let mut xrefs = Vec::new();
         // Convert the XrefSectT into XrefEntTs so that they can be
         // merged with any XRefStms.
-        let xrsect = xrsect.unwrap();
-        for e in xrsect.val().ents() {
+        for e in xrs.val().ents() {
             xrefs.push(e);
         }
         // Get trailer following the xref table.
         match pb.scan(b"trailer") {
-            Ok(_) => ta3_log!(
-                Level::Info,
-                fi.file_offset(pb.get_cursor()),
-                "Found trailer."
-            ),
+            Ok(_) => {
+                let c = pb.get_cursor();
+                ta3_log!(Level::Info, fi.file_offset(c), "Found trailer at {}.", c)
+            },
             Err(e) => {
                 ta3_log!(
                     Level::Info,
-                    fi.file_offset(e.start()),
-                    "Cannot find trailer: {}",
+                    fi.file_offset(pb.get_cursor()),
+                    "No trailer found: {}",
                     e.val()
                 );
-                return None
+                return Some((xrefs, None, None))
             },
         }
         let mut p = TrailerP::new(ctxt);
         let tloc = pb.get_cursor();
         let t = p.parse(pb);
         if let Err(e) = t {
-            exit_log!(fi.file_offset(tloc), "Cannot parse trailer: {}", e.val());
+            ta3_log!(
+                Level::Error,
+                fi.file_offset(tloc),
+                "Cannot parse trailer: {}",
+                e.val()
+            );
+            return Some((xrefs, None, None))
         }
         let t = t.unwrap();
 
+        // extract trailer-derived info: /Root and /Prev
+        let prev = t.val().dict().get_usize(b"Prev");
+        let root = t.val().dict().get(b"Root");
+        let root = match root {
+            Some(rt) => Some(Rc::clone(rt)),
+            None => None,
+        };
+
         // Section 7.5.8.4: check for XRefStm in hybrid-reference
-        // file, before processing "Prev".
-        // TODO: This XRefStm block should be conditioned on a flag
-        // for versions < PDF-1.5.
+        // file. TODO: This should be conditioned on a flag for
+        // versions < PDF-1.5.
         let xrefstm = t.val().dict().get_usize(b"XRefStm");
         let xrefstm_loc = t.start();
-        if let Some(start) = xrefstm {
+        if let Some(xrstart) = xrefstm {
             ta3_log!(
                 Level::Info,
                 fi.file_offset(xrefstm_loc),
                 "Found hybrid specifier for XRefStm located at {}",
-                start,
+                xrstart,
             );
-            if cursorset.insert(start) {
-                if pb.check_cursor(start) {
-                    pb.set_cursor(start);
-                    let xref_stm = parse_xref_stream(fi, ctxt, pb);
-                    if let Some((xrents, _root)) = xref_stm {
-                        // Ignore the Root specifiers coming from the
-                        // XRefStm.  (This seems to be implicit in the
-                        // spec.)
-                        for e in xrents {
-                            xrefs.push(e);
-                        }
-                    } else {
-                        exit_log!(
-                            fi.file_offset(xrefstm_loc),
-                            "/XRefStm points to an invalid XRefStm at {}",
-                            start
-                        );
+            if pb.check_cursor(xrstart) {
+                pb.set_cursor(xrstart);
+                let xref_stm = parse_xref_stream(fi, ctxt, pb);
+                if let Some((xrents, _root, _prev)) = xref_stm {
+                    // Ignore the /Root and /Prev specifiers coming
+                    // from the XRefStm.  (This seems to be implicit
+                    // in the spec.)
+                    for e in xrents {
+                        xrefs.push(e);
                     }
                 } else {
                     exit_log!(
                         fi.file_offset(xrefstm_loc),
-                        "/XRefStm specifies out-of-bounds offset {}",
-                        start
+                        "/XRefStm points to an invalid XRefStm at {}",
+                        xrstart
                     );
                 }
             } else {
                 exit_log!(
-                    fi.file_offset(tloc),
-                    "Infinite /XRefStm or /Prev loop detected in xref tables."
-                )
-            }
-        }
-
-        // update trailer-derived info.
-        let prev = t.val().dict().get_usize(b"Prev");
-        let prev_loc = t.start();
-        match trlr {
-            None => trlr = Some(t),
-            Some(_) => {
-                // Newer trailers make older ones redundant.
-                // TODO: should we check any constraints here?
-            },
-        }
-        if let Some(start) = prev {
-            // Go to the next xref table, after ensuring we are not in
-            // an infinite loop.
-            // TODO: ensure that there is an %%EOF marker following
-            // the trailer.
-            if cursorset.insert(start) {
-                // This is a new location.
-                if pb.check_cursor(start) {
-                    pb.set_cursor(start);
-                    ta3_log!(
-                        Level::Info,
-                        fi.file_offset(xrefstm_loc),
-                        "Following /Prev to {}",
-                        start,
-                    );
-                    continue
-                }
-                exit_log!(
-                    fi.file_offset(prev_loc),
-                    "/Prev specifies out-of-bounds offset {}",
-                    start
+                    fi.file_offset(xrefstm_loc),
+                    "/XRefStm specifies out-of-bounds offset {}",
+                    xrstart
                 );
             }
-            exit_log!(
-                fi.file_offset(tloc),
-                "Infinite /Prev or /XrefStm loop detected in xref tables."
-            )
         }
-        // There is no Prev, so this was the last xref table.
-        break
+        return Some((xrefs, root, prev))
     }
-    Some((xrefs, trlr.unwrap().unwrap()))
-}
 
-type RootObjRef = Rc<LocatedVal<PDFObjT>>;
-
-// This assumes that the parse cursor is positioned at the stream
-// object location.
-fn parse_xref_stream(
-    fi: &FileInfo, ctxt: &mut PDFObjContext, pb: &mut dyn ParseBufferT,
-) -> Option<(Vec<LocatedVal<XrefEntT>>, Option<RootObjRef>)> {
-    let mut xrefs = Vec::new();
-    let mut root = None;
-    let mut cursorset = BTreeSet::new(); // to prevent infinite loops
-    loop {
-        let mut sp = IndirectP::new(ctxt);
-        let xref_obj_loc = pb.get_cursor();
-        let xref_obj = sp.parse(pb);
-        if let Err(e) = xref_obj {
-            ta3_log!(
-                Level::Info,
-                fi.file_offset(pb.get_cursor()),
-                "Could not parse object for xref stream in {} at file-offset {} (pdf-offset {}): {}",
-                fi.display(),
-                fi.file_offset(e.start()),
-                e.start(),
-                e.val()
-            );
-            return None
-        };
-        let xref_obj = xref_obj.unwrap();
-        if let PDFObjT::Stream(ref s) = xref_obj.val().obj().val() {
-            let content = s.stream().val();
-            let mut xref_buf = ParseBuffer::new_view(pb, content.start(), content.size());
-            let mut xp = XrefStreamP::new(s);
-            let xref_stm = xp.parse(&mut xref_buf);
-            if let Err(e) = xref_stm {
-                ta3_log!(
-                    Level::Info,
-                    fi.file_offset(pb.get_cursor()),
-                    "Cannot parse xref stream in {} at file-offset {} (pdf-offset {}): {}",
-                    fi.display(),
-                    fi.file_offset(e.start()),
-                    e.start(),
-                    e.val()
-                );
-                return None
-            } else {
-                let xref_stm = xref_stm.unwrap();
-                ta3_log!(
-                    Level::Info,
-                    fi.file_offset(pb.get_cursor()),
-                    "Found xref stream with {} entries at {}.",
-                    xref_stm.val().ents().len(),
-                    xref_obj_loc
-                );
-                // Convert the XrefStreamT into XrefEntTs so that they
-                // can be merged with any XrefSectT.
-                for e in xref_stm.val().ents() {
-                    xrefs.push(*e)
-                }
-                // Get a root if we don't have one already.  TODO: the
-                // PDF doesn't specify the handling of inconsistent
-                // roots.  For now, we use the first root specifier we find.
-                if root.is_none() {
-                    if let Some(rt) = xref_stm.val().dict().get(b"Root") {
-                        root = Some(Rc::clone(rt))
-                    }
-                }
-                let prev = xref_stm.val().dict().get_usize(b"Prev");
-                let prev_loc = xref_stm.start();
-                if let Some(start) = prev {
-                    // Go to the next xref table, after ensuring we
-                    // are not in an infinite loop.
-                    if cursorset.insert(start) {
-                        if pb.check_cursor(start) {
-                            pb.set_cursor(start);
-                            ta3_log!(
-                                Level::Info,
-                                fi.file_offset(xref_obj_loc),
-                                "Following XRefStm /Prev to {}",
-                                start,
-                            );
-                            continue
-                        }
-                        exit_log!(
-                            fi.file_offset(prev_loc),
-                            "/Prev specifies out-of-bounds offset {}",
-                            start
-                        );
-                    }
-                    exit_log!(
-                        fi.file_offset(start),
-                        "Infinite /Prev loop detected in xref tables."
-                    )
-                }
-                // There is no Prev, so this was the last xref table.
-                break
-            }
-        }
-        ta3_log!(
-            Level::Info,
-            fi.file_offset(pb.get_cursor()),
-            "Could not find xref stream in {} at file-offset {} (pdf-offset {})",
-            fi.display(),
-            fi.file_offset(pb.get_cursor()),
-            pb.get_cursor()
-        );
-        return None
-    }
-    Some((xrefs, root))
+    // No xref section; check for xref stream.
+    pb.set_cursor(start);
+    parse_xref_stream(fi, ctxt, pb)
 }
 
 // This assumes that the parse cursor is set at the startxref
-// location.  This tries getting it from the xref table and trailer,
-// failing which it tries getting it from a xref stream.
+// location.  It traverses a chain of xref tables (conventional or
+// hybrid) or xref streams to return the xref entries and a root.
 fn get_xref_info(
     fi: &FileInfo, ctxt: &mut PDFObjContext, pb: &mut dyn ParseBufferT,
 ) -> (Vec<LocatedVal<XrefEntT>>, RootObjRef) {
-    let cursor = pb.get_cursor();
-    let info = parse_xref_with_trailer(fi, ctxt, pb);
-    if let Some((xres, trailer)) = info {
-        // Collect the entries from possibly multiple xref tables,
-        // keeping the newest ones.
-        let mut xrents = Vec::new();
-        let mut idset = BTreeSet::new();
-        for e in xres {
+    // Collect all xref tables or streams, following the /Prev chain.
+    let mut xrefs = Vec::new();
+    let mut root = None;
+
+    let mut cursorset = BTreeSet::new(); // to prevent infinite loops
+    let mut idset = BTreeSet::new(); // to keep newest entries
+
+    let mut next = pb.get_cursor();
+    loop {
+        if !cursorset.insert(next) {
+            exit_log!(
+                fi.file_offset(next),
+                "Xref cycle detected at offset {}!",
+                next,
+            );
+        }
+        pb.set_cursor(next);
+        // Check for a conventional or hybrid xref section.
+        let mut xinfo = parse_xref_section(fi, ctxt, pb);
+        if xinfo.is_none() {
+            xinfo = parse_xref_stream(fi, ctxt, pb);
+        }
+        if xinfo.is_none() {
+            exit_log!(
+                fi.file_offset(next),
+                "No xref found at specified offset {}!",
+                next,
+            );
+        }
+        let (ents, rt, prev) = xinfo.unwrap();
+        // update root
+        if root.is_none() {
+            if rt.is_some() {
+                root = rt;
+            } else {
+                exit_log!(
+                    fi.file_offset(next),
+                    "No Root specified in xref at {}!",
+                    next,
+                );
+            }
+        }
+        // add entries
+        for e in ents {
             let id = (e.val().obj(), e.val().gen());
             if idset.insert(id) {
                 // This is the newest version of the object.
-                xrents.push(e)
+                xrefs.push(e)
             }
         }
-        let root_ref = match trailer.dict().get(b"Root") {
-            Some(rt) => Rc::clone(rt),
-            None => {
-                // FIXME: Make this a constraint on the Trailer parser.
-                exit_log!(
-                    fi.file_offset(pb.get_cursor()),
-                    "No root reference found in trailer!"
-                );
-            },
-        };
-        return (xrents, root_ref)
-    }
-
-    pb.set_cursor(cursor);
-    let xrefs = parse_xref_stream(fi, ctxt, pb);
-    if xrefs.is_none() {
-        exit_log!(
-            fi.file_offset(cursor),
-            "No valid xref information found at startxref."
-        )
-    }
-    let (xrefs, root_opt) = xrefs.unwrap();
-    let mut root = None;
-    let mut xrents = Vec::new();
-    let mut idset = BTreeSet::new();
-    for e in xrefs {
-        let id = (e.val().obj(), e.val().gen());
-        if idset.insert(id) {
-            // This is the newest version of the object.
-            xrents.push(e)
+        // goto prev
+        match prev {
+            None => break,
+            Some(p) => next = p, // continue
         }
     }
-    if let Some(rt) = root_opt {
-        root = Some(Rc::clone(&rt))
-    }
     if root.is_none() {
-        exit_log!(
-            fi.file_offset(pb.get_cursor()),
-            "No root reference found in xref stream dictionary!"
-        );
-    };
-    let root = root.unwrap();
-    (xrents, root)
+        exit_log!(fi.file_offset(next), "No root object found!!",);
+    }
+    (xrefs, root.unwrap())
 }
 
 // Get the in-use object locations from the xref entries.
