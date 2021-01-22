@@ -998,10 +998,7 @@ fn main() {
     }
     if matches.is_present("output_text") {
         let filename = matches.value_of("output_text").unwrap();
-        // TODO: actually extract text during parse_file() and write it instead of:
-        //   (which currently generates a warning anyways)
-        let mut file = File::create(filename).unwrap();
-        file.write_all("Parsley is great!\n".as_bytes());
+        // TODO: actually extract text during parse_file() and write it to this filename
         debug!("wrote extracted text output to:\t{}", filename);
     }
 
