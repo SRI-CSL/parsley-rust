@@ -928,6 +928,14 @@ fn main() {
                 .help("input file with TA1 JSON content to guide the parsing"),
         )
         .arg(
+            Arg::with_name("output_text")
+                .short("t")
+                .long("text")
+                .value_name("TXT_FILE")
+                .takes_value(true)
+                .help("text file where to write extracted text from PDF to"),
+        )
+        .arg(
             Arg::with_name("verbose")
                 .short("v")
                 .multiple(true)
@@ -987,6 +995,14 @@ fn main() {
             debug!("parsed input JSON: {}", json_input); // TODO: use in
                                                          // parse_file()?
         }
+    }
+    if matches.is_present("output_text") {
+        let filename = matches.value_of("output_text").unwrap();
+        // TODO: actually extract text during parse_file() and write it instead of:
+        //   (which currently generates a warning anyways)
+        let mut file = File::create(filename).unwrap();
+        file.write_all("Parsley is great!\n".as_bytes());
+        debug!("wrote extracted text output to:\t{}", filename);
     }
 
     parse_file(matches.value_of("pdf_file").unwrap())
