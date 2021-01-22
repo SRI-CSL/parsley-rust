@@ -500,10 +500,8 @@ pub(super) fn normalize_check(typ: &Rc<TypeCheckRep>) -> Rc<TypeCheckRep> {
     }
 }
 
-fn resolve(
-    tctx: &TypeCheckContext, chk: Rc<TypeCheck>,
-) -> Result<Rc<TypeCheckRep>, TypeCheckError> {
-    match chk.as_ref() {
+fn resolve(tctx: &TypeCheckContext, chk: &TypeCheck) -> Result<Rc<TypeCheckRep>, TypeCheckError> {
+    match chk {
         TypeCheck::Rep(r) => Ok(Rc::clone(r)),
         TypeCheck::Named(n) => match tctx.lookup(n) {
             None => Err(TypeCheckError::UnknownTypeCheck(format!(
@@ -520,7 +518,7 @@ pub fn check_type(
     ctxt: &PDFObjContext, tctx: &TypeCheckContext, obj: Rc<LocatedVal<PDFObjT>>, chk: Rc<TypeCheck>,
 ) -> Option<LocatedVal<TypeCheckError>> {
     // Resolve the check if needed.
-    let rep = match resolve(tctx, chk) {
+    let rep = match resolve(tctx, &chk) {
         Ok(rep) => rep,
         Err(err) => return Some(obj.place(err)),
     };
@@ -555,7 +553,7 @@ pub fn check_type(
         }
         let (o, tc) = next.unwrap();
 
-        let c = match resolve(tctx, tc) {
+        let c = match resolve(tctx, &tc) {
             Ok(rep) => rep,
             Err(err) => return Some(o.place(err)),
         };
@@ -574,7 +572,12 @@ pub fn check_type(
                         let chk = Rc::new(TypeCheck::Rep(c.allow_indirect()));
                         return_check(&mut state, (Rc::clone(obj), chk));
                     },
-                    None => return Some(o.place(TypeCheckError::RefNotFound(*refnc))),
+                    None => {
+                        // References to undefined objects are treated
+                        // as references to the null object.
+                        let obj = o.place(PDFObjT::Null(()));
+                        return_check(&mut state, (Rc::new(obj), tc));
+                    },
                 }
             },
             (PDFObjT::Reference(_), _, IndirectSpec::Forbidden) => {
@@ -633,7 +636,7 @@ pub fn check_type(
                     None => (),
                 };
                 /* optimize PDFType::Any */
-                let elem_rep = match resolve(tctx, Rc::clone(elem)) {
+                let elem_rep = match resolve(tctx, &elem) {
                     Ok(rep) => rep,
                     Err(err) => return Some(o.place(err)),
                 };
@@ -652,7 +655,7 @@ pub fn check_type(
                 let mut chks = Vec::new();
                 for ent in ents {
                     let val = dict.get(&ent.key);
-                    let chk = match resolve(tctx, Rc::clone(&ent.chk)) {
+                    let chk = match resolve(tctx, &ent.chk) {
                         Ok(rep) => rep,
                         Err(err) => return Some(o.place(err)),
                     };
@@ -680,7 +683,7 @@ pub fn check_type(
                 let mut chks = Vec::new();
                 for ent in ents {
                     let val = s.dict().val().get(&ent.key);
-                    let chk = match resolve(tctx, Rc::clone(&ent.chk)) {
+                    let chk = match resolve(tctx, &ent.chk) {
                         Ok(rep) => rep,
                         Err(err) => return Some(o.place(err)),
                     };
@@ -838,6 +841,18 @@ mod test_pdf_types {
             String::from("An indirect reference was forbidden"),
         ));
         assert_eq!(check_type(&ctxt, &tctx, Rc::clone(&obj), typ), Some(err));
+
+        // check missing reference handling as null
+        let v = Vec::from("3 0 R".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = Rc::new(obj);
+        let typ = TypeCheck::new(
+            &mut tctx,
+            "missing-reference",
+            Rc::new(PDFType::PrimType(PDFPrimType::Null)),
+        );
+        assert_eq!(check_type(&ctxt, &tctx, Rc::clone(&obj), typ), None);
 
         // check required error.
         let v = Vec::from("10".as_bytes());
