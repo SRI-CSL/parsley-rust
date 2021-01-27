@@ -315,7 +315,7 @@ pub fn mk_parent_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
 mod test {
     use super::{mk_date_typchk, mk_rectangle_typchk};
     use crate::pcore::parsebuffer::{LocatedVal, ParseBuffer};
-    use crate::pdf_lib::pdf_obj::{parse_pdf_obj, PDFObjContext};
+    use crate::pdf_lib::pdf_obj::{parse_pdf_obj, Marker, PDFObjContext};
     use crate::pdf_lib::pdf_type_check::{check_type, TypeCheckContext, TypeCheckError};
     use std::rc::Rc;
 
@@ -328,7 +328,7 @@ mod test {
             let mut tctx = TypeCheckContext::new();
             let v = Vec::from(raw_pdf_date_string.as_bytes());
             let mut pb = ParseBuffer::new(v);
-            let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+            let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
             let typ_chk = mk_date_typchk(&mut tctx);
             return check_type(&ctxt, &tctx, Rc::new(obj), typ_chk)
         }
@@ -372,7 +372,7 @@ mod test {
         let mut ctxt = mk_new_context();
         let v = Vec::from("[1 2 3 4]".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
 
         let mut tctx = TypeCheckContext::new();
         let typ = mk_rectangle_typchk(&mut tctx);
@@ -380,7 +380,7 @@ mod test {
 
         let v = Vec::from("[1 2.0 3 4.5]".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
 
         let mut tctx = TypeCheckContext::new();
         let typ = mk_rectangle_typchk(&mut tctx);

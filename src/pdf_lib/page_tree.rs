@@ -128,7 +128,7 @@ impl Predicate for ReferencePredicate {
 
 mod test_page_tree {
     use super::super::super::pcore::parsebuffer::ParseBuffer;
-    use super::super::pdf_obj::{parse_pdf_indirect_obj, parse_pdf_obj, PDFObjContext};
+    use super::super::pdf_obj::{parse_pdf_indirect_obj, parse_pdf_obj, Marker, PDFObjContext};
     use super::super::pdf_type_check::{check_type, TypeCheckContext};
     use super::{non_root_page_tree, root_page_tree};
     use std::rc::Rc;
@@ -194,7 +194,7 @@ mod test_page_tree {
         // parse the test object
         let pt_root = Vec::from("<</Type /Pages /Kids [4 0 R ] /Count 3 >>".as_bytes());
         let mut pt_root = ParseBuffer::new(pt_root);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pt_root).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pt_root, Marker::Obj).unwrap();
 
         // check
         let mut tctx = TypeCheckContext::new();
@@ -260,7 +260,7 @@ mod test_page_tree {
         // parse the test object
         let v = Vec::from("<</Type /Pages /Parent [4 0 R] /Kids [10 0 R ] /Count 3 >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
 
         // check
         let mut tctx = TypeCheckContext::new();
@@ -347,7 +347,7 @@ mod test_page_tree {
         // parse the test object
         let v = Vec::from("<</Type /Pages /Kids [10 0 R 24 0 R ] /Count 3 >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
 
         // check
         let mut tctx = TypeCheckContext::new();

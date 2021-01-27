@@ -26,7 +26,7 @@ use super::super::pcore::transforms::{BufferTransformT, RestrictView, RestrictVi
 
 use super::pdf_filters::{ASCII85Decode, ASCIIHexDecode, FlateDecode};
 use super::pdf_obj::{
-    parse_pdf_obj, DictKey, DictT, Filter, IndirectT, PDFObjContext, PDFObjT, StreamT,
+    parse_pdf_obj, Marker, DictKey, DictT, Filter, IndirectT, PDFObjContext, PDFObjT, StreamT,
 };
 use super::pdf_prim::{IntegerP, StreamContentT, WhitespaceEOL};
 
@@ -180,7 +180,7 @@ impl ObjStreamP<'_> {
             ws.parse(buf)?;
 
             let start = buf.get_cursor();
-            let o = parse_pdf_obj(&mut self.ctxt, buf)?;
+            let o = parse_pdf_obj(&mut self.ctxt, buf, Marker::StreamObj)?;
             let end = buf.get_cursor();
             let obj = Rc::new(o);
             let ind = IndirectT::new(*onum, 0, Rc::clone(&obj));
