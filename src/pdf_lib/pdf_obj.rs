@@ -19,9 +19,9 @@
 // Basic PDF objects.
 
 use std::collections::{BTreeMap, HashSet};
-use std::rc::Rc;
 use std::fs::File;
 use std::io::Write;
+use std::rc::Rc;
 
 use super::super::pcore::parsebuffer::{
     locate_value, ErrorKind, LocatedVal, Location, ParseBufferT, ParseResult, ParsleyParser,
@@ -57,13 +57,13 @@ pub enum Marker {
 
 pub struct PDFObjContext {
     // Maps object identifiers to their objects.
-    defns:     BTreeMap<(usize, usize), Rc<LocatedVal<PDFObjT>>>,
+    defns:      BTreeMap<(usize, usize), Rc<LocatedVal<PDFObjT>>>,
     // Tracks the recursion depth.
-    max_depth: usize,
-    cur_depth: usize,
+    max_depth:  usize,
+    cur_depth:  usize,
     // Trace logging
     trace_file: Option<File>,
-    mstack: Vec<Marker>,
+    mstack:     Vec<Marker>,
 }
 
 impl PDFObjContext {
@@ -96,7 +96,10 @@ impl PDFObjContext {
     pub fn enter_obj(&mut self, m: Marker, ofs: usize) -> bool {
         self.mstack.push(m);
         if let Some(tf) = &mut self.trace_file {
-            let msg = format!("parser: depth {}: offset: {} enter: {:?}\n", self.cur_depth, ofs, m);
+            let msg = format!(
+                "parser: depth {}: offset: {} enter: {:?}\n",
+                self.cur_depth, ofs, m
+            );
             let _ = tf.write(msg.as_bytes()); // ignore write errors
         }
         if self.cur_depth == self.max_depth {
@@ -110,7 +113,12 @@ impl PDFObjContext {
         assert!(self.cur_depth != 0);
         let m = self.mstack.pop();
         if let Some(tf) = &mut self.trace_file {
-            let msg = format!("parser: depth {}: offset: {} leave: {:?}\n", self.cur_depth, ofs, m.unwrap());
+            let msg = format!(
+                "parser: depth {}: offset: {} leave: {:?}\n",
+                self.cur_depth,
+                ofs,
+                m.unwrap()
+            );
             let _ = tf.write(msg.as_bytes()); // ignore write errors
         }
         self.cur_depth -= 1;
@@ -809,8 +817,8 @@ mod test_pdf_obj {
     };
     use super::super::pdf_prim::{IntegerT, NameT, RealT, StreamContentT};
     use super::{
-        parse_pdf_obj, Marker, ArrayT, DictKey, DictT, IndirectP, IndirectT, PDFObjContext, PDFObjT,
-        ReferenceT, StreamT,
+        parse_pdf_obj, ArrayT, DictKey, DictT, IndirectP, IndirectT, Marker, PDFObjContext,
+        PDFObjT, ReferenceT, StreamT,
     };
     use std::borrow::Borrow;
     use std::collections::BTreeMap;

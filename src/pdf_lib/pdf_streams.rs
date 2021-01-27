@@ -26,7 +26,7 @@ use super::super::pcore::transforms::{BufferTransformT, RestrictView, RestrictVi
 
 use super::pdf_filters::{ASCII85Decode, ASCIIHexDecode, FlateDecode};
 use super::pdf_obj::{
-    parse_pdf_obj, Marker, DictKey, DictT, Filter, IndirectT, PDFObjContext, PDFObjT, StreamT,
+    parse_pdf_obj, DictKey, DictT, Filter, IndirectT, Marker, PDFObjContext, PDFObjT, StreamT,
 };
 use super::pdf_prim::{IntegerP, StreamContentT, WhitespaceEOL};
 

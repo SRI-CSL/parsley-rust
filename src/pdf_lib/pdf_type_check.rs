@@ -740,7 +740,9 @@ mod test_pdf_types {
         PDFType, Predicate, TypeCheck, TypeCheckContext, TypeCheckError,
     };
     use crate::pcore::parsebuffer::{LocatedVal, ParseBuffer};
-    use crate::pdf_lib::pdf_obj::{parse_pdf_obj, Marker, DictKey, IndirectT, PDFObjContext, PDFObjT};
+    use crate::pdf_lib::pdf_obj::{
+        parse_pdf_obj, DictKey, IndirectT, Marker, PDFObjContext, PDFObjT,
+    };
     use crate::pdf_lib::pdf_prim::{IntegerT, NameT};
     use std::rc::Rc;
 

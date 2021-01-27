@@ -658,9 +658,8 @@ fn parse_file(test_file: &str, trace_file: Option<&str>) {
     // Open the trace file, if specified
     let trace = trace_file.map(|s| match File::create(s) {
         Ok(f) => f,
-        Err(e) => exit_log!(0, "Couldn't open {}: {}", s, e.to_string())
+        Err(e) => exit_log!(0, "Couldn't open {}: {}", s, e.to_string()),
     });
-
 
     // Open the path in read-only mode, returns `io::Result<File>`
     let mut file = match File::open(&path.as_path()) {
@@ -942,5 +941,8 @@ fn main() {
         }
     }
 
-    parse_file(matches.value_of("pdf_file").unwrap(), matches.value_of("trace_file"))
+    parse_file(
+        matches.value_of("pdf_file").unwrap(),
+        matches.value_of("trace_file"),
+    )
 }
