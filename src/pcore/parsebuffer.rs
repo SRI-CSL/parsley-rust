@@ -244,6 +244,7 @@ pub trait ParseBufferT {
     // but this is not supported (surprisingly).
     fn rc_buf(&self) -> Rc<Vec<u8>>;
     fn start(&self) -> usize;
+    fn shared_count(&self) -> usize; // Returns the number of sharers of the buffer
 
     // cursor management
 
@@ -288,6 +289,24 @@ pub trait ParseBufferT {
 
     // Extract binary stream of specified length.
     fn extract(&mut self, len: usize) -> ParseResult<&[u8]>;
+}
+
+// Parsing interface for flexible buffers, typically needed by
+// stream-oriented protocols.  Since this interface includes methods
+// that need to modify the underlying buffer, they can fail if the
+// buffer is being shared (e.g. via a view).
+
+pub trait StreamBufferT {
+    // drop len bytes from the start of the buffer (which might not be
+    // self.buf[0]).  this can also fail (i.e. return false) if the
+    // cursor is within the dropped region.
+    fn drop(&mut self, len: usize) -> bool;
+
+    // add bytes to the end of the buffer.  if the buffer is not
+    // shared, this will succeed (return true); it will appropriately
+    // increase the reported size of the buffer, but not change the
+    // cursor position.
+    fn append(&mut self, buf: &[u8]) -> bool;
 }
 
 // The basic parsing buffer.  This implements a (possibly restricted)
@@ -374,6 +393,9 @@ impl ParseBufferT for ParseBuffer {
     fn buf(&self) -> &[u8] { &self.buf[(self.start + self.ofs) .. (self.start + self.size)] }
 
     fn rc_buf(&self) -> Rc<Vec<u8>> { Rc::clone(&self.buf) }
+
+    fn shared_count(&self) -> usize { Rc::strong_count(&self.buf) }
+
     fn start(&self) -> usize { self.start }
 
     fn get_location(&self) -> LocatedVal<()> { LocatedVal::new((), self.ofs, self.size) }
@@ -482,9 +504,41 @@ impl ParseBufferT for ParseBuffer {
     }
 }
 
+impl StreamBufferT for ParseBuffer {
+    fn drop(&mut self, len: usize) -> bool {
+        match Rc::get_mut(&mut self.buf) {
+            Some(b) => {
+                if self.ofs < len {
+                    false
+                } else {
+                    let mut tail = b.split_off(self.start + len);
+                    b.clear();
+                    b.append(&mut tail);
+                    self.start = 0;
+                    self.ofs -= len;
+                    self.size = b.len();
+                    true
+                }
+            },
+            None => false, // buffer is being shared
+        }
+    }
+
+    fn append(&mut self, buf: &[u8]) -> bool {
+        match Rc::get_mut(&mut self.buf) {
+            Some(b) => {
+                self.size += buf.len();
+                b.extend_from_slice(buf);
+                true
+            },
+            None => false,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test_parsebuffer {
-    use super::{locate_value, ErrorKind, LocatedVal, ParseBuffer, ParseBufferT};
+    use super::{locate_value, ErrorKind, LocatedVal, ParseBuffer, ParseBufferT, StreamBufferT};
     use std::collections::HashMap;
 
     #[test]
@@ -546,5 +600,57 @@ mod test_parsebuffer {
         // ensure the old view is still usable
         pb.set_cursor(0);
         assert_eq!(pb.scan(b"56"), Ok(5));
+    }
+
+    #[test]
+    fn test_streambuffer_drop() {
+        let v = Vec::from("0123456789".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let orig_sz = pb.size();
+
+        assert_eq!(pb.scan(b"56"), Ok(5));
+        assert_eq!(pb.get_cursor(), 5);
+        assert_eq!(pb.drop(2), true);
+        assert_eq!(pb.size(), orig_sz - 2);
+        assert_eq!(pb.scan(b"56"), Ok(0)); // cursor stays at same relative offset
+        assert_eq!(pb.get_cursor(), 3);
+        assert_eq!(pb.drop(4), false); // cannot cross cursor
+        assert_eq!(pb.drop(3), true); // can drop upto cursor
+        assert_eq!(pb.size(), orig_sz - 5);
+        assert_eq!(pb.get_cursor(), 0);
+        assert_eq!(pb.scan(b"56"), Ok(0)); // cursor stays at same relative offset
+
+        pb.set_cursor(pb.size()); // goto end of buffer
+        assert_eq!(pb.remaining(), 0);
+        assert_eq!(pb.drop(pb.size()), true); // can now drop the entire buffer
+        assert_eq!(pb.size(), 0);
+
+        let v = Vec::from("0123456789".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        {
+            // create a new view
+            let size = pb.size() - 5;
+            let mut view = ParseBuffer::new_view(&pb, 5, size);
+            assert_eq!(view.scan(b"56"), Ok(0));
+            // cannot drop from any shared buffer
+            assert_eq!(pb.shared_count(), 2);
+            assert_eq!(view.shared_count(), 2);
+            assert_eq!(pb.drop(1), false);
+            assert_eq!(view.drop(1), false);
+        }
+        // the view is dropped, so the buffer is now not shared
+        assert_eq!(pb.shared_count(), 1);
+        assert_eq!(pb.get_cursor(), 0);
+        assert_eq!(pb.scan(b"56"), Ok(5)); // move the cursor
+        assert_eq!(pb.drop(1), true);
+    }
+
+    #[test]
+    fn test_streambuffer_append() {
+        let v = Vec::from("0123456789".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let orig_sz = pb.size();
+        pb.append("0123456789".as_bytes());
+        assert_eq!(pb.size(), 2 * orig_sz);
     }
 }
