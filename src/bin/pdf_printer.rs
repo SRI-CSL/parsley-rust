@@ -657,7 +657,10 @@ fn parse_file(test_file: &str, trace_file: Option<&str>) {
 
     // Open the trace file, if specified
     let trace = trace_file.map(|s| match File::create(s) {
-        Ok(f) => f,
+        Ok(f) => {
+            debug!("writing trace output to:\t{}", s);
+            return f
+        },
         Err(e) => exit_log!(0, "Couldn't open {}: {}", s, e.to_string()),
     });
 
@@ -857,12 +860,12 @@ fn main() {
                 .index(1),
         )
         .arg(
-            Arg::with_name("output_json")
+            Arg::with_name("trace_output")
                 .short("o")
                 .long("output")
-                .value_name("JSON_FILE")
+                .value_name("TRACE_FILE")
                 .takes_value(true)
-                .help("output file where to write JSON for TA1 to"),
+                .help("output file where to write trace for TA1 to"),
         )
         .arg(
             Arg::with_name("input_json")
@@ -877,13 +880,6 @@ fn main() {
                 .short("v")
                 .multiple(true)
                 .help("verbosity that increases logging level (default: INFO)"),
-        )
-        .arg(
-            Arg::with_name("trace_file")
-                .short("t")
-                .long("trace-file")
-                .takes_value(true)
-                .help("dump trace of parser processing"),
         )
         .get_matches();
 
@@ -916,13 +912,6 @@ fn main() {
         .init();
     log_panics::init(); // cause panic! to log errors instead of simply printing them
 
-    if matches.is_present("output_json") {
-        debug!(
-            "writing JSON output to:\t{}",
-            matches.value_of("output_json").unwrap()
-        );
-        // TODO: actually write something into this file...
-    }
     if matches.is_present("input_json") {
         // read file to string and parse as JSON, then pass it to `parse_file` as
         // appropriate...
@@ -943,6 +932,6 @@ fn main() {
 
     parse_file(
         matches.value_of("pdf_file").unwrap(),
-        matches.value_of("trace_file"),
+        matches.value_of("trace_output"),
     )
 }
