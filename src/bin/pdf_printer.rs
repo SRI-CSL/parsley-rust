@@ -645,7 +645,7 @@ fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFOb
     }
 }
 
-fn parse_file(test_file: &str) {
+fn parse_file(test_file: &str, trace_file: Option<&str>) {
     // Print current path
     let path = env::current_dir();
     if path.is_err() {
@@ -654,6 +654,12 @@ fn parse_file(test_file: &str) {
     let mut path = path.unwrap();
     path.push(test_file);
     let display = path.as_path().display();
+
+    // Open the trace file, if specified
+    let trace = trace_file.map(|s| match File::create(s) {
+        Ok(f) => f,
+        Err(e) => exit_log!(0, "Couldn't open {}: {}", s, e.to_string()),
+    });
 
     // Open the path in read-only mode, returns `io::Result<File>`
     let mut file = match File::open(&path.as_path()) {
@@ -783,7 +789,7 @@ fn parse_file(test_file: &str) {
 
     // Create the pdf object context.
     // TODO: control max-depth via command-line option.
-    let mut ctxt = PDFObjContext::new(50);
+    let mut ctxt = PDFObjContext::new_with_trace(50, trace);
 
     // Parse xref table at that offset.
     if !pb.check_cursor(sxref_offset) {
@@ -872,6 +878,13 @@ fn main() {
                 .multiple(true)
                 .help("verbosity that increases logging level (default: INFO)"),
         )
+        .arg(
+            Arg::with_name("trace_file")
+                .short("t")
+                .long("trace-file")
+                .takes_value(true)
+                .help("dump trace of parser processing"),
+        )
         .get_matches();
 
     // set logging level based on -v:
@@ -928,5 +941,8 @@ fn main() {
         }
     }
 
-    parse_file(matches.value_of("pdf_file").unwrap())
+    parse_file(
+        matches.value_of("pdf_file").unwrap(),
+        matches.value_of("trace_file"),
+    )
 }

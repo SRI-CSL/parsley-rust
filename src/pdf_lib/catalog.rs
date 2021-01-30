@@ -289,7 +289,7 @@ pub fn catalog_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
 mod test_name_tree {
     use super::catalog_type;
     use crate::pcore::parsebuffer::ParseBuffer;
-    use crate::pdf_lib::pdf_obj::{parse_pdf_indirect_obj, parse_pdf_obj, PDFObjContext};
+    use crate::pdf_lib::pdf_obj::{parse_pdf_indirect_obj, parse_pdf_obj, Marker, PDFObjContext};
     use crate::pdf_lib::pdf_type_check::{check_type, TypeCheckContext};
     use std::rc::Rc;
 
@@ -384,7 +384,7 @@ mod test_name_tree {
             .as_bytes(),
         );
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
 
         // check
         let mut tctx = TypeCheckContext::new();

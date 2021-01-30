@@ -758,7 +758,9 @@ mod test_pdf_types {
         PDFType, Predicate, TypeCheck, TypeCheckContext, TypeCheckError,
     };
     use crate::pcore::parsebuffer::{LocatedVal, ParseBuffer};
-    use crate::pdf_lib::pdf_obj::{parse_pdf_obj, DictKey, IndirectT, PDFObjContext, PDFObjT};
+    use crate::pdf_lib::pdf_obj::{
+        parse_pdf_obj, DictKey, IndirectT, Marker, PDFObjContext, PDFObjT,
+    };
     use crate::pdf_lib::pdf_prim::{IntegerT, NameT};
     use std::rc::Rc;
 
@@ -789,7 +791,7 @@ mod test_pdf_types {
         let mut ctxt = mk_new_context();
         let v = Vec::from("[1 2 3 4]".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
 
         let mut tctx = TypeCheckContext::new();
         let typ = mk_rectangle_typchk(&mut tctx);
@@ -808,7 +810,7 @@ mod test_pdf_types {
         // parse the object directly
         let v = Vec::from("10".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
 
         let mut tctx = TypeCheckContext::new();
         let typ = TypeCheck::new(
@@ -821,7 +823,7 @@ mod test_pdf_types {
         // parse a reference pointing to that object
         let v = Vec::from("2 0 R".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
         let typ = TypeCheck::new(
             &mut tctx,
             "integer",
@@ -832,7 +834,7 @@ mod test_pdf_types {
         // require a referenced object
         let v = Vec::from("2 0 R".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
         let typ = TypeCheck::new_all(
             &mut tctx,
             "integer-required",
@@ -845,7 +847,7 @@ mod test_pdf_types {
         // check forbidden error
         let v = Vec::from("2 0 R".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
         let obj = Rc::new(obj);
         let typ = TypeCheck::new_all(
             &mut tctx,
@@ -863,7 +865,7 @@ mod test_pdf_types {
         // check missing reference handling as null
         let v = Vec::from("3 0 R".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
         let obj = Rc::new(obj);
         let typ = TypeCheck::new(
             &mut tctx,
@@ -875,7 +877,7 @@ mod test_pdf_types {
         // check required error.
         let v = Vec::from("10".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
         let obj = Rc::new(obj);
         let typ = TypeCheck::new_all(
             &mut tctx,
@@ -896,7 +898,7 @@ mod test_pdf_types {
         let mut ctxt = mk_new_context();
         let v = Vec::from("<< /Entry [ 1 1 4 5 ] >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
 
         let mut tctx = TypeCheckContext::new();
         let rect = mk_rectangle_typchk(&mut tctx);
@@ -928,7 +930,7 @@ mod test_pdf_types {
         let mut ctxt = mk_new_context();
         let v = Vec::from("<< /Entry [ 1 1 4 5 ] >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
 
         let mut tctx = TypeCheckContext::new();
         let ent = DictEntry {
@@ -946,7 +948,7 @@ mod test_pdf_types {
         let mut ctxt = mk_new_context();
         let v = Vec::from("<< /Entry [ 1 1 4 5 ] >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
 
         let mut tctx = TypeCheckContext::new();
         let ent = DictEntry {
@@ -983,7 +985,7 @@ mod test_pdf_types {
         let mut ctxt = mk_new_context();
         let v = Vec::from("<< /PageMode /UseNone >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
 
         let mut tctx = TypeCheckContext::new();
         let pagemode = mk_pagemode_typchk(&mut tctx);
@@ -998,7 +1000,7 @@ mod test_pdf_types {
         // valid value for optional key
         let v = Vec::from("<< /PageMode /UseNone >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
         let ent = DictEntry {
             key: Vec::from("PageMode"),
             chk: Rc::clone(&pagemode),
@@ -1010,7 +1012,7 @@ mod test_pdf_types {
         // optional key absent
         let v = Vec::from("<< >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
         let ent = DictEntry {
             key: Vec::from("PageMode"),
             chk: Rc::clone(&pagemode),
@@ -1022,7 +1024,7 @@ mod test_pdf_types {
         // forbidden key present
         let v = Vec::from("<< /PageMode /UseNone >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
         let ent = DictEntry {
             key: Vec::from("PageMode"),
             chk: Rc::clone(&pagemode),
@@ -1037,7 +1039,7 @@ mod test_pdf_types {
         // invalid value for optional key
         let v = Vec::from("<< /PageMode /Dummy >>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
         let ent = DictEntry {
             key: Vec::from("PageMode"),
             chk: Rc::clone(&pagemode),
@@ -1090,7 +1092,7 @@ mod test_pdf_types {
         let mut ctxt = mk_new_context();
         let v = Vec::from("(ascii)".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
         let mut tctx = TypeCheckContext::new();
         let chk = mk_ascii_typchk(&mut tctx);
         assert_eq!(
@@ -1101,7 +1103,7 @@ mod test_pdf_types {
         //                     (                )
         let v: Vec<u8> = vec![40, 129, 255, 0, 41];
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
         let err = obj.place(TypeCheckError::PredicateError(
             "Not an ASCII string.".to_string(),
         ));
@@ -1131,7 +1133,7 @@ mod test_pdf_types {
         let mut ctxt = mk_new_context();
         let v = Vec::from("(ascii)".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
 
         let mut tctx = TypeCheckContext::new();
         let chk = TypeCheck::new_refined(
@@ -1147,7 +1149,7 @@ mod test_pdf_types {
 
         let v = Vec::from("10".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
         let err = obj.place(TypeCheckError::PredicateError(
             "Not an ASCII string.".to_string(),
         ));
@@ -1184,7 +1186,7 @@ mod test_pdf_types {
         let mut ctxt = mk_new_context();
         let v = Vec::from("(ascii)".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
 
         let mut tctx = TypeCheckContext::new();
         let chk = TypeCheck::new_refined(
@@ -1200,7 +1202,7 @@ mod test_pdf_types {
 
         let v = Vec::from("10".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
         assert_eq!(
             check_type(&ctxt, &tctx, Rc::new(obj), Rc::clone(&chk)),
             None
@@ -1250,7 +1252,7 @@ mod test_pdf_types {
         let mut ctxt = mk_new_context();
         let v = Vec::from("[1 2 3 4]".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = Rc::new(parse_pdf_obj(&mut ctxt, &mut pb).unwrap());
+        let obj = Rc::new(parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap());
 
         let mut tctx = TypeCheckContext::new();
         let rect = mk_rectangle_typchk(&mut tctx);
@@ -1275,7 +1277,7 @@ mod test_pdf_types {
 
         let v = Vec::from("<</Key [1 2 3 4]>>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = Rc::new(parse_pdf_obj(&mut ctxt, &mut pb).unwrap());
+        let obj = Rc::new(parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap());
 
         let opts = vec![Rc::clone(&rect), Rc::clone(&int), Rc::clone(&date)];
         let chk = TypeCheck::new(&mut tctx, "opt", Rc::new(PDFType::Disjunct(opts)));
@@ -1293,7 +1295,7 @@ mod test_pdf_types {
         let mut ctxt = mk_new_context();
         let v = Vec::from("[1 2 3 4]".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = Rc::new(parse_pdf_obj(&mut ctxt, &mut pb).unwrap());
+        let obj = Rc::new(parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap());
 
         let mut tctx = TypeCheckContext::new();
         let int = TypeCheck::new(
@@ -1321,7 +1323,7 @@ mod test_pdf_types {
         let mut ctxt = mk_new_context();
         let v = Vec::from("<</Key [1 2 3 4]>>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = Rc::new(parse_pdf_obj(&mut ctxt, &mut pb).unwrap());
+        let obj = Rc::new(parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap());
 
         let mut tctx = TypeCheckContext::new();
         let int = TypeCheck::new(
@@ -1389,7 +1391,7 @@ mod test_pdf_types {
         // non-recursive case: the value is a rectangle
         let v = Vec::from("<</Key [1 2 3 4]>>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = Rc::new(parse_pdf_obj(&mut ctxt, &mut pb).unwrap());
+        let obj = Rc::new(parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap());
         assert_eq!(
             check_type(&ctxt, &tctx, Rc::clone(&obj), Rc::clone(&typ)),
             None
@@ -1398,7 +1400,7 @@ mod test_pdf_types {
         // recursive case: the value is another (rect | dict)
         let v = Vec::from("<</Key <</Key [1 2 3 4]>>>>".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = Rc::new(parse_pdf_obj(&mut ctxt, &mut pb).unwrap());
+        let obj = Rc::new(parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap());
         assert_eq!(
             check_type(&ctxt, &tctx, Rc::clone(&obj), Rc::clone(&typ)),
             None

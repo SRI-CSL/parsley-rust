@@ -308,7 +308,7 @@ pub fn page_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
 mod test_page {
     use super::page_type;
     use crate::pcore::parsebuffer::ParseBuffer;
-    use crate::pdf_lib::pdf_obj::{parse_pdf_indirect_obj, parse_pdf_obj, PDFObjContext};
+    use crate::pdf_lib::pdf_obj::{parse_pdf_indirect_obj, parse_pdf_obj, Marker, PDFObjContext};
     use crate::pdf_lib::pdf_type_check::{check_type, TypeCheckContext};
     use std::rc::Rc;
 
@@ -334,7 +334,7 @@ mod test_page {
         // parse page object
         let v = Vec::from("<</Type /Page /Parent 4 0 R /MediaBox [0 0 612 792] /Resources  <</Font <</F3 7 0 R /F5 9 0 R /F7 11 0 R >> >>  /Contents 12 0 R /Annots [23 0 R 24 0 R ]>> ".as_bytes());
         let mut pb = ParseBuffer::new(v);
-        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb, Marker::Obj).unwrap();
 
         // check
         let mut tctx = TypeCheckContext::new();
@@ -468,7 +468,7 @@ mod test_page {
             .as_bytes(),
         );
         let mut page2 = ParseBuffer::new(page2);
-        let obj = parse_pdf_obj(&mut ctxt, &mut page2).unwrap();
+        let obj = parse_pdf_obj(&mut ctxt, &mut page2, Marker::Obj).unwrap();
 
         let mut tctx = TypeCheckContext::new();
         let typ = page_type(&mut tctx);
