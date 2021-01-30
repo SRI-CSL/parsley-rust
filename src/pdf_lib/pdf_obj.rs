@@ -23,6 +23,8 @@ use std::fs::File;
 use std::io::Write;
 use std::rc::Rc;
 
+use serde_json::json;
+
 use super::super::pcore::parsebuffer::{
     locate_value, ErrorKind, LocatedVal, Location, ParseBufferT, ParseResult, ParsleyParser,
 };
@@ -96,11 +98,13 @@ impl PDFObjContext {
     pub fn enter_obj(&mut self, m: Marker, ofs: usize) -> bool {
         self.mstack.push(m);
         if let Some(tf) = &mut self.trace_file {
-            let msg = format!(
-                "parser: depth {}: offset: {} enter: {:?}\n",
-                self.cur_depth, ofs, m
-            );
-            let _ = tf.write(msg.as_bytes()); // ignore write errors
+            let msg = format!("{}\n", json!({
+                "depth": self.cur_depth,
+                "offset": ofs,
+                "op": "enter",
+                "type": format!("{:?}", m)
+            }).to_string());
+            let _ = tf.write_all(msg.as_bytes()); // ignore write errors
         }
         if self.cur_depth == self.max_depth {
             false
@@ -113,13 +117,13 @@ impl PDFObjContext {
         assert!(self.cur_depth != 0);
         let m = self.mstack.pop();
         if let Some(tf) = &mut self.trace_file {
-            let msg = format!(
-                "parser: depth {}: offset: {} leave: {:?}\n",
-                self.cur_depth,
-                ofs,
-                m.unwrap()
-            );
-            let _ = tf.write(msg.as_bytes()); // ignore write errors
+            let msg = format!("{}\n", json!({
+                "depth": self.cur_depth,
+                "offset": ofs,
+                "op": "leave",
+                "type": format!("{:?}", m.unwrap())
+            }).to_string());
+            let _ = tf.write_all(msg.as_bytes()); // ignore write errors
         }
         self.cur_depth -= 1;
     }
