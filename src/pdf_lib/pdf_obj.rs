@@ -48,6 +48,8 @@ impl Location for PDFLocation {
 pub struct PDFObjContext {
     // Maps object identifiers to their objects.
     defns:     BTreeMap<(usize, usize), Rc<LocatedVal<PDFObjT>>>,
+    // whether the document is encrypted
+    encrypted: bool,
     // Tracks the recursion depth.
     max_depth: usize,
     cur_depth: usize,
@@ -57,6 +59,7 @@ impl PDFObjContext {
     pub fn new(max_depth: usize) -> PDFObjContext {
         PDFObjContext {
             defns: BTreeMap::new(),
+            encrypted: false,
             max_depth,
             cur_depth: 0,
         }
@@ -67,6 +70,12 @@ impl PDFObjContext {
     }
     pub fn lookup_obj(&self, oid: (usize, usize)) -> Option<&Rc<LocatedVal<PDFObjT>>> {
         self.defns.get(&oid)
+    }
+    pub fn set_encrypted(&mut self) {
+        self.encrypted = true;
+    }
+    pub fn is_encrypted(&self) -> bool {
+        self.encrypted
     }
     pub fn enter_obj(&mut self) -> bool {
         if self.cur_depth == self.max_depth {

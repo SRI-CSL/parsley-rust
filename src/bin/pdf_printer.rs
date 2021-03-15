@@ -133,7 +133,7 @@ fn parse_xref_stream(
     if let PDFObjT::Stream(ref s) = xref_obj.val().obj().val() {
         let content = s.stream().val();
         let mut xref_buf = ParseBuffer::new_view(pb, content.start(), content.size());
-        let mut xp = XrefStreamP::new(s);
+        let mut xp = XrefStreamP::new(ctxt.is_encrypted(), s);
         let xref_stm = xp.parse(&mut xref_buf);
         if let Err(e) = xref_stm {
             ta3_log!(
@@ -240,6 +240,10 @@ fn parse_xref_section(
         Some(rt) => Some(Rc::clone(rt)),
         None => None,
     };
+    // check for encryption
+    if t.val().dict().get(b"Encrypt").is_some() {
+        ctxt.set_encrypted();
+    }
 
     // Section 7.5.8.4: check for XRefStm in hybrid-reference
     // file. TODO: This should be conditioned on a flag for
@@ -266,7 +270,7 @@ fn parse_xref_section(
             } else {
                 exit_log!(
                     fi.file_offset(xrefstm_loc),
-                    "/XRefStm points to an invalid XRefStm at {}",
+                    "/XRefStm points to an invalid or encrypted XRefStm at {}",
                     xrstart
                 );
             }

@@ -228,6 +228,11 @@ impl ParsleyParser for ObjStreamP<'_> {
                 &mut views[last]
             }
         }
+        if self.ctxt.is_encrypted() {
+            let msg = format!("Encrypted streams are currently unsupported");
+            let err = ErrorKind::GuardError(msg);
+            return Err(self.stream.dict().place(err))
+        }
         for filter in &filters {
             let f = filter.name().as_string();
             let mut decoder: Box<dyn BufferTransformT> = match f.as_str() {
@@ -333,7 +338,8 @@ impl XrefStreamT {
 }
 
 pub struct XrefStreamP<'a> {
-    stream: &'a StreamT,
+    encrypted: bool,
+    stream:    &'a StreamT,
 }
 
 pub struct XrefStreamDictInfo<'a> {
@@ -350,7 +356,9 @@ impl XrefStreamDictInfo<'_> {
 }
 
 impl XrefStreamP<'_> {
-    pub fn new(stream: &StreamT) -> XrefStreamP { XrefStreamP { stream } }
+    pub fn new(encrypted: bool, stream: &StreamT) -> XrefStreamP {
+        XrefStreamP { encrypted, stream }
+    }
 
     pub fn stream(&self) -> &StreamT { self.stream }
 
@@ -590,6 +598,11 @@ impl ParsleyParser for XrefStreamP<'_> {
                 let last = views.len() - 1;
                 &mut views[last]
             }
+        }
+        if self.encrypted {
+            let msg = format!("Encrypted streams are currently unsupported");
+            let err = ErrorKind::GuardError(msg);
+            return Err(self.stream.dict().place(err))
         }
         for filter in &meta.filters {
             let f = filter.name().as_string();
@@ -956,7 +969,7 @@ endobj");
         if let PDFObjT::Stream(ref s) = io.obj().val() {
             let content = s.stream().val();
             let mut xref_buf = ParseBuffer::new_view(&pb, content.start(), content.size());
-            let mut xrsp = XrefStreamP::new(s);
+            let mut xrsp = XrefStreamP::new(false, s);
             let xrt = xrsp.parse(&mut xref_buf).unwrap();
             let ents = xrt.val().ents();
             let size = s.dict().val().get_usize(b"Size").unwrap();
@@ -979,7 +992,7 @@ endobj");
         if let PDFObjT::Stream(ref s) = io.obj().val() {
             let content = s.stream().val();
             let mut xref_buf = ParseBuffer::new_view(&pb, content.start(), content.size());
-            let mut xrsp = XrefStreamP::new(s);
+            let mut xrsp = XrefStreamP::new(false, s);
             let xrt = xrsp.parse(&mut xref_buf).unwrap();
             let ents = xrt.val().ents();
             let size = s.dict().val().get_usize(b"Size").unwrap();
