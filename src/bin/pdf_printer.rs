@@ -486,8 +486,9 @@ fn parse_objects(
                     },
                 };
                 let io = lobj.unwrap(); // unwrap LocatedVal.
-                                        // Validate that the object is what we expect.
-                                        // TODO: this constraint should be enforced in the library.
+
+                // Validate that the object is what we expect.
+                // TODO: this constraint should be enforced in the library.
                 if (io.num(), io.gen()) != (*id, *gen) {
                     exit_log!(
                         fi.file_offset(ofs),
@@ -502,7 +503,7 @@ fn parse_objects(
         }
     }
 
-    // complete the second pass over objects that needed it
+    // Do the second pass over objects that needed it.
     for (id, gen, ofs) in second_pass {
         // If we've already parsed this object, skip it.
         if ctxt.lookup_obj((*id, *gen)).is_some() {
