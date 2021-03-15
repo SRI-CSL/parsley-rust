@@ -305,9 +305,8 @@ mod test_name_tree {
         let _root = parse_pdf_indirect_obj(&mut ctxt, &mut pb).unwrap();
 
         let v = Vec::from(
-            "48 0 obj << >> stream
-         endstream
-         endobj"
+            "48 0 obj <</Length 0>> stream
+\nendstream endobj"
                 .as_bytes(),
         );
         let mut pb = ParseBuffer::new(v);

@@ -693,8 +693,15 @@ impl IndirectP<'_> {
                     let dict_start = o.loc_start();
                     let dict_end = o.loc_end();
                     if let PDFObjT::Dict(dict) = o.unwrap() {
+                        let length = dict.get_usize(b"Length");
+                        if length.is_none() {
+                            let err = ErrorKind::GuardError("no supported Length specified for stream"
+                                                            .to_string());
+                            return Err(LocatedVal::new(err, dict_start, dict_end));
+                        }
+                        let length = length.unwrap();
                         let dict = LocatedVal::new(dict, dict_start, dict_end);
-                        let mut s = StreamContentP;
+                        let mut s = StreamContentP::new(length);
                         let stream = s.parse(buf)?;
                         let start = dict_start;
                         let end = stream.loc_end();
@@ -1150,10 +1157,10 @@ mod test_pdf_obj {
     fn stream() {
         let mut ctxt = mk_new_context();
         let mut p = IndirectP::new(&mut ctxt);
-        //             1         2         3         4         5         6
-        //   0123456789012345678901234567890123456 7890123 4567890123 4567890123
+        //             1         2         3         4          5          6
+        //   0123456789012345678901234567890123456789012345 6789012 3456789012 3
         let v = Vec::from(
-            "1 0 obj << /Entry [ 1 0 R ] >> stream\n junk \nendstream\nendobj".as_bytes(),
+            "1 0 obj << /Entry [ 1 0 R ] /Length 6>> stream\n junk \nendstream\nendobj".as_bytes(),
         );
         let vlen = v.len();
         let mut pb = ParseBuffer::new(v);
@@ -1170,15 +1177,21 @@ mod test_pdf_obj {
             DictKey::new(LocatedVal::new(key, 11, 17).val().normalize()),
             Rc::new(entval),
         );
-        let dict = Rc::new(LocatedVal::new(DictT::new(map), 8, 30));
-        let content = LocatedVal::new(StreamContentT::new(38, 6, Vec::from(" junk ".as_bytes())), 31, 54);
+        let key = NameT::new(Vec::from("Length".as_bytes()));
+        let entval = LocatedVal::new(PDFObjT::Integer(IntegerT::new(6)), 36, 37);
+        map.insert(
+            DictKey::new(LocatedVal::new(key, 11, 17).val().normalize()),
+            Rc::new(entval),
+        );
+        let dict = Rc::new(LocatedVal::new(DictT::new(map), 8, 39));
+        let content = LocatedVal::new(StreamContentT::new(47, 6, Vec::from(" junk ".as_bytes())), 40, 63);
         let stream = Rc::new(LocatedVal::new(
             PDFObjT::Stream(StreamT::new(dict, content)),
             8,
-            54,
+            63,
         ));
         let obj = IndirectT::new(1, 0, Rc::clone(&stream));
-        assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(obj, 0, 61)));
+        assert_eq!(p.parse(&mut pb), Ok(LocatedVal::new(obj, 0, 70)));
         assert_eq!(pb.get_cursor(), vlen);
         assert_eq!(ctxt.lookup_obj((1, 0)), Some(stream.borrow()));
     }

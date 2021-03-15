@@ -323,9 +323,8 @@ mod test_page {
         let _parent = parse_pdf_indirect_obj(&mut ctxt, &mut pb).unwrap();
 
         let v = Vec::from(
-            "12 0 obj << >> stream
-         endstream
-         endobj"
+            "12 0 obj <</Length 0>> stream
+\nendstream endobj"
                 .as_bytes(),
         );
         let mut pb = ParseBuffer::new(v);
@@ -407,18 +406,16 @@ mod test_page {
         let _page1 = parse_pdf_indirect_obj(&mut ctxt, &mut page1).unwrap();
 
         let v = Vec::from(
-            "750 0 obj << >> stream
-         endstream
-         endobj"
+            "750 0 obj <</Length 0>> stream
+\nendstream endobj"
                 .as_bytes(),
         );
         let mut pb = ParseBuffer::new(v);
         let _content1 = parse_pdf_indirect_obj(&mut ctxt, &mut pb).unwrap();
 
         let v = Vec::from(
-            "48 0 obj << >> stream
-         endstream
-         endobj"
+            "48 0 obj <</Length 0>> stream
+\nendstream endobj"
                 .as_bytes(),
         );
         let mut pb = ParseBuffer::new(v);

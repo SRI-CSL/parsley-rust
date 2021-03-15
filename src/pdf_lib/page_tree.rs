@@ -192,18 +192,16 @@ mod test_page_tree {
         let _page_1 = parse_pdf_indirect_obj(&mut ctxt, &mut page_1).unwrap();
 
         let v = Vec::from(
-            "19 0 obj << >> stream
-         endstream
-         endobj"
+            "19 0 obj <</Length 0>> stream
+\nendstream endobj"
                 .as_bytes(),
         );
         let mut pb = ParseBuffer::new(v);
         let _content1 = parse_pdf_indirect_obj(&mut ctxt, &mut pb).unwrap();
 
         let v = Vec::from(
-            "20 0 obj << >> stream
-         endstream
-         endobj"
+            "20 0 obj <</Length 0>> stream
+\nendstream endobj"
                 .as_bytes(),
         );
         let mut pb = ParseBuffer::new(v);
@@ -258,18 +256,16 @@ mod test_page_tree {
         let _page_1 = parse_pdf_indirect_obj(&mut ctxt, &mut page_1).unwrap();
 
         let v = Vec::from(
-            "19 0 obj << >> stream
-         endstream
-         endobj"
+            "19 0 obj <</Length 0>> stream
+\nendstream endobj"
                 .as_bytes(),
         );
         let mut pb = ParseBuffer::new(v);
         let _content1 = parse_pdf_indirect_obj(&mut ctxt, &mut pb).unwrap();
 
         let v = Vec::from(
-            "20 0 obj << >> stream
-         endstream
-         endobj"
+            "20 0 obj <</Length 0>> stream
+\nendstream endobj"
                 .as_bytes(),
         );
         let mut pb = ParseBuffer::new(v);
@@ -325,18 +321,16 @@ mod test_page_tree {
         let _page_1 = parse_pdf_indirect_obj(&mut ctxt, &mut page_1).unwrap();
 
         let v = Vec::from(
-            "19 0 obj << >> stream
-         endstream
-         endobj"
+            "19 0 obj <</Length 0>> stream
+\nendstream endobj"
                 .as_bytes(),
         );
         let mut pb = ParseBuffer::new(v);
         let _content1 = parse_pdf_indirect_obj(&mut ctxt, &mut pb).unwrap();
 
         let v = Vec::from(
-            "20 0 obj << >> stream
-         endstream
-         endobj"
+            "20 0 obj <</Length 0>> stream
+\nendstream endobj"
                 .as_bytes(),
         );
         let mut pb = ParseBuffer::new(v);
@@ -354,9 +348,8 @@ mod test_page_tree {
         let _page_2 = parse_pdf_indirect_obj(&mut ctxt, &mut page_2).unwrap();
 
         let v = Vec::from(
-            "7 0 obj << >> stream
-         endstream
-         endobj"
+            "7 0 obj <</Length 0>> stream
+\nendstream endobj"
                 .as_bytes(),
         );
         let mut pb = ParseBuffer::new(v);

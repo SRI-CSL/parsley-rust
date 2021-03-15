@@ -681,7 +681,13 @@ impl StreamContentT {
     pub fn content(&self) -> &[u8] { &self.content }
 }
 
-pub struct StreamContentP;
+pub struct StreamContentP {
+    length: usize,
+}
+
+impl StreamContentP {
+    pub fn new(length: usize) -> StreamContentP { Self { length } }
+}
 
 impl ParsleyParser for StreamContentP {
     type T = LocatedVal<StreamContentT>;
@@ -710,42 +716,45 @@ impl ParsleyParser for StreamContentP {
         }
         let stream_start_cursor = buf.get_cursor();
 
-        let len = buf.scan(b"endstream");
-        if let Err(e) = len {
-            buf.set_cursor(start);
-            return Err(e)
-        }
-        let stream_end_cursor = buf.get_cursor();
-        let mut stream_len = stream_end_cursor - stream_start_cursor;
-
-        // Extract the stream content
-        buf.set_cursor(stream_start_cursor);
-        let content_res = buf.extract(stream_end_cursor - stream_start_cursor);
+        // extract the specified length of content
+        let content_res = buf.extract(self.length);
         if let Err(e) = content_res {
             buf.set_cursor(start);
             return Err(e)
         }
-        let mut v = Vec::from(content_res.unwrap());
-        // Remove the trailing EOL.
-        //
-        // FIXME: If we find a trailing '\r\n', it is not clear from
-        // the spec whether the '\r' is part of the data and EOL is
-        // '\n'.  For now, just remove a trailing '\n'.
-        match v.pop() {
-            None => (),
-            Some(10) => stream_len -= 1,
-            Some(c) => v.push(c),
+        let v = Vec::from(content_res.unwrap());
+
+        // if we were able to extract the content, it should be safe
+        // to set the cursor at the end of the content.
+        buf.set_cursor(stream_start_cursor + self.length);
+
+        // go past the EOL
+        let end_eol = buf.get_cursor();
+        if buf.peek() == Some(13) {
+            // '\r'
+            buf.incr_cursor();
+        }
+        if buf.peek() == Some(10) {
+            // '\n'
+            buf.incr_cursor();
+        }
+        if end_eol == buf.get_cursor() {
+            let msg = format!("no EOL after stream content: {}", buf.peek().unwrap());
+            let err = ErrorKind::GuardError(msg);
+            buf.set_cursor(start);
+            return Err(locate_value(err, start, end_eol))
         }
 
-        // Go back to the end of the content
-        buf.set_cursor(stream_end_cursor);
+        // go past the endstream token
         if buf.exact(b"endstream").is_err() {
             let end = buf.get_cursor();
-            let err = ErrorKind::GuardError("invalid endstream".to_string());
+            let msg = format!("invalid endstream: {}", buf.peek().unwrap());
+            let err = ErrorKind::GuardError(msg);
             buf.set_cursor(start);
             return Err(locate_value(err, start, end))
         }
-        let stream = StreamContentT::new(stream_start_cursor, stream_len, v);
+
+        let stream = StreamContentT::new(stream_start_cursor, self.length, v);
         let end = buf.get_cursor();
         Ok(LocatedVal::new(stream, start, end))
     }
@@ -1437,7 +1446,7 @@ mod test_pdf_prim {
 
     #[test]
     fn stream_content() {
-        let mut sc = StreamContentP;
+        let mut sc = StreamContentP::new(0);
 
         let v = Vec::new();
         let mut pb = ParseBuffer::new(v);
@@ -1469,8 +1478,9 @@ mod test_pdf_prim {
         assert_eq!(sc.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
 
-        //                 012345 678901234567890
-        let v = Vec::from("stream\n  endstream ".as_bytes());
+        //                 012345 678 901234567890
+        let mut sc = StreamContentP::new(2);
+        let v = Vec::from("stream\n  \nendstream ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(
             sc.parse(&mut pb),
@@ -1480,10 +1490,11 @@ mod test_pdf_prim {
                 18
             ))
         );
-        assert_eq!(pb.get_cursor(), 18);
+        assert_eq!(pb.get_cursor(), 19);
 
-        //                 012345 6 78901234567890
-        let v = Vec::from("stream\r\n  endstream".as_bytes());
+        //                 012345 6 789 01234567890
+        let mut sc = StreamContentP::new(2);
+        let v = Vec::from("stream\r\n  \nendstream".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(
             sc.parse(&mut pb),
@@ -1493,9 +1504,10 @@ mod test_pdf_prim {
                 19
             ))
         );
-        assert_eq!(pb.get_cursor(), 19);
+        assert_eq!(pb.get_cursor(), 20);
 
         //                 012345 6 789 012345678901
+        let mut sc = StreamContentP::new(2);
         let v = Vec::from("stream\r\n  \nendstream ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(
@@ -1509,6 +1521,7 @@ mod test_pdf_prim {
         assert_eq!(pb.get_cursor(), 20);
 
         //                 012345 6 789 0 123456789012
+        let mut sc = StreamContentP::new(3);
         let v = Vec::from("stream\r\n  \r\nendstream ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(
@@ -1522,6 +1535,7 @@ mod test_pdf_prim {
         assert_eq!(pb.get_cursor(), 21);
 
         // wrong starting eol
+        let mut sc = StreamContentP::new(2);
         let v = Vec::from("stream\r  \r\nendstream ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let e = locate_value(
@@ -1533,8 +1547,9 @@ mod test_pdf_prim {
         assert_eq!(pb.get_cursor(), 0);
 
         // endstream eol
-        //                 012345 6 789 01234567890
-        let v = Vec::from("stream\r\n  \rendstream ".as_bytes());
+        //                 012345 6 789 0 12345678901
+        let mut sc = StreamContentP::new(3);
+        let v = Vec::from("stream\r\n  \r\nendstream ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(
             sc.parse(&mut pb),
@@ -1544,6 +1559,6 @@ mod test_pdf_prim {
                 20
             ))
         );
-        assert_eq!(pb.get_cursor(), 20);
+        assert_eq!(pb.get_cursor(), 21);
     }
 }
