@@ -71,12 +71,8 @@ impl PDFObjContext {
     pub fn lookup_obj(&self, oid: (usize, usize)) -> Option<&Rc<LocatedVal<PDFObjT>>> {
         self.defns.get(&oid)
     }
-    pub fn set_encrypted(&mut self) {
-        self.encrypted = true;
-    }
-    pub fn is_encrypted(&self) -> bool {
-        self.encrypted
-    }
+    pub fn set_encrypted(&mut self) { self.encrypted = true; }
+    pub fn is_encrypted(&self) -> bool { self.encrypted }
     pub fn enter_obj(&mut self) -> bool {
         if self.cur_depth == self.max_depth {
             false
@@ -654,6 +650,24 @@ pub struct IndirectP<'a> {
     ctxt: &'a mut PDFObjContext,
 }
 
+fn convert_stream_length(obj: &LocatedVal<PDFObjT>) -> ParseResult<usize> {
+    match obj.val() {
+        PDFObjT::Integer(i) => {
+            if i.is_usize() {
+                Ok(i.usize_val())
+            } else {
+                let err =
+                    ErrorKind::GuardError("unsupported Length specified for stream".to_string());
+                Err(obj.place(err))
+            }
+        },
+        _ => {
+            let err = ErrorKind::GuardError("invalid Length specified for stream".to_string());
+            Err(obj.place(err))
+        },
+    }
+}
+
 impl IndirectP<'_> {
     pub fn new(ctxt: &mut PDFObjContext) -> IndirectP { IndirectP { ctxt } }
     fn parse_internal(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<LocatedVal<IndirectT>> {
@@ -702,13 +716,35 @@ impl IndirectP<'_> {
                     let dict_start = o.loc_start();
                     let dict_end = o.loc_end();
                     if let PDFObjT::Dict(dict) = o.unwrap() {
-                        let length = dict.get_usize(b"Length");
-                        if length.is_none() {
-                            let err = ErrorKind::GuardError("no supported Length specified for stream"
-                                                            .to_string());
-                            return Err(LocatedVal::new(err, dict_start, dict_end));
-                        }
-                        let length = length.unwrap();
+                        // In real files, the Length is either a
+                        // number, or a reference to a number object.
+                        // If we find a reference, the reference could
+                        // aleady be in the context, or it might not
+                        // yet have been parsed.
+                        let length = match dict.get(b"Length") {
+                            None => {
+                                let err = ErrorKind::GuardError("no Length specified for stream"
+                                                                .to_string());
+                                return Err(LocatedVal::new(err, dict_start, dict_end))
+                            },
+                            Some(l) => match l.val() {
+                                PDFObjT::Integer(_) =>
+                                    convert_stream_length(l)?,
+                                PDFObjT::Reference(r) =>
+                                    match self.ctxt.lookup_obj(r.id()) {
+                                        Some(o) => convert_stream_length(o)?,
+                                        None => {
+                                            let err = ErrorKind::InsufficientContext;
+                                            return Err(l.place(err))
+                                        }
+                                    },
+                                _ =>  {
+                                    let err = ErrorKind::GuardError("invalid Length specified for stream"
+                                                                    .to_string());
+                                    return Err(LocatedVal::new(err, dict_start, dict_end))
+                                },
+                            }
+                        };
                         let dict = LocatedVal::new(dict, dict_start, dict_end);
                         let mut s = StreamContentP::new(length);
                         let stream = s.parse(buf)?;

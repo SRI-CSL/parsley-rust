@@ -179,6 +179,8 @@ pub trait ParsleyParser {
 pub enum ErrorKind {
     // Insufficient data
     EndOfBuffer,
+    // Not enough context to parse (perhaps a later pass might work)
+    InsufficientContext,
     // Bounds error,
     BoundsError,
     // Errors during unguarded primitive parsing.
@@ -205,6 +207,7 @@ impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ErrorKind::EndOfBuffer => write!(f, "end of buffer"),
+            ErrorKind::InsufficientContext => write!(f, "not enough context"),
             ErrorKind::BoundsError => write!(f, "out of bounds error"),
             ErrorKind::PrimitiveError(ParseError { msg }) => {
                 write!(f, "primitive parse failure: {}", msg)

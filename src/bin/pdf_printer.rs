@@ -42,7 +42,7 @@ use clap::{App, Arg};
 use serde_json::Value;
 
 use parsley_rust::pcore::parsebuffer::{
-    LocatedVal, Location, ParseBuffer, ParseBufferT, ParsleyParser,
+    ErrorKind, LocatedVal, Location, ParseBuffer, ParseBufferT, ParsleyParser,
 };
 use parsley_rust::pcore::transforms::{BufferTransformT, RestrictView};
 use parsley_rust::pdf_lib::catalog::catalog_type;
@@ -428,6 +428,9 @@ fn parse_objects(
     // references to object streams since they will need to be parsed
     // subsequently.
     let mut obj_streams = BTreeSet::new();
+    // Some stream objects use references for their lengths, so
+    // collect them for a second pass.
+    let mut second_pass = Vec::new();
     for obj in obj_infos.iter() {
         match obj {
             ObjInfo::Stream { id, gen } => {
@@ -462,23 +465,29 @@ fn parse_objects(
                     ofs
                 );
                 pb.set_cursor(ofs);
-                let lobj = p.parse(pb);
-                if let Err(e) = lobj {
-                    exit_log!(
-                        fi.file_offset(e.start()),
-                        "Cannot parse object ({},{}) at file-offset {} (pdf-offset {}) in {}: {}",
-                        id,
-                        gen,
-                        fi.file_offset(e.start()),
-                        e.start(),
-                        fi.display(),
-                        e.val()
-                    );
-                }
-                let io = lobj.unwrap().unwrap(); // unwrap Result, LocatedVal.
-
-                // Validate that the object is what we expect.
-                // TODO: this constraint should be enforced in the library.
+                let lobj = match p.parse(pb) {
+                    Ok(o) => o,
+                    Err(e) => {
+                        if let ErrorKind::InsufficientContext = e.val() {
+                            second_pass.push((id, gen, ofs));
+                            continue
+                        } else {
+                            exit_log!(
+                            fi.file_offset(e.start()),
+                            "Cannot parse object ({},{}) at file-offset {} (pdf-offset {}) in {}: {}",
+                            id,
+                            gen,
+                            fi.file_offset(e.start()),
+                            e.start(),
+                            fi.display(),
+                            e.val()
+                        )
+                        }
+                    },
+                };
+                let io = lobj.unwrap(); // unwrap LocatedVal.
+                                        // Validate that the object is what we expect.
+                                        // TODO: this constraint should be enforced in the library.
                 if (io.num(), io.gen()) != (*id, *gen) {
                     exit_log!(
                         fi.file_offset(ofs),
@@ -493,7 +502,61 @@ fn parse_objects(
         }
     }
 
-    // Now do the second pass over the object streams, collecting only
+    // complete the second pass over objects that needed it
+    for (id, gen, ofs) in second_pass {
+        // If we've already parsed this object, skip it.
+        if ctxt.lookup_obj((*id, *gen)).is_some() {
+            ta3_log!(
+                Level::Info,
+                fi.file_offset(ofs),
+                "skipping already parsed object ({},{})",
+                id,
+                gen
+            );
+            continue
+        }
+        let mut p = IndirectP::new(ctxt);
+        let ofs = ofs;
+        ta3_log!(
+            Level::Info,
+            fi.file_offset(ofs),
+            "second parse of object ({},{}) at {}file-offset {} (pdf-offset {})",
+            id,
+            gen,
+            if ofs == 0 { "(possibly invalid) " } else { "" },
+            fi.file_offset(ofs),
+            ofs
+        );
+        pb.set_cursor(ofs);
+        let lobj = match p.parse(pb) {
+            Ok(o) => o,
+            Err(e) => exit_log!(
+                fi.file_offset(e.start()),
+                "Cannot parse object ({},{}) at file-offset {} (pdf-offset {}) in {}: {}",
+                id,
+                gen,
+                fi.file_offset(e.start()),
+                e.start(),
+                fi.display(),
+                e.val()
+            ),
+        };
+        let io = lobj.unwrap(); // unwrap LocatedVal.
+                                // Validate that the object is what we expect.
+                                // TODO: this constraint should be enforced in the library.
+        if (io.num(), io.gen()) != (*id, *gen) {
+            exit_log!(
+                fi.file_offset(ofs),
+                "unexpected object ({},{}) found: expected ({},{}) from xref entry",
+                io.num(),
+                io.gen(),
+                id,
+                gen
+            )
+        }
+    }
+
+    // Now do the pass over the object streams, collecting only
     // those that are actually defined.  In this pass, we only use
     // immutable borrows on ctxt.
     let mut defined_obj_streams = BTreeSet::new();
