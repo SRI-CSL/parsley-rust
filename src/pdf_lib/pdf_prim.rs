@@ -1452,7 +1452,7 @@ mod test_pdf_prim {
 
     #[test]
     fn stream_content() {
-        let mut sc = StreamContentP::new(0);
+        let mut sc = StreamContentP::new(0, true);
 
         let v = Vec::new();
         let mut pb = ParseBuffer::new(v);
@@ -1485,7 +1485,7 @@ mod test_pdf_prim {
         assert_eq!(pb.get_cursor(), 0);
 
         //                 012345 678 901234567890
-        let mut sc = StreamContentP::new(2);
+        let mut sc = StreamContentP::new(2, true);
         let v = Vec::from("stream\n  \nendstream ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(
@@ -1499,7 +1499,7 @@ mod test_pdf_prim {
         assert_eq!(pb.get_cursor(), 19);
 
         //                 012345 6 789 01234567890
-        let mut sc = StreamContentP::new(2);
+        let mut sc = StreamContentP::new(2, true);
         let v = Vec::from("stream\r\n  \nendstream".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(
@@ -1513,7 +1513,7 @@ mod test_pdf_prim {
         assert_eq!(pb.get_cursor(), 20);
 
         //                 012345 6 789 012345678901
-        let mut sc = StreamContentP::new(2);
+        let mut sc = StreamContentP::new(2, true);
         let v = Vec::from("stream\r\n  \nendstream ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(
@@ -1527,7 +1527,7 @@ mod test_pdf_prim {
         assert_eq!(pb.get_cursor(), 20);
 
         //                 012345 6 789 0 123456789012
-        let mut sc = StreamContentP::new(3);
+        let mut sc = StreamContentP::new(3, true);
         let v = Vec::from("stream\r\n  \r\nendstream ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(
@@ -1541,7 +1541,7 @@ mod test_pdf_prim {
         assert_eq!(pb.get_cursor(), 21);
 
         // wrong starting eol
-        let mut sc = StreamContentP::new(2);
+        let mut sc = StreamContentP::new(2, true);
         let v = Vec::from("stream\r  \r\nendstream ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let e = locate_value(
@@ -1554,7 +1554,7 @@ mod test_pdf_prim {
 
         // endstream eol
         //                 012345 6 789 0 12345678901
-        let mut sc = StreamContentP::new(3);
+        let mut sc = StreamContentP::new(3, true);
         let v = Vec::from("stream\r\n  \r\nendstream ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(
