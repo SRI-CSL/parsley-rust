@@ -47,12 +47,14 @@ impl Location for PDFLocation {
 
 pub struct PDFObjContext {
     // Maps object identifiers to their objects.
-    defns:     BTreeMap<(usize, usize), Rc<LocatedVal<PDFObjT>>>,
+    defns:                    BTreeMap<(usize, usize), Rc<LocatedVal<PDFObjT>>>,
     // whether the document is encrypted
-    encrypted: bool,
+    encrypted:                bool,
     // Tracks the recursion depth.
-    max_depth: usize,
-    cur_depth: usize,
+    max_depth:                usize,
+    cur_depth:                usize,
+    // customized strictness
+    eol_after_stream_content: bool,
 }
 
 impl PDFObjContext {
@@ -62,6 +64,7 @@ impl PDFObjContext {
             encrypted: false,
             max_depth,
             cur_depth: 0,
+            eol_after_stream_content: false, // not strict
         }
     }
     pub fn register_obj(&mut self, p: &LocatedVal<IndirectT>) -> Option<Rc<LocatedVal<PDFObjT>>> {
@@ -746,7 +749,7 @@ impl IndirectP<'_> {
                             }
                         };
                         let dict = LocatedVal::new(dict, dict_start, dict_end);
-                        let mut s = StreamContentP::new(length);
+                        let mut s = StreamContentP::new(length, self.ctxt.eol_after_stream_content);
                         let stream = s.parse(buf)?;
                         let start = dict_start;
                         let end = stream.loc_end();

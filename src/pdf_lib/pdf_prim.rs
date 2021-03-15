@@ -682,11 +682,17 @@ impl StreamContentT {
 }
 
 pub struct StreamContentP {
-    length: usize,
+    length:                   usize,
+    eol_after_stream_content: bool,
 }
 
 impl StreamContentP {
-    pub fn new(length: usize) -> StreamContentP { Self { length } }
+    pub fn new(length: usize, eol_after_stream_content: bool) -> StreamContentP {
+        Self {
+            length,
+            eol_after_stream_content,
+        }
+    }
 }
 
 impl ParsleyParser for StreamContentP {
@@ -738,7 +744,7 @@ impl ParsleyParser for StreamContentP {
             // '\n'
             buf.incr_cursor();
         }
-        if end_eol == buf.get_cursor() {
+        if self.eol_after_stream_content && end_eol == buf.get_cursor() {
             let msg = format!("no EOL after stream content: {}", buf.peek().unwrap());
             let err = ErrorKind::GuardError(msg);
             buf.set_cursor(start);
