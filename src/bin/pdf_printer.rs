@@ -131,6 +131,14 @@ fn parse_xref_stream(
     };
     let xref_obj = xref_obj.unwrap();
     if let PDFObjT::Stream(ref s) = xref_obj.val().obj().val() {
+        ta3_log!(
+            Level::Info,
+            fi.file_offset(0),
+            "parsing xref stream ({},{})",
+            xref_obj.val().num(),
+            xref_obj.val().gen()
+        );
+
         let content = s.stream().val();
         let mut xref_buf = ParseBuffer::new_view(pb, content.start(), content.size());
         let mut xp = XrefStreamP::new(ctxt.is_encrypted(), s);
@@ -521,7 +529,7 @@ fn parse_objects(
         ta3_log!(
             Level::Info,
             fi.file_offset(0),
-            "parsing stream object ({},{})",
+            "parsing object stream ({},{})",
             id.0,
             id.1
         );
