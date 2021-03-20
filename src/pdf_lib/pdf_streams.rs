@@ -24,7 +24,7 @@ use super::super::pcore::parsebuffer::{
 };
 use super::super::pcore::transforms::{BufferTransformT, RestrictView, RestrictViewFrom};
 
-use super::pdf_filters::{ASCII85Decode, ASCIIHexDecode, FlateDecode};
+use super::pdf_filters::{ASCII85Decode, ASCIIHexDecode, DCTDecode, FlateDecode};
 use super::pdf_obj::{
     parse_pdf_obj, DictKey, DictT, Filter, IndirectT, PDFObjContext, PDFObjT, StreamT,
 };
@@ -239,6 +239,7 @@ impl ParsleyParser for ObjStreamP<'_> {
                 "FlateDecode" => Box::new(FlateDecode::new(filter.options())),
                 "ASCII85Decode" => Box::new(ASCII85Decode::new(filter.options())),
                 "ASCIIHexDecode" => Box::new(ASCIIHexDecode::new(filter.options())),
+                "DCTDecode" => Box::new(DCTDecode::new(filter.options())),
                 s => {
                     let msg = format!("Cannot handle filter {} in object stream", s);
                     let err = ErrorKind::GuardError(msg);
@@ -610,6 +611,7 @@ impl ParsleyParser for XrefStreamP<'_> {
                 "FlateDecode" => Box::new(FlateDecode::new(filter.options())),
                 "ASCII85Decode" => Box::new(ASCII85Decode::new(filter.options())),
                 "ASCIIHexDecode" => Box::new(ASCIIHexDecode::new(filter.options())),
+                "DCTDecode" => Box::new(DCTDecode::new(filter.options())),
                 s => {
                     let msg = format!("Cannot handle filter {} in xref stream", s);
                     let err = ErrorKind::GuardError(msg);
@@ -663,6 +665,7 @@ pub fn decode_stream(strm: &StreamT) -> ParseResult<StreamT> {
             "FlateDecode" => Box::new(FlateDecode::new(filter.options())),
             "ASCII85Decode" => Box::new(ASCII85Decode::new(filter.options())),
             "ASCIIHexDecode" => Box::new(ASCIIHexDecode::new(filter.options())),
+            "DCTDecode" => Box::new(DCTDecode::new(filter.options())),
             s => {
                 let msg = format!("Cannot handle filter {} in object stream", s);
                 let err = ErrorKind::GuardError(msg);
@@ -974,6 +977,24 @@ endobj");
             let ents = xrt.val().ents();
             let size = s.dict().val().get_usize(b"Size").unwrap();
             assert_eq!(size, ents.len())
+        } else {
+            assert!(false);
+        }
+    }
+
+    #[test]
+    fn test_jpg_stream() {
+        let v = get_test_data("tests/test_files/filter_tests/jpeg_stm.obj");
+        let mut pb = ParseBuffer::new(v);
+        let mut ctxt = mk_new_context();
+        let mut p = IndirectP::new(&mut ctxt);
+        let io = p.parse(&mut pb).expect("unable to parse stream");
+        let io = io.val();
+        if let PDFObjT::Stream(ref s) = io.obj().val() {
+            match decode_stream(s) {
+                Ok(_) => (),
+                Err(_) => assert!(false),
+            }
         } else {
             assert!(false);
         }

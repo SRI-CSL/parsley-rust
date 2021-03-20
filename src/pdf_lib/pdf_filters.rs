@@ -18,6 +18,7 @@
 
 use binascii::hex2bin;
 use flate2::write::ZlibDecoder;
+use jpeg_decoder;
 use lzw::{Decoder, DecoderEarlyChange, LsbReader};
 use std::io::Write;
 
@@ -489,6 +490,28 @@ impl BufferTransformT for ASCII85Decode<'_> {
             Err(e) => {
                 let err =
                     ErrorKind::TransformError(format!("ASCII85Decode: error decoding: {:?}", e));
+                Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+            },
+        }
+    }
+}
+
+pub struct DCTDecode<'a> {
+    _options: &'a Option<&'a DictT>,
+}
+
+impl DCTDecode<'_> {
+    pub fn new<'a>(_options: &'a Option<&'a DictT>) -> DCTDecode { DCTDecode { _options } }
+}
+
+impl BufferTransformT for DCTDecode<'_> {
+    fn transform(&mut self, buf: &dyn ParseBufferT) -> TransformResult {
+        let loc = &buf.get_location();
+        let mut decoder = jpeg_decoder::Decoder::new(buf.buf());
+        match decoder.decode() {
+            Ok(res) => Ok(ParseBuffer::new(res)),
+            Err(e) => {
+                let err = ErrorKind::TransformError(format!("DCTDecode: error decoding: {:?}", e));
                 Err(locate_value(err, loc.loc_start(), loc.loc_end()))
             },
         }
