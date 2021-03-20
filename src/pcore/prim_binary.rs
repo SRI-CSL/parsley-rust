@@ -65,57 +65,6 @@ impl ParsleyParser for BinaryMatcher {
     }
 }
 
-/* Ideally, we would have a binary buffer that keeps a reference
-   with the lifetime of the parser.  The naive approach runs into
-   error E0207.
-
-   A workaround could be to use PhantomData such as something like below.
-   But this doesn't quite work, and variously crashes rustc!
-
-   For now, just do the inefficient thing and copy the data, until
-   we properly grok lifetimes and traits.
-
-pub struct BinaryBuffer {
-    len: usize,
-    phantom: PhantomData<&'a [u8]>
-}
-
-impl<'a> BinaryBuffer<'a> {
-    pub fn new(len: usize) -> BinaryBuffer<'a> {
-        BinaryBuffer { len, phantom: PhantomData }
-    }
-}
-
-impl<'a> ParsleyParser for BinaryBuffer<'a> {
-    type T<'a> = &'a [u8];
-
-    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
-        buf.extract(self.len)
-    }
-}
-*/
-
-pub struct BinaryBuffer {
-    len: usize,
-}
-
-impl BinaryBuffer {
-    pub fn new(len: usize) -> BinaryBuffer { BinaryBuffer { len } }
-}
-
-impl ParsleyParser for BinaryBuffer {
-    type T = LocatedVal<Vec<u8>>;
-
-    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
-        let start = buf.get_cursor();
-        let bytes = buf.extract(self.len)?;
-        let mut ret = Vec::new();
-        ret.extend_from_slice(bytes);
-        let end = buf.get_cursor();
-        Ok(LocatedVal::new(ret, start, end))
-    }
-}
-
 // unit tests
 
 #[cfg(test)]
@@ -123,7 +72,7 @@ mod test_binary {
     use super::super::parsebuffer::{
         locate_value, ErrorKind, LocatedVal, ParseBuffer, ParseBufferT, ParsleyParser,
     };
-    use super::{BinaryBuffer, BinaryMatcher, BinaryScanner};
+    use super::{BinaryMatcher, BinaryScanner};
 
     #[test]
     fn scan() {
@@ -164,20 +113,5 @@ mod test_binary {
         let e = locate_value(ErrorKind::GuardError("match".to_string()), 0, 0);
         assert_eq!(s.parse(&mut pb), Err(e));
         assert_eq!(pb.get_cursor(), 0);
-    }
-
-    #[test]
-    fn buffer() {
-        let mut s = BinaryBuffer::new(3);
-        let mut pb = ParseBuffer::new(Vec::from("".as_bytes()));
-        let e = locate_value(ErrorKind::EndOfBuffer, 0, 0);
-        assert_eq!(s.parse(&mut pb), Err(e));
-
-        let mut s = BinaryBuffer::new(3);
-        let mut pb = ParseBuffer::new(Vec::from("%PDF-".as_bytes()));
-        let v = s.parse(&mut pb).unwrap();
-        let r = Vec::from("%PD".as_bytes());
-        assert_eq!(*v.val(), r);
-        assert_eq!(pb.get_cursor(), 3);
     }
 }
