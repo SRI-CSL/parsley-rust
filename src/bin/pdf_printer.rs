@@ -48,7 +48,9 @@ use parsley_rust::pcore::transforms::{BufferTransformT, RestrictView};
 use parsley_rust::pdf_lib::catalog::catalog_type;
 use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, TrailerP, XrefSectP};
 use parsley_rust::pdf_lib::pdf_obj::{IndirectP, PDFObjContext, PDFObjT};
-use parsley_rust::pdf_lib::pdf_streams::{ObjStreamP, XrefEntStatus, XrefEntT, XrefStreamP};
+use parsley_rust::pdf_lib::pdf_streams::{
+    decode_stream, ObjStreamP, XrefEntStatus, XrefEntT, XrefStreamP,
+};
 use parsley_rust::pdf_lib::pdf_type_check::{check_type, TypeCheckContext};
 
 /* from: https://osr.jpl.nasa.gov/wiki/pages/viewpage.action?spaceKey=SD&title=TA2+PDF+Safe+Parser+Evaluation
@@ -688,6 +690,17 @@ fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFOb
                     if !processed.contains(v) {
                         obj_queue.push_back((Rc::clone(v), depth + 1));
                         processed.insert(Rc::clone(v));
+                    }
+                }
+                if !ctxt.is_encrypted() {
+                    match decode_stream(s) {
+                        Ok(_) => (),
+                        Err(e) => ta3_log!(
+                            Level::Warn,
+                            fi.file_offset(o.start()),
+                            " error decoding stream: {:?}",
+                            e
+                        ),
                     }
                 }
             },
