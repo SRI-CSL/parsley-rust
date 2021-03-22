@@ -65,6 +65,22 @@ impl ParsleyParser for BinaryMatcher {
     }
 }
 
+pub struct ByteVecP {
+    len: usize,
+}
+impl ByteVecP {
+    pub fn new(len: usize) -> Self { Self { len } }
+}
+impl ParsleyParser for ByteVecP {
+    type T = LocatedVal<Vec<u8>>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let vec = buf.extract(self.len)?;
+        return Ok(LocatedVal::new(Vec::from(vec), start, buf.get_cursor()))
+    }
+}
+
 // Binary integers
 
 #[derive(Debug, Clone, Copy)]
