@@ -153,6 +153,24 @@ impl ParsleyParser for HeaderP {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum SubMessageKind {
+    Pad,
+    AckNack,
+    Heartbeat,
+    Gap,
+    InfoTimestamp,
+    InfoSource,
+    InfoReplyIp4,
+    InfoDestination,
+    InfoReply,
+    NackFrag,
+    HeartbeatFrag,
+    Data,
+    DataFrag,
+    Other(u8),
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct SubMessageHeader {
     sub_msg_id: u8,
     flags:      u8,
@@ -168,6 +186,24 @@ impl SubMessageHeader {
     }
     pub fn id(&self) -> u8 { self.sub_msg_id }
     pub fn length(&self) -> u16 { self.length }
+    pub fn kind(&self) -> SubMessageKind {
+        match self.sub_msg_id {
+            0x01 => SubMessageKind::Pad,
+            0x06 => SubMessageKind::AckNack,
+            0x07 => SubMessageKind::Heartbeat,
+            0x08 => SubMessageKind::Gap,
+            0x09 => SubMessageKind::InfoTimestamp,
+            0x0c => SubMessageKind::InfoSource,
+            0x0d => SubMessageKind::InfoReplyIp4,
+            0x0e => SubMessageKind::InfoDestination,
+            0x0f => SubMessageKind::InfoReply,
+            0x12 => SubMessageKind::NackFrag,
+            0x13 => SubMessageKind::HeartbeatFrag,
+            0x15 => SubMessageKind::Data,
+            0x16 => SubMessageKind::DataFrag,
+            id => SubMessageKind::Other(id),
+        }
+    }
 }
 
 pub struct SubMessageHeaderP;
