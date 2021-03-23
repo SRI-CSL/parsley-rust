@@ -18,7 +18,6 @@
 
 use binascii::hex2bin;
 use flate2::write::ZlibDecoder;
-use jpeg_decoder;
 use lzw::{Decoder, DecoderEarlyChange, LsbReader};
 use std::io::Write;
 

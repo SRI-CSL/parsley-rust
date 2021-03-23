@@ -229,7 +229,7 @@ impl ParsleyParser for ObjStreamP<'_> {
             }
         }
         if self.ctxt.is_encrypted() {
-            let msg = format!("Encrypted streams are currently unsupported");
+            let msg = "Encrypted streams are currently unsupported".to_string();
             let err = ErrorKind::GuardError(msg);
             return Err(self.stream.dict().place(err))
         }
@@ -601,7 +601,7 @@ impl ParsleyParser for XrefStreamP<'_> {
             }
         }
         if self.encrypted {
-            let msg = format!("Encrypted streams are currently unsupported");
+            let msg = "Encrypted streams are currently unsupported".to_string();
             let err = ErrorKind::GuardError(msg);
             return Err(self.stream.dict().place(err))
         }
