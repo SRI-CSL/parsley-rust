@@ -52,18 +52,21 @@ fn parse(data: &[u8]) {
 
 pub fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() != 2 {
-        eprintln!("Usage: {} <pcap-conv-packet.dat>", args[0]);
+    if args.len() < 2 {
+        eprintln!("Usage: {} <pcap-conv-packet.dat>*", args[0]);
+        eprintln!("  specify the list of per-packet files in an RTPS conversation.");
         std::process::exit(0)
     }
-    let mut file = match std::fs::File::open(&args[1]) {
-        Ok(f) => f,
-        Err(e) => {
-            eprintln!("Error opening {}: {}", &args[1], e);
-            std::process::exit(1)
-        },
-    };
-    let mut data = Vec::new();
-    file.read_to_end(&mut data).unwrap();
-    parse(&data)
+    for f in &args[1 .. ] {
+        let mut file = match std::fs::File::open(f) {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!("Error opening {}: {}", &args[1], e);
+                std::process::exit(1)
+            },
+        };
+        let mut data = Vec::new();
+        file.read_to_end(&mut data).unwrap();
+        parse(&data)
+    }
 }
