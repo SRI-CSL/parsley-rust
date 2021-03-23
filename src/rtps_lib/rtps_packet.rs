@@ -42,7 +42,9 @@ impl ParsleyParser for PacketP {
         let mut msgs = Vec::new();
         let mut err: Option<(ErrorKind, usize, usize)> = None;
         loop {
-            if buf.remaining() == 0 { break };
+            if buf.remaining() == 0 {
+                break
+            };
 
             let mut smp = SubMessageP;
             match smp.parse(buf) {
