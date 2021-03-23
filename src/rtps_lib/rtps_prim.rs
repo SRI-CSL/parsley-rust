@@ -244,6 +244,7 @@ pub struct SubMessage {
 
 impl SubMessage {
     pub fn new(header: SubMessageHeader, payload: Vec<u8>) -> Self { Self { header, payload } }
+    pub fn kind(&self) -> SubMessageKind { self.header.kind() }
 }
 
 pub struct SubMessageP;
