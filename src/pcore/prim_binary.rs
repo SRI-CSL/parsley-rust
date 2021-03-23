@@ -77,7 +77,7 @@ impl ParsleyParser for ByteVecP {
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         let vec = buf.extract(self.len)?;
-        return Ok(LocatedVal::new(Vec::from(vec), start, buf.get_cursor()))
+        Ok(LocatedVal::new(Vec::from(vec), start, buf.get_cursor()))
     }
 }
 
@@ -122,7 +122,7 @@ impl ParsleyParser for UInt16P {
         match p.parse(buf) {
             Err(e) => {
                 buf.set_cursor(start);
-                return Err(e)
+                Err(e)
             },
             Ok(v2) => {
                 let v: u16 = match self.endian {
@@ -151,7 +151,7 @@ impl ParsleyParser for UInt32P {
         match p.parse(buf) {
             Err(e) => {
                 buf.set_cursor(start);
-                return Err(e)
+                Err(e)
             },
             Ok(v2) => {
                 let v: u32 = match self.endian {
@@ -180,7 +180,7 @@ impl ParsleyParser for UInt64P {
         match p.parse(buf) {
             Err(e) => {
                 buf.set_cursor(start);
-                return Err(e)
+                Err(e)
             },
             Ok(v2) => {
                 let v: u64 = match self.endian {
@@ -444,7 +444,7 @@ mod test_binary {
         assert_eq!(lp.parse(&mut pb), Ok(v));
         let v = LocatedVal::new(u64::MAX, 17, 24);
         assert_eq!(lp.parse(&mut pb), Ok(v));
-}
+    }
 
     #[test]
     fn int64() {
