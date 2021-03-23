@@ -16,18 +16,21 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use parsley_rust::pcore::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyParser};
+use parsley_rust::rtps_lib::rtps_packet::PacketP;
 use std::env;
 use std::io::Read;
-use parsley_rust::pcore::parsebuffer::{ParseBuffer, ParsleyParser};
-use parsley_rust::rtps_lib::rtps_packet::PacketP;
 
 fn parse(data: &[u8]) {
-    println!("Parsing conversation of {} bytes ..\n", data.len());
+    println!("Parsing packet of {} bytes ..", data.len());
     let v = Vec::from(data);
     let mut pb = ParseBuffer::new(v);
 
     let mut count = 0;
     loop {
+        if pb.remaining() == 0 {
+            break
+        }
         let mut pp = PacketP;
         let p = match pp.parse(&mut pb) {
             Ok(p) => p,
@@ -36,22 +39,30 @@ fn parse(data: &[u8]) {
                 break
             },
         };
+        for (i, m) in p.val().msgs().iter().enumerate() {
+            println!("Packet {}, sub-msg {}: {:?}", count, i, m.kind())
+        }
         println!(
-            "Received RTPS packet with {} sub messages.\n",
+            "Received RTPS packet with {} sub messages.",
             p.val().msgs().len()
         );
         count += 1
     }
-    println!("Parsed {} packets in conversation.", count)
 }
 
 pub fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
-        eprintln!("Usage: {} <pcap-conv.dat>\n", args[0]);
+        eprintln!("Usage: {} <pcap-conv-packet.dat>", args[0]);
         std::process::exit(0)
     }
-    let mut file = std::fs::File::open(&args[1]).unwrap();
+    let mut file = match std::fs::File::open(&args[1]) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("Error opening {}: {}", &args[1], e);
+            std::process::exit(1)
+        },
+    };
     let mut data = Vec::new();
     file.read_to_end(&mut data).unwrap();
     parse(&data)
