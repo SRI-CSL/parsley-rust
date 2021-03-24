@@ -18,6 +18,7 @@
 
 use std::collections::BTreeMap;
 use std::rc::Rc;
+use std::io::Write;
 
 use super::super::pcore::parsebuffer::{
     locate_value, ErrorKind, LocatedVal, ParseBuffer, ParseBufferT, ParseResult, ParsleyParser,
@@ -639,7 +640,7 @@ impl ParsleyParser for XrefStreamP<'_> {
 // dictionary will have any filter-specific entries pruned from the
 // old dictionary, but will retain the old location.
 
-pub fn decode_stream(strm: &StreamT) -> ParseResult<StreamT> {
+pub fn decode_stream(ctxt: &PDFObjContext, strm: &StreamT, uniq: usize) -> ParseResult<StreamT> {
     let dict = strm.dict().val();
     let content = strm.stream().val().content();
     let filters = strm.filters()?;
@@ -659,13 +660,17 @@ pub fn decode_stream(strm: &StreamT) -> ParseResult<StreamT> {
         }
     }
     // Work through the filter sequence.
+    let mut have_jpg = false;
     for filter in &filters {
         let f = filter.name().as_string();
         let mut decoder: Box<dyn BufferTransformT> = match f.as_str() {
             "FlateDecode" => Box::new(FlateDecode::new(filter.options())),
             "ASCII85Decode" => Box::new(ASCII85Decode::new(filter.options())),
             "ASCIIHexDecode" => Box::new(ASCIIHexDecode::new(filter.options())),
-            "DCTDecode" => Box::new(DCTDecode::new(filter.options())),
+            "DCTDecode" => {
+                have_jpg = true;
+                Box::new(DCTDecode::new(filter.options()))
+            },
             s => {
                 let msg = format!("Cannot handle filter {} in object stream", s);
                 let err = ErrorKind::GuardError(msg);
@@ -673,6 +678,18 @@ pub fn decode_stream(strm: &StreamT) -> ParseResult<StreamT> {
             },
         };
         let input = get_input(&mut input, &mut views);
+        if have_jpg {
+            let jpg_file_name = format!("{}-{}.jpg", ctxt.file(), uniq);
+            match std::fs::File::create(&jpg_file_name) {
+                Err(e) =>
+                    eprintln!("Cannot open {}: {:?}", &jpg_file_name, e),
+                Ok(mut file) =>
+                    match file.write_all(input.buf()) {
+                        Ok(_) => (),
+                        Err(e) => eprintln!("Cannot write {}: {:?}", &jpg_file_name, e),
+                    },
+            }
+        }
         let output = decoder.transform(input)?;
         views.push(output);
     }

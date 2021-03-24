@@ -653,6 +653,7 @@ fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFOb
         )
     };
 
+    let mut uniq = 0;
     let mut obj_queue = VecDeque::new();
     obj_queue.push_back((Rc::clone(root_obj), 0)); // depth 0
     let mut processed = BTreeSet::new();
@@ -684,6 +685,7 @@ fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFOb
                 }
             },
             PDFObjT::Stream(s) => {
+                uniq += 1;
                 log_obj("stream", o.as_ref() as &dyn Location, depth);
                 for (_, v) in s.dict().val().map().iter() {
                     // TODO: print key names
@@ -693,7 +695,7 @@ fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFOb
                     }
                 }
                 if !ctxt.is_encrypted() {
-                    match decode_stream(s) {
+                    match decode_stream(ctxt, s, uniq) {
                         Ok(_) => (),
                         Err(e) => ta3_log!(
                             Level::Warn,
@@ -872,7 +874,7 @@ fn parse_file(test_file: &str) {
 
     // Create the pdf object context.
     // TODO: control max-depth via command-line option.
-    let mut ctxt = PDFObjContext::new(50);
+    let mut ctxt = PDFObjContext::new(test_file, 50);
 
     // Parse xref table at that offset.
     if !pb.check_cursor(sxref_offset) {
