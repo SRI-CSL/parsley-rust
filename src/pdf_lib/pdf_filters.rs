@@ -508,10 +508,7 @@ impl BufferTransformT for DCTDecode<'_> {
         let loc = &buf.get_location();
         let mut decoder = jpeg_decoder::Decoder::new(buf.buf());
         match decoder.decode() {
-            Ok(res) => {
-                println!("\n JPEG stream decoded! \n");
-                Ok(ParseBuffer::new(res))
-            },
+            Ok(res) => Ok(ParseBuffer::new(res)),
             Err(e) => {
                 let err = ErrorKind::TransformError(format!("DCTDecode: error decoding: {:?}", e));
                 Err(locate_value(err, loc.loc_start(), loc.loc_end()))

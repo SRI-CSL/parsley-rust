@@ -46,8 +46,6 @@ impl Location for PDFLocation {
 // collected during parsing.
 
 pub struct PDFObjContext {
-    // Input file
-    file:                     String,
     // Maps object identifiers to their objects.
     defns:                    BTreeMap<(usize, usize), Rc<LocatedVal<PDFObjT>>>,
     // whether the document is encrypted
@@ -60,9 +58,8 @@ pub struct PDFObjContext {
 }
 
 impl PDFObjContext {
-    pub fn new(file: &str, max_depth: usize) -> PDFObjContext {
+    pub fn new(max_depth: usize) -> PDFObjContext {
         PDFObjContext {
-            file: String::from(file),
             defns: BTreeMap::new(),
             encrypted: false,
             max_depth,
@@ -70,7 +67,6 @@ impl PDFObjContext {
             eol_after_stream_content: false, // not strict
         }
     }
-    pub fn file(&self) -> &str { &self.file }
     pub fn register_obj(&mut self, p: &LocatedVal<IndirectT>) -> Option<Rc<LocatedVal<PDFObjT>>> {
         self.defns
             .insert((p.val().num(), p.val().gen()), Rc::clone(p.val().obj()))
