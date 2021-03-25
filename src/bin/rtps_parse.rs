@@ -21,8 +21,8 @@ use parsley_rust::rtps_lib::rtps_packet::PacketP;
 use std::env;
 use std::io::Read;
 
-fn parse(data: &[u8]) {
-    println!("Parsing packet of {} bytes ..", data.len());
+fn parse(f: &str, data: &[u8]) {
+    println!("Parsing packet of {} bytes in {} ..", data.len(), f);
     let v = Vec::from(data);
     let mut pb = ParseBuffer::new(v);
 
@@ -67,6 +67,6 @@ pub fn main() {
         };
         let mut data = Vec::new();
         file.read_to_end(&mut data).unwrap();
-        parse(&data)
+        parse(f, &data)
     }
 }
