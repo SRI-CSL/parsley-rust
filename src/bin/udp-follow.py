@@ -4,24 +4,14 @@ import subprocess, sys, os
 def num_conversations(pcap):
     args  = ["tshark", "-q", "-2", "-R", "rtps", "-r", pcap, "-z", "conv,udp"]
     comp  = subprocess.run(args, capture_output=True)
-    convs = comp.stdout.decode(encoding="utf-8")
-    convs = convs.split("\n")
+    convs = comp.stdout.decode(encoding="utf-8").split("\n")
     return len(convs) - (5) - (2)
 
 def get_conversation_packets(pcap, n):
     args = ["tshark", "-q", "-2", "-R", "rtps", "-r", pcap, "-z", ("follow,udp,raw,%d" % n)]
     comp = subprocess.run(args, capture_output=True)
-    conv = comp.stdout.decode(encoding="utf-8")
-    conv = conv.split("\n")
-    startidx = 6
-    endidx = len(conv) - 2
-    return conv[startidx : endidx]
-
-def make_binary(input_conv):
-    output_conv = []
-    for pack in input_conv:
-        output_conv.append(bytes.fromhex(pack))
-    return output_conv
+    conv = comp.stdout.decode(encoding="utf-8").split("\n")
+    return conv[6 : (len(conv) - 2)]
 
 def save_conv(outdir, pcap, nconv, conv):
     pcap = os.path.split(pcap)[1]
@@ -34,7 +24,7 @@ def process_pcap(pcap, outdir):
     n = num_conversations(pcap)
     for i in range(0, n):
         sconv = get_conversation_packets(pcap, i)
-        bconv = make_binary(sconv)
+        bconv = [ bytes.fromhex(pack) for pack in sconv ]
         save_conv(outdir, pcap, i, bconv)
 
 if __name__ == "__main__":
