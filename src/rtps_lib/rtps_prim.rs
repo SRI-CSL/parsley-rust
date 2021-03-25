@@ -170,6 +170,13 @@ pub enum SubMessageKind {
     Other(u8),
 }
 
+fn msg_endian(flags: u8) -> Endian {
+    if flags & 0x01 == 0x01 {
+        Endian::Little
+    } else {
+        Endian::Big
+    }
+}
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct SubMessageHeader {
     sub_msg_id: u8,
@@ -185,6 +192,9 @@ impl SubMessageHeader {
         }
     }
     pub fn id(&self) -> u8 { self.sub_msg_id }
+    pub fn endian(&self) -> Endian {
+        msg_endian(self.flags)
+    }
     pub fn length(&self) -> u16 { self.length }
     pub fn kind(&self) -> SubMessageKind {
         match self.sub_msg_id {
@@ -212,7 +222,6 @@ impl ParsleyParser for SubMessageHeaderP {
 
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let mut uip = UInt8P;
-        let mut usp = UInt16P::new(Endian::Little);
 
         let start = buf.get_cursor();
         let id = uip.parse(buf)?;
@@ -223,6 +232,7 @@ impl ParsleyParser for SubMessageHeaderP {
                 return Err(e)
             },
         };
+        let mut usp = UInt16P::new(msg_endian(*flags.val()));
         let len = match usp.parse(buf) {
             Ok(l) => l,
             Err(e) => {
@@ -258,7 +268,13 @@ impl ParsleyParser for SubMessageP {
         let hdr = smhp.parse(buf)?;
         let hdr = hdr.unwrap();
 
-        let mut bvp = ByteVecP::new(hdr.length().into());
+        let length: usize =
+            if hdr.length() == 0 {
+                buf.remaining()
+            } else {
+                hdr.length().into()
+            };
+        let mut bvp = ByteVecP::new(length);
         let pld = bvp.parse(buf)?;
         let pld = pld.unwrap();
 
