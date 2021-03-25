@@ -2,14 +2,14 @@
 import subprocess, sys, os
 
 def num_conversations(pcap):
-    args = ["tshark", "-q", "-r", pcap, "-z", "conv,udp"]
-    comp = subprocess.run(args, capture_output=True)
+    args  = ["tshark", "-q", "-2", "-R", "rtps", "-r", pcap, "-z", "conv,udp"]
+    comp  = subprocess.run(args, capture_output=True)
     convs = comp.stdout.decode(encoding="utf-8")
     convs = convs.split("\n")
     return len(convs) - (5) - (2)
 
 def get_conversation_packets(pcap, n):
-    args = ["tshark", "-q", "-r", pcap, "-z", ("follow,udp,raw,%d" % n)]
+    args = ["tshark", "-q", "-2", "-R", "rtps", "-r", pcap, "-z", ("follow,udp,raw,%d" % n)]
     comp = subprocess.run(args, capture_output=True)
     conv = comp.stdout.decode(encoding="utf-8")
     conv = conv.split("\n")
