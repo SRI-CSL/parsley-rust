@@ -42,7 +42,7 @@ impl ParsleyParser for GuidPrefixP {
         let guid_prefix: [u8; 12] = match TryFrom::try_from(g.val().as_slice()) {
             Ok(v) => v,
             Err(_) => {
-                buf.set_cursor(start);
+                buf.set_cursor_unsafe(start);
                 return Err(LocatedVal::new(ErrorKind::BoundsError, start, start))
             },
         };
@@ -129,21 +129,21 @@ impl ParsleyParser for HeaderP {
         let pv = match pvp.parse(buf) {
             Ok(pv) => pv,
             Err(e) => {
-                buf.set_cursor(start);
+                buf.set_cursor_unsafe(start);
                 return Err(e)
             },
         };
         let vi = match vip.parse(buf) {
             Ok(vi) => vi,
             Err(e) => {
-                buf.set_cursor(start);
+                buf.set_cursor_unsafe(start);
                 return Err(e)
             },
         };
         let gp = match gpp.parse(buf) {
             Ok(gp) => gp,
             Err(e) => {
-                buf.set_cursor(start);
+                buf.set_cursor_unsafe(start);
                 return Err(e)
             },
         };
@@ -228,7 +228,7 @@ impl ParsleyParser for SubMessageHeaderP {
         let flags = match uip.parse(buf) {
             Ok(f) => f,
             Err(e) => {
-                buf.set_cursor(start);
+                buf.set_cursor_unsafe(start);
                 return Err(e)
             },
         };
@@ -236,7 +236,7 @@ impl ParsleyParser for SubMessageHeaderP {
         let len = match usp.parse(buf) {
             Ok(l) => l,
             Err(e) => {
-                buf.set_cursor(start);
+                buf.set_cursor_unsafe(start);
                 return Err(e)
             },
         };

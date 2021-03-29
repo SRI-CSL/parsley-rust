@@ -97,7 +97,7 @@ impl ParsleyParser for UInt8P {
         let start = buf.get_cursor();
         match buf.peek() {
             Some(b) => {
-                buf.incr_cursor();
+                buf.incr_cursor_unsafe();
                 let end = buf.get_cursor();
                 Ok(LocatedVal::new(b, start, end))
             },
@@ -121,7 +121,7 @@ impl ParsleyParser for UInt16P {
         let v1 = p.parse(buf)?;
         match p.parse(buf) {
             Err(e) => {
-                buf.set_cursor(start);
+                buf.set_cursor_unsafe(start);
                 Err(e)
             },
             Ok(v2) => {
@@ -150,7 +150,7 @@ impl ParsleyParser for UInt32P {
         let v1 = p.parse(buf)?;
         match p.parse(buf) {
             Err(e) => {
-                buf.set_cursor(start);
+                buf.set_cursor_unsafe(start);
                 Err(e)
             },
             Ok(v2) => {
@@ -179,7 +179,7 @@ impl ParsleyParser for UInt64P {
         let v1 = p.parse(buf)?;
         match p.parse(buf) {
             Err(e) => {
-                buf.set_cursor(start);
+                buf.set_cursor_unsafe(start);
                 Err(e)
             },
             Ok(v2) => {

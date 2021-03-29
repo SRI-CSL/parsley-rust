@@ -248,10 +248,17 @@ pub trait ParseBufferT {
 
     // cursor management
 
+    fn set_cursor(&mut self, ofs: usize) -> ParseResult<()>;
+    fn incr_cursor(&mut self) -> ParseResult<()>;
+    fn decr_cursor(&mut self) -> ParseResult<()>;
+
+    // normally called before using the unsafe functions below
     fn check_cursor(&self, ofs: usize) -> bool;
-    fn set_cursor(&mut self, ofs: usize);
-    fn incr_cursor(&mut self);
-    fn decr_cursor(&mut self);
+
+    // these functions assert their bounds checks
+    fn set_cursor_unsafe(&mut self, ofs: usize);
+    fn incr_cursor_unsafe(&mut self);
+    fn decr_cursor_unsafe(&mut self);
 
     // parsing primitives
 
@@ -352,7 +359,7 @@ impl ParseBuffer {
 pub fn parse_prim<P: ParsleyPrimitive>(buf: &mut dyn ParseBufferT) -> ParseResult<P::T> {
     let start = buf.get_cursor();
     let (t, consumed) = P::parse(buf.buf())?;
-    buf.set_cursor(start + consumed);
+    buf.set_cursor_unsafe(start + consumed);
     Ok(t)
 }
 
@@ -370,7 +377,7 @@ pub fn parse_guarded<P: ParsleyPrimitive>(
         let err = ErrorKind::GuardError(P::name().to_string());
         return Err(locate_value(err, start, end))
     };
-    buf.set_cursor(start + consumed);
+    buf.set_cursor_unsafe(start + consumed);
     Ok(t)
 }
 
@@ -400,17 +407,42 @@ impl ParseBufferT for ParseBuffer {
 
     fn get_location(&self) -> LocatedVal<()> { LocatedVal::new((), self.ofs, self.size) }
     fn get_cursor(&self) -> usize { self.ofs }
-    fn set_cursor(&mut self, ofs: usize) {
+    fn set_cursor(&mut self, ofs: usize) -> ParseResult<()> {
+        if ofs <= self.size {
+            self.ofs = ofs;
+            Ok(())
+        } else {
+            Err(locate_value(ErrorKind::EndOfBuffer, self.ofs, self.ofs))
+        }
+    }
+    fn incr_cursor(&mut self) -> ParseResult<()> {
+        if self.ofs < self.size {
+            self.ofs += 1;
+            Ok(())
+        } else {
+            Err(locate_value(ErrorKind::EndOfBuffer, self.ofs, self.ofs))
+        }
+    }
+    fn decr_cursor(&mut self) -> ParseResult<()> {
+        if self.ofs > 0 {
+            self.ofs -= 1;
+            Ok(())
+        } else {
+            Err(locate_value(ErrorKind::EndOfBuffer, self.ofs, self.ofs))
+        }
+    }
+
+    fn check_cursor(&self, ofs: usize) -> bool { ofs <= self.size }
+
+    fn set_cursor_unsafe(&mut self, ofs: usize) {
         assert!(ofs <= self.size);
         self.ofs = ofs
     }
-    fn check_cursor(&self, ofs: usize) -> bool { ofs <= self.size }
-
-    fn incr_cursor(&mut self) {
+    fn incr_cursor_unsafe(&mut self) {
         assert!(self.ofs < self.size);
-        self.ofs += 1;
+        self.ofs += 1
     }
-    fn decr_cursor(&mut self) {
+    fn decr_cursor_unsafe(&mut self) {
         assert!(self.ofs > 0);
         self.ofs -= 1;
     }
@@ -587,18 +619,18 @@ mod test_parsebuffer {
         let v = Vec::from("0123456789".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(pb.scan(b"9"), Ok(9));
-        pb.set_cursor(0);
+        pb.set_cursor_unsafe(0);
         assert_eq!(pb.scan(b"56"), Ok(5));
 
         // create a new view
         let size = pb.remaining();
         let mut pb_new = ParseBuffer::new_view(&pb, 5, size);
         assert_eq!(pb_new.scan(b"56"), Ok(0));
-        pb_new.set_cursor(0);
+        pb_new.set_cursor_unsafe(0);
         assert_eq!(pb_new.scan(b"9"), Ok(4));
 
         // ensure the old view is still usable
-        pb.set_cursor(0);
+        pb.set_cursor_unsafe(0);
         assert_eq!(pb.scan(b"56"), Ok(5));
     }
 
@@ -620,7 +652,7 @@ mod test_parsebuffer {
         assert_eq!(pb.get_cursor(), 0);
         assert_eq!(pb.scan(b"56"), Ok(0)); // cursor stays at same relative offset
 
-        pb.set_cursor(pb.size()); // goto end of buffer
+        pb.set_cursor_unsafe(pb.size()); // goto end of buffer
         assert_eq!(pb.remaining(), 0);
         assert_eq!(pb.drop(pb.size()), true); // can now drop the entire buffer
         assert_eq!(pb.size(), 0);

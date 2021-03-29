@@ -46,14 +46,14 @@ where
         let start = buf.get_cursor();
         let o1 = self.p1.parse(buf);
         if let Err(err) = o1 {
-            buf.set_cursor(start);
+            buf.set_cursor_unsafe(start);
             return Err(err)
         }
         let o1 = o1.unwrap();
 
         let o2 = self.p2.parse(buf);
         if let Err(err) = o2 {
-            buf.set_cursor(start);
+            buf.set_cursor_unsafe(start);
             return Err(err)
         }
         let o2 = o2.unwrap();
@@ -97,10 +97,10 @@ where
             return Ok(LocatedVal::new(Alt::Left(o), start, end))
         }
 
-        buf.set_cursor(start);
+        buf.set_cursor_unsafe(start);
         let o2 = self.p2.parse(buf);
         if let Err(err) = o2 {
-            buf.set_cursor(start);
+            buf.set_cursor_unsafe(start);
             return Err(err)
         }
 
@@ -139,7 +139,7 @@ where
             r = self.p.parse(buf)
         }
 
-        buf.set_cursor(c);
+        buf.set_cursor_unsafe(c);
         let end = c;
         Ok(LocatedVal::new(v, start, end))
     }
@@ -166,7 +166,7 @@ where
         let start = buf.get_cursor();
         let r = self.p.parse(buf);
         let end = buf.get_cursor();
-        buf.set_cursor(start);
+        buf.set_cursor_unsafe(start);
 
         if r.is_ok() {
             Err(locate_value(

@@ -389,7 +389,7 @@ impl ReferenceP {
             );
             let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
-            buf.set_cursor(cursor);
+            buf.set_cursor_unsafe(cursor);
             return Err(locate_value(err, cursor, end))
         }
         ws.parse(buf)?;
@@ -403,7 +403,7 @@ impl ReferenceP {
             );
             let err = ErrorKind::GuardError(msg);
             let end = buf.get_cursor();
-            buf.set_cursor(cursor);
+            buf.set_cursor_unsafe(cursor);
             return Err(locate_value(err, cursor, end))
         }
         ws.parse(buf)?;
@@ -501,9 +501,9 @@ impl PDFObjP<'_> {
                 // We need to distinguish between a hex-string and a
                 // dictionary object.  So peek ahead.
                 let cursor = buf.get_cursor();
-                buf.incr_cursor();
+                buf.incr_cursor_unsafe();
                 let next = buf.peek();
-                buf.set_cursor(cursor);
+                buf.set_cursor_unsafe(cursor);
 
                 match next {
                     Some(60) => {
@@ -552,7 +552,7 @@ impl PDFObjP<'_> {
                 if ws.parse(buf).is_err() {
                     // We've already parsed a number, so set the
                     // cursor past that and return it.
-                    buf.set_cursor(n1_end_cursor);
+                    buf.set_cursor_unsafe(n1_end_cursor);
                     return Ok(PDFObjT::Integer(n1))
                 }
 
@@ -560,7 +560,7 @@ impl PDFObjP<'_> {
                 let n2 = int.parse(buf);
                 if n2.is_err() {
                     // See above comment.
-                    buf.set_cursor(n1_end_cursor);
+                    buf.set_cursor_unsafe(n1_end_cursor);
                     return Ok(PDFObjT::Integer(n1))
                 }
 
@@ -568,7 +568,7 @@ impl PDFObjP<'_> {
                 if ws.parse(buf).is_err() {
                     // We've already parsed the first number, so set the
                     // cursor past that and return it.
-                    buf.set_cursor(n1_end_cursor);
+                    buf.set_cursor_unsafe(n1_end_cursor);
                     return Ok(PDFObjT::Integer(n1))
                 }
 
@@ -576,7 +576,7 @@ impl PDFObjP<'_> {
                 // indirect reference.
                 let prefix = buf.check_prefix(b"R");
                 if prefix.is_err() {
-                    buf.set_cursor(n1_end_cursor);
+                    buf.set_cursor_unsafe(n1_end_cursor);
                     return Ok(PDFObjT::Integer(n1))
                 }
                 if prefix.unwrap() {
@@ -584,7 +584,7 @@ impl PDFObjP<'_> {
                     // and call its parser (though we could optimize
                     // this case since we've actually already parsed
                     // it.).
-                    buf.set_cursor(cursor);
+                    buf.set_cursor_unsafe(cursor);
 
                     let p = ReferenceP;
                     return Ok(PDFObjT::Reference(p.parse(buf)?))
@@ -592,7 +592,7 @@ impl PDFObjP<'_> {
 
                 // Fallback case: these were two integers after all;
                 // rewind to the first.
-                buf.set_cursor(n1_end_cursor);
+                buf.set_cursor_unsafe(n1_end_cursor);
                 Ok(PDFObjT::Integer(n1))
             },
         }
@@ -683,7 +683,7 @@ impl IndirectP<'_> {
         if !num.val().is_usize() {
             let msg = format!("invalid or unsupported object id: {}", num.val().int_val());
             let err = ErrorKind::GuardError(msg);
-            buf.set_cursor(cursor);
+            buf.set_cursor_unsafe(cursor);
             return Err(num.place(err))
         }
         ws.parse(buf)?;
@@ -695,7 +695,7 @@ impl IndirectP<'_> {
                 gen.val().int_val()
             );
             let err = ErrorKind::GuardError(msg);
-            buf.set_cursor(cursor);
+            buf.set_cursor_unsafe(cursor);
             return Err(gen.place(err))
         }
         ws.parse(buf)?;

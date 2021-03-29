@@ -49,7 +49,7 @@ impl ParsleyParser for WhitespaceNoEOL {
         // If the last character is '\r' (13), check if the next one
         // is '\n' (10).  If so, rewind by one character.
         if (ws.last() == Some(&13)) & (buf.peek() == Some(10)) {
-            buf.decr_cursor();
+            buf.decr_cursor_unsafe();
         }
         let end = buf.get_cursor();
         Ok(LocatedVal::new((), start, end))
@@ -72,10 +72,10 @@ impl ParsleyParser for Comment {
             let err = ErrorKind::GuardError("not at comment".to_string());
             return Err(LocatedVal::new(err, start, end))
         }
-        buf.incr_cursor();
+        buf.incr_cursor_unsafe();
         let c = buf.parse_bytes_until(b"\n")?;
         if buf.peek() == Some(10) {
-            buf.incr_cursor();
+            buf.incr_cursor_unsafe();
         }
         let end = buf.get_cursor();
         Ok(LocatedVal::new(c, start, end))
@@ -206,11 +206,11 @@ impl ParsleyParser for IntegerP {
         let start = buf.get_cursor();
         let minus = if buf.peek() == Some(45) {
             // '-'
-            buf.incr_cursor();
+            buf.incr_cursor_unsafe();
             true
         } else if buf.peek() == Some(43) {
             // '+'
-            buf.incr_cursor();
+            buf.incr_cursor_unsafe();
             false
         } else {
             false
@@ -219,7 +219,7 @@ impl ParsleyParser for IntegerP {
         if num_str.is_empty() && (buf.peek() != Some(46)) {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not at number".to_string());
-            buf.set_cursor(start);
+            buf.set_cursor_unsafe(start);
             return Err(locate_value(err, start, end))
         }
         let mut num: i64 = 0;
@@ -228,7 +228,7 @@ impl ParsleyParser for IntegerP {
             if tmp.is_none() {
                 let end = buf.get_cursor();
                 let err = ErrorKind::GuardError("numerical overflow".to_string());
-                buf.set_cursor(start);
+                buf.set_cursor_unsafe(start);
                 return Err(locate_value(err, start, end))
             }
             num = tmp.unwrap();
@@ -236,7 +236,7 @@ impl ParsleyParser for IntegerP {
             if tmp.is_none() {
                 let end = buf.get_cursor();
                 let err = ErrorKind::GuardError("numerical overflow".to_string());
-                buf.set_cursor(start);
+                buf.set_cursor_unsafe(start);
                 return Err(locate_value(err, start, end))
             }
             num = tmp.unwrap();
@@ -288,11 +288,11 @@ impl ParsleyParser for RealP {
         let start = buf.get_cursor();
         let minus = if buf.peek() == Some(45) {
             // '-'
-            buf.incr_cursor();
+            buf.incr_cursor_unsafe();
             true
         } else if buf.peek() == Some(43) {
             // '+'
-            buf.incr_cursor();
+            buf.incr_cursor_unsafe();
             false
         } else {
             false
@@ -301,7 +301,7 @@ impl ParsleyParser for RealP {
         if num_str.is_empty() && (buf.peek() != Some(46)) {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not at number".to_string());
-            buf.set_cursor(start);
+            buf.set_cursor_unsafe(start);
             return Err(locate_value(err, start, end))
         }
         let mut num: i128 = 0;
@@ -310,7 +310,7 @@ impl ParsleyParser for RealP {
             if tmp.is_none() {
                 let end = buf.get_cursor();
                 let err = ErrorKind::GuardError("numerical overflow".to_string());
-                buf.set_cursor(start);
+                buf.set_cursor_unsafe(start);
                 return Err(locate_value(err, start, end))
             }
             num = tmp.unwrap();
@@ -318,7 +318,7 @@ impl ParsleyParser for RealP {
             if tmp.is_none() {
                 let end = buf.get_cursor();
                 let err = ErrorKind::GuardError("numerical overflow".to_string());
-                buf.set_cursor(start);
+                buf.set_cursor_unsafe(start);
                 return Err(locate_value(err, start, end))
             }
             num = tmp.unwrap();
@@ -326,7 +326,7 @@ impl ParsleyParser for RealP {
         if buf.peek() == Some(46) {
             // '.'
             let mut den: i128 = 1;
-            buf.incr_cursor();
+            buf.incr_cursor_unsafe();
             let s = buf.parse_allowed_bytes(b"0123456789");
             if let Ok(den_str) = s {
                 for c in den_str.iter() {
@@ -334,7 +334,7 @@ impl ParsleyParser for RealP {
                     if tmp.is_none() {
                         let end = buf.get_cursor();
                         let err = ErrorKind::GuardError("numerical overflow".to_string());
-                        buf.set_cursor(start);
+                        buf.set_cursor_unsafe(start);
                         return Err(locate_value(err, start, end))
                     }
                     num = tmp.unwrap();
@@ -342,7 +342,7 @@ impl ParsleyParser for RealP {
                     if tmp.is_none() {
                         let end = buf.get_cursor();
                         let err = ErrorKind::GuardError("numerical overflow".to_string());
-                        buf.set_cursor(start);
+                        buf.set_cursor_unsafe(start);
                         return Err(locate_value(err, start, end))
                     }
                     num = tmp.unwrap();
@@ -350,7 +350,7 @@ impl ParsleyParser for RealP {
                     if tmp.is_none() {
                         let end = buf.get_cursor();
                         let err = ErrorKind::GuardError("numerical overflow".to_string());
-                        buf.set_cursor(start);
+                        buf.set_cursor_unsafe(start);
                         return Err(locate_value(err, start, end))
                     }
                     den = tmp.unwrap();
@@ -395,15 +395,15 @@ impl ParsleyParser for HexString {
             let err = ErrorKind::GuardError("not at hex string".to_string());
             return Err(LocatedVal::new(err, start, start))
         };
-        buf.incr_cursor();
+        buf.incr_cursor_unsafe();
         let bytes = buf.parse_allowed_bytes(b"0123456789abcdefABCDEF \n\r\t\0\x0c")?;
         if buf.peek() != Some(62) {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not at valid hex string".to_string());
-            buf.set_cursor(start);
+            buf.set_cursor_unsafe(start);
             return Err(locate_value(err, start, end))
         }
-        buf.incr_cursor();
+        buf.incr_cursor_unsafe();
 
         let mut hx = Vec::new();
         let mut ws = HashSet::new();
@@ -448,12 +448,12 @@ impl ParsleyParser for RawLiteralString {
             let err = ErrorKind::GuardError("not at literal string".to_string());
             return Err(LocatedVal::new(err, start, start))
         };
+        buf.incr_cursor_unsafe();
 
         // match the backslashes and parens we see
         let mut last_slash: Option<usize> = None;
         let mut depth = 1;
 
-        buf.incr_cursor();
         let mut v = Vec::new();
         loop {
             let bytes = buf.parse_bytes_until(b"()\\")?;
@@ -461,7 +461,7 @@ impl ParsleyParser for RawLiteralString {
                 Some(40) => {
                     // '('
                     let curpos = buf.get_cursor();
-                    buf.incr_cursor();
+                    buf.incr_cursor_unsafe();
                     v.extend_from_slice(&bytes);
                     v.extend_from_slice(b"(");
 
@@ -480,7 +480,7 @@ impl ParsleyParser for RawLiteralString {
                 Some(41) => {
                     // ')'
                     let curpos = buf.get_cursor();
-                    buf.incr_cursor();
+                    buf.incr_cursor_unsafe();
                     v.extend_from_slice(&bytes);
 
                     // append the ')' only if it does not terminate the string.
@@ -504,7 +504,7 @@ impl ParsleyParser for RawLiteralString {
                 Some(92) => {
                     // '\'
                     let curpos = buf.get_cursor();
-                    buf.incr_cursor();
+                    buf.incr_cursor_unsafe();
                     v.extend_from_slice(&bytes);
                     v.extend_from_slice(b"\\");
 
@@ -532,7 +532,7 @@ impl ParsleyParser for RawLiteralString {
                 },
                 None => {
                     let end = buf.get_cursor();
-                    buf.set_cursor(start);
+                    buf.set_cursor_unsafe(start);
                     return Err(locate_value(ErrorKind::EndOfBuffer, start, end))
                 },
             }
@@ -588,7 +588,7 @@ impl ParsleyParser for NameP {
             let err = ErrorKind::GuardError("not at name object".to_string());
             return Err(LocatedVal::new(err, start, start))
         }
-        buf.incr_cursor();
+        buf.incr_cursor_unsafe();
 
         // terminated by whitespace or delimiter characters.  empty
         // names are considered valid.
@@ -620,7 +620,7 @@ impl ParsleyParser for NameP {
                     let ch = 16 * hi + lo;
                     if ch == 0 {
                         let err = ErrorKind::GuardError("null char in name".to_string());
-                        buf.set_cursor(start);
+                        buf.set_cursor_unsafe(start);
                         return Err(locate_value(err, start, end))
                     }
                     r.push(ch);
@@ -709,15 +709,15 @@ impl ParsleyParser for StreamContentP {
         }
         if buf.peek() == Some(13) {
             // '\r'
-            buf.incr_cursor();
+            buf.incr_cursor_unsafe();
         }
         if buf.peek() == Some(10) {
             // '\n'
-            buf.incr_cursor();
+            buf.incr_cursor_unsafe();
         } else {
             let end = buf.get_cursor();
             let err = ErrorKind::GuardError("not a valid stream marker".to_string());
-            buf.set_cursor(start);
+            buf.set_cursor_unsafe(start);
             return Err(locate_value(err, start, end))
         }
         let stream_start_cursor = buf.get_cursor();
@@ -725,29 +725,29 @@ impl ParsleyParser for StreamContentP {
         // extract the specified length of content
         let content_res = buf.extract(self.length);
         if let Err(e) = content_res {
-            buf.set_cursor(start);
+            buf.set_cursor_unsafe(start);
             return Err(e)
         }
         let v = Vec::from(content_res.unwrap());
 
         // if we were able to extract the content, it should be safe
         // to set the cursor at the end of the content.
-        buf.set_cursor(stream_start_cursor + self.length);
+        buf.set_cursor_unsafe(stream_start_cursor + self.length);
 
         // go past the EOL
         let end_eol = buf.get_cursor();
         if buf.peek() == Some(13) {
             // '\r'
-            buf.incr_cursor();
+            buf.incr_cursor_unsafe();
         }
         if buf.peek() == Some(10) {
             // '\n'
-            buf.incr_cursor();
+            buf.incr_cursor_unsafe();
         }
         if self.eol_after_stream_content && end_eol == buf.get_cursor() {
             let msg = format!("no EOL after stream content: {}", buf.peek().unwrap());
             let err = ErrorKind::GuardError(msg);
-            buf.set_cursor(start);
+            buf.set_cursor_unsafe(start);
             return Err(locate_value(err, start, end_eol))
         }
 
@@ -756,7 +756,7 @@ impl ParsleyParser for StreamContentP {
             let end = buf.get_cursor();
             let msg = format!("invalid endstream: {}", buf.peek().unwrap());
             let err = ErrorKind::GuardError(msg);
-            buf.set_cursor(start);
+            buf.set_cursor_unsafe(start);
             return Err(locate_value(err, start, end))
         }
 

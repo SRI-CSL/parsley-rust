@@ -141,7 +141,7 @@ mod test_prim_ascii {
         assert_eq!(pb.get_cursor(), 1);
 
         // forcibly advance
-        pb.set_cursor(2);
+        pb.set_cursor_unsafe(2);
         let r = parse_prim::<AsciiCharPrimitive>(&mut pb);
         assert_eq!(r, Ok('\u{0}'));
         assert_eq!(pb.get_cursor(), 3);
@@ -212,7 +212,7 @@ mod test_ascii {
         assert_eq!(pb.get_cursor(), 1);
 
         // forcibly advance to nul
-        pb.set_cursor(2);
+        pb.set_cursor_unsafe(2);
         let r = ascii_parser.parse(&mut pb);
         // nul fails the guard test
         let e = ErrorKind::GuardError(<AsciiCharPrimitive as ParsleyPrimitive>::name().to_string());
@@ -222,7 +222,7 @@ mod test_ascii {
         assert_eq!(pb.get_cursor(), 2);
 
         // forcibly advance
-        pb.set_cursor(3);
+        pb.set_cursor_unsafe(3);
         let e = Err(locate_value(ErrorKind::EndOfBuffer, 3, 3));
         assert_eq!(ascii_parser.parse(&mut pb), e)
     }
