@@ -1,0 +1,2 @@
+tests/test_files/*.out
+tests/test_files/flate_error_pdf_files/*

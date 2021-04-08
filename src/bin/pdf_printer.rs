@@ -321,46 +321,71 @@ fn parse_xref_section(
         Some(rt) => Some(Rc::clone(rt)),
         None => None,
     };
+
     // check for encryption
     if t.val().dict().get(b"Encrypt").is_some() {
         ctxt.set_encrypted();
         let c = pb.get_cursor();
         let enc_obj = t.val().dict().get(b"Encrypt").unwrap();
-        ta3_log!(Level::Info,
-            fi.file_offset(c),
-            "Found encryption object in trailer: {:?}", t.val().dict().get(b"Encrypt").unwrap());
-        ta3_log!(Level::Info, fi.file_offset(c), "trailer: {:#?}", t.val());
+
+        ta3_log!(Level::Info, fi.file_offset(c),
+            "Found encryption object in trailer: {:?}",
+            t.val().dict().get(b"Encrypt").unwrap());
+
+        ta3_log!(Level::Info, fi.file_offset(c), " trailer: {:#?}", t.val());
+
         let enc_obj = parse_enc_obj(fi, ctxt, pb, &enc_obj, &xrefs);
+
+        let enc_v : i64;
 
         if let PDFObjT::Dict(d) = enc_obj.obj().val() {
             if let Some(fk) = d.get(b"Filter") {
-                if let PDFObjT::Name(nme) = fk.val() {
-                    if (nme.as_string() == "Standard") {
+                if let PDFObjT::Name(enc_dict_nme) = fk.val() {
+                    if enc_dict_nme.as_string() == "Standard" {
                         //
                     } else {
-                        exit_log!(
-                            fi.file_offset(c),
+                        exit_log!(fi.file_offset(c),
                             "Encryption filter type {} unsupported!",
-                            nme.as_string());
+                            enc_dict_nme.as_string());
                     }
                 } else {
-                    exit_log!(
-                        fi.file_offset(c),
-                        "Erroneous type of /Filter key value in encryption dict object."
-                    );
+                    exit_log!(fi.file_offset(c),
+                        "Erroneous type of /Filter key value in encryption dict object.");
+                }
+            } else {
+                exit_log!(fi.file_offset(c),
+                    "The filter key is missing in the encryption dictionary.");
+            }
+
+            if let Some(lk) = d.get(b"Length") {
+                if let PDFObjT::Integer(enc_dict_length) = lk.val() {
+                    println!("length: {:?}", enc_dict_length.int_val());
 
                 }
             } else {
-                exit_log!(
-                    fi.file_offset(c),
-                    "The filter key is missing in the encryption dictionary."
-                );
+                exit_log!(fi.file_offset(c),
+                    "The length key is missing in the encryption dictionary.");
+            }
+
+            if let Some(v_intt) = d.get(b"V") {
+                if let PDFObjT::Integer(v) = v_intt.val() {
+                    println!("V is: {:?}", v.int_val());
+                    match v.int_val() {
+                        0 => exit_log!(fi.file_offset(c),
+                        "The V key in the encryption dictionary has invalid undocumented algo value 0."),
+                        2 => (),
+                        1 | 3..=5 => enc_v = v.int_val(),
+                        _ => exit_log!(fi.file_offset(c),
+                        "The file"),
+                    }
+                }
+            } else {
+                exit_log!(fi.file_offset(c),
+                    "The V key is missing in the encryption dictionary.");
             }
         } else {
-            exit_log!(
-                fi.file_offset(c),
-                "The Encryption object is not a dictionary."
-            );
+            exit_log!(fi.file_offset(c),
+                "The Encryption object is not a dictionary.");
         }
     }
 
