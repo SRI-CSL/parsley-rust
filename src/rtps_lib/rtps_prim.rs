@@ -192,9 +192,7 @@ impl SubMessageHeader {
         }
     }
     pub fn id(&self) -> u8 { self.sub_msg_id }
-    pub fn endian(&self) -> Endian {
-        msg_endian(self.flags)
-    }
+    pub fn endian(&self) -> Endian { msg_endian(self.flags) }
     pub fn length(&self) -> u16 { self.length }
     pub fn kind(&self) -> SubMessageKind {
         match self.sub_msg_id {
@@ -268,12 +266,11 @@ impl ParsleyParser for SubMessageP {
         let hdr = smhp.parse(buf)?;
         let hdr = hdr.unwrap();
 
-        let length: usize =
-            if hdr.length() == 0 {
-                buf.remaining()
-            } else {
-                hdr.length().into()
-            };
+        let length: usize = if hdr.length() == 0 {
+            buf.remaining()
+        } else {
+            hdr.length().into()
+        };
         let mut bvp = ByteVecP::new(length);
         let pld = bvp.parse(buf)?;
         let pld = pld.unwrap();

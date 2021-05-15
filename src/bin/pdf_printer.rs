@@ -285,12 +285,11 @@ fn parse_xref_section(
                     );
                 }
             },
-            Err(_) =>
-                exit_log!(
-                    fi.file_offset(xrefstm_loc),
-                    "/XRefStm specifies out-of-bounds offset {}",
-                    xrstart
-                )
+            Err(_) => exit_log!(
+                fi.file_offset(xrefstm_loc),
+                "/XRefStm specifies out-of-bounds offset {}",
+                xrstart
+            ),
         }
     }
     Some((xrefs, root, prev))

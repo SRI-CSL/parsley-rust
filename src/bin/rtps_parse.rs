@@ -57,7 +57,7 @@ pub fn main() {
         eprintln!("  specify the list of per-packet files in an RTPS conversation.");
         std::process::exit(0)
     }
-    for f in &args[1 .. ] {
+    for f in &args[1 ..] {
         let mut file = match std::fs::File::open(f) {
             Ok(f) => f,
             Err(e) => {
