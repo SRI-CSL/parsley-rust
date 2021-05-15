@@ -20,6 +20,7 @@ use binascii::hex2bin;
 use flate2::write::ZlibDecoder;
 use lzw::{Decoder, DecoderEarlyChange, LsbReader};
 use std::io::Write;
+use std::num::Wrapping;
 
 use super::super::pcore::parsebuffer::{
     locate_value, ErrorKind, Location, ParseBuffer, ParseBufferT,
@@ -114,7 +115,7 @@ impl BufferTransformT for FlateDecode<'_> {
 }
 
 // the paeth prediction algorithm
-fn paeth(a: u8, b: u8, c: u8) -> u8 {
+fn paeth(a: Wrapping<u8>, b: Wrapping<u8>, c: Wrapping<u8>) -> Wrapping<u8> {
     let p = a + b - c;
     let pa = if p > a { p - a } else { a - p };
     let pb = if p > b { p - b } else { b - p };
@@ -232,7 +233,7 @@ fn flate_lzw_filter(
     decoded: Vec<u8>, loc: &dyn Location, predictor: usize, colors: usize, columns: usize,
     bitspercolumn: usize,
 ) -> TransformResult {
-    let mut row_data = Vec::<u8>::new();
+    let mut row_data = Vec::<Wrapping<u8>>::new();
     let mut out_buffer = Vec::<u8>::new();
 
     if predictor == 1 {
@@ -263,16 +264,16 @@ fn flate_lzw_filter(
                 .take(row_length * (i + 1))
                 .skip(row_length * i)
             {
-                row_data.push(*d);
+                row_data.push(Wrapping(*d));
             }
             // Predicts based on the sample to the left,
             // interleaved by colors.
             for j in colors .. row_length {
-                row_data[j] += row_data[j - colors];
+                row_data[j] = row_data[j] + row_data[j - colors];
             }
             // add to output
             for &e in &row_data {
-                out_buffer.push(e);
+                out_buffer.push(e.0);
             }
         }
         Ok(ParseBuffer::new(out_buffer))
@@ -297,7 +298,7 @@ fn flate_lzw_filter(
             return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
         }
 
-        let mut prev_row = vec![0; row_length];
+        let mut prev_row = vec![Wrapping(0); row_length];
         for r in 0 .. rows {
             row_data.clear();
             for d in decoded
@@ -305,73 +306,73 @@ fn flate_lzw_filter(
                 .take(row_length * (r + 1))
                 .skip(row_length * r)
             {
-                row_data.push(*d)
+                row_data.push(Wrapping(*d))
             }
             match predictor {
                 10 => {
                     // PNG None
-                    if row_data[0] != 0 {
+                    if row_data[0].0 != 0 {
                         let err = ErrorKind::TransformError(format!(
                             "PNG filter: row filter {} is not None for None predictor",
-                            row_data[0]
+                            row_data[0].0
                         ));
                         return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
                     }
                 },
                 11 => {
                     // PNG Sub
-                    if row_data[0] != 1 {
+                    if row_data[0].0 != 1 {
                         let err = ErrorKind::TransformError(format!(
                             "PNG filter: row filter {} is not Sub for Sub predictor",
-                            row_data[0]
+                            row_data[0].0
                         ));
                         return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
                     }
                     for k in 1 + bytes_per_pixel .. row_length {
-                        row_data[k] = row_data[k].wrapping_add(row_data[k - bytes_per_pixel])
+                        row_data[k] = row_data[k] + row_data[k - bytes_per_pixel]
                     }
                 },
                 12 => {
                     // PNG Up
-                    if row_data[0] != 2 {
+                    if row_data[0].0 != 2 {
                         let err = ErrorKind::TransformError(format!(
                             "PNG filter: row filter {} is not Up for Up predictor",
-                            row_data[0]
+                            row_data[0].0
                         ));
                         return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
                     }
                     for j in 1 .. row_length {
-                        row_data[j] = row_data[j].wrapping_add(prev_row[j]);
+                        row_data[j] = row_data[j] + prev_row[j];
                     }
                 },
                 13 => {
                     // PNG Avg
-                    if row_data[0] != 3 {
+                    if row_data[0].0 != 3 {
                         let err = ErrorKind::TransformError(format!(
                             "PNG filter: row filter {} is not Avg for Avg predictor",
-                            row_data[0]
+                            row_data[0].0
                         ));
                         return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
                     }
                     for j in 1 .. 1 + bytes_per_pixel {
-                        row_data[j] = row_data[j].wrapping_add(prev_row[j] / 2);
+                        row_data[j] = row_data[j] + (prev_row[j] / Wrapping(2));
                     }
                     for j in bytes_per_pixel .. row_length {
-                        let incr = (row_data[j - bytes_per_pixel] + prev_row[j]) / 2;
-                        row_data[j] = row_data[j].wrapping_add(incr)
+                        let incr = (row_data[j - bytes_per_pixel] + prev_row[j]) / Wrapping(2);
+                        row_data[j] = row_data[j] + incr
                     }
                 },
                 14 => {
-                    if row_data[0] != 4 {
+                    if row_data[0].0 != 4 {
                         let err = ErrorKind::TransformError(format!(
                             "PNG filter: row filter {} is not Paeth for Paeth predictor",
-                            row_data[0]
+                            row_data[0].0
                         ));
                         return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
                     }
                     // Paeth algorithm prediction.
-                    let mut a = 0;
-                    let mut c = 0;
+                    let mut a = Wrapping(0);
+                    let mut c = Wrapping(0);
                     for j in 1 .. row_length {
                         let b = prev_row[j];
                         if j > bytes_per_pixel {
@@ -393,7 +394,7 @@ fn flate_lzw_filter(
             prev_row[.. row_length].clone_from_slice(&row_data[.. row_length]);
             // put data in output buffer
             for d in row_data.iter().take(row_length).skip(1) {
-                out_buffer.push(*d);
+                out_buffer.push(d.0);
             }
         }
         Ok(ParseBuffer::new(out_buffer))
