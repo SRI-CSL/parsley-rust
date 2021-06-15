@@ -86,7 +86,7 @@ mod test_transforms {
         let v = Vec::from("0123456789".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(pb.scan(b"9"), Ok(9));
-        pb.set_cursor(0);
+        pb.set_cursor_unsafe(0);
         assert_eq!(pb.scan(b"56"), Ok(5));
         let size = pb.remaining();
         let mut view = RestrictView::new(5, size);
@@ -94,11 +94,11 @@ mod test_transforms {
         assert_eq!(pb.get_cursor(), 0);
         assert_eq!(pb.remaining(), size);
         assert_eq!(pb.scan(b"56"), Ok(0));
-        pb.set_cursor(0);
+        pb.set_cursor_unsafe(0);
         assert_eq!(pb.scan(b"9"), Ok(4));
 
         // identical view
-        pb.set_cursor(0);
+        pb.set_cursor_unsafe(0);
         let size = pb.remaining();
         let mut view = RestrictView::new(0, size);
         pb = view.transform(&pb).unwrap();

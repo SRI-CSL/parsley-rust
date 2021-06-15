@@ -275,7 +275,7 @@ fn parse_xref_section(
             e.val()
         );
         // No xref section; check for xref stream.
-        pb.set_cursor(start);
+        pb.set_cursor_unsafe(start);
         return parse_xref_stream(fi, ctxt, pb)
     }
     let xrs = xrsect.unwrap();
@@ -418,29 +418,29 @@ fn parse_xref_section(
             "Found hybrid specifier for XRefStm located at {}",
             xrstart,
         );
-        if pb.check_cursor(xrstart) {
-            pb.set_cursor(xrstart);
-            let xref_stm = parse_xref_stream(fi, ctxt, pb);
-            if let Some((xrents, _root, _prev)) = xref_stm {
-                // Ignore the /Root and /Prev specifiers coming from
-                // the XRefStm.  (This seems to be implicit in the
-                // spec.)
-                for e in xrents {
-                    xrefs.push(e);
+        match pb.set_cursor(xrstart) {
+            Ok(()) => {
+                let xref_stm = parse_xref_stream(fi, ctxt, pb);
+                if let Some((xrents, _root, _prev)) = xref_stm {
+                    // Ignore the /Root and /Prev specifiers coming from
+                    // the XRefStm.  (This seems to be implicit in the
+                    // spec.)
+                    for e in xrents {
+                        xrefs.push(e);
+                    }
+                } else {
+                    exit_log!(
+                        fi.file_offset(xrefstm_loc),
+                        "/XRefStm points to an invalid or encrypted XRefStm at {}",
+                        xrstart
+                    );
                 }
-            } else {
-                exit_log!(
-                    fi.file_offset(xrefstm_loc),
-                    "/XRefStm points to an invalid or encrypted XRefStm at {}",
-                    xrstart
-                );
-            }
-        } else {
-            exit_log!(
+            },
+            Err(_) => exit_log!(
                 fi.file_offset(xrefstm_loc),
                 "/XRefStm specifies out-of-bounds offset {}",
                 xrstart
-            );
+            ),
         }
     }
     Some((xrefs, root, prev))
@@ -468,7 +468,14 @@ fn get_xref_info(
                 next,
             );
         }
-        pb.set_cursor(next);
+        if !pb.check_cursor(next) {
+            exit_log!(
+                fi.file_offset(next),
+                "Xref offset {} is out of bounds!",
+                next,
+            );
+        }
+        pb.set_cursor_unsafe(next);
         // Check for a conventional or hybrid xref section.
         let mut xinfo = parse_xref_section(fi, ctxt, pb);
         if xinfo.is_none() {
@@ -617,7 +624,14 @@ fn parse_objects(
                     fi.file_offset(ofs),
                     ofs
                 );
-                pb.set_cursor(ofs);
+                if !pb.check_cursor(ofs) {
+                    exit_log!(
+                        fi.file_offset(ofs),
+                        "object offset {} is out of bounds!",
+                        ofs,
+                    );
+                }
+                pb.set_cursor_unsafe(ofs);
                 let lobj = match p.parse(pb) {
                     Ok(o) => o,
                     Err(e) => {
@@ -681,7 +695,14 @@ fn parse_objects(
             fi.file_offset(ofs),
             ofs
         );
-        pb.set_cursor(ofs);
+        if !pb.check_cursor(ofs) {
+            exit_log!(
+                fi.file_offset(ofs),
+                "object offset {} is out of bounds!",
+                ofs,
+            );
+        }
+        pb.set_cursor_unsafe(ofs);
         let lobj = match p.parse(pb) {
             Ok(o) => o,
             Err(e) => exit_log!(
@@ -951,7 +972,7 @@ fn parse_file(test_file: &str) {
     // Todo: some sanity check of header.
 
     // From end of buffer, scan backwards for %EOF, if present.
-    pb.set_cursor(buflen);
+    pb.set_cursor_unsafe(buflen);
     let eof = pb.backward_scan(b"%%EOF");
     if let Err(e) = eof {
         ta3_log!(
@@ -1033,7 +1054,7 @@ fn parse_file(test_file: &str) {
             sxref_offset
         );
     }
-    pb.set_cursor(sxref_offset);
+    pb.set_cursor_unsafe(sxref_offset);
     let (xref_ents, root_ref) = get_xref_info(&fi, &mut ctxt, &mut pb);
     ta3_log!(
         Level::Info,

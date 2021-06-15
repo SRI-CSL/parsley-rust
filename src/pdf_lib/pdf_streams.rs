@@ -119,7 +119,7 @@ impl ObjStreamP<'_> {
             if !obj.val().is_usize() {
                 let msg = format!("invalid object id: {}", obj.val().int_val());
                 let err = ErrorKind::GuardError(msg);
-                buf.set_cursor(cursor);
+                buf.set_cursor_unsafe(cursor);
                 return Err(obj.place(err))
             }
             let obj = obj.val().usize_val();
@@ -131,7 +131,7 @@ impl ObjStreamP<'_> {
             if !ofs.val().is_usize() {
                 let msg = format!("invalid or unsupported offset: {}", ofs.val().int_val());
                 let err = ErrorKind::GuardError(msg);
-                buf.set_cursor(cursor);
+                buf.set_cursor_unsafe(cursor);
                 return Err(ofs.place(err))
             }
             // ensure that the offset is ordered.
@@ -142,7 +142,7 @@ impl ObjStreamP<'_> {
                     ofs_val, obj, last_ofs
                 );
                 let err = ErrorKind::GuardError(msg);
-                buf.set_cursor(cursor);
+                buf.set_cursor_unsafe(cursor);
                 return Err(ofs.place(err))
             }
 
@@ -229,7 +229,7 @@ impl ParsleyParser for ObjStreamP<'_> {
             }
         }
         if self.ctxt.is_encrypted() {
-            let msg = format!("Encrypted streams are currently unsupported");
+            let msg = "Encrypted streams are currently unsupported".to_string();
             let err = ErrorKind::GuardError(msg);
             return Err(self.stream.dict().place(err))
         }
@@ -510,7 +510,7 @@ impl XrefStreamP<'_> {
             }
             let peek = peek.unwrap();
             val = (val << 8) | usize::from(peek);
-            buf.incr_cursor();
+            buf.incr_cursor_unsafe();
         }
         Ok(val)
     }
@@ -601,7 +601,7 @@ impl ParsleyParser for XrefStreamP<'_> {
             }
         }
         if self.encrypted {
-            let msg = format!("Encrypted streams are currently unsupported");
+            let msg = "Encrypted streams are currently unsupported".to_string();
             let err = ErrorKind::GuardError(msg);
             return Err(self.stream.dict().place(err))
         }

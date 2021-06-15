@@ -17,7 +17,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 /// Primitives for handling binary data.
-use super::parsebuffer::{LocatedVal, ParseBufferT, ParseResult, ParsleyParser};
+use super::parsebuffer::{ErrorKind, LocatedVal, ParseBufferT, ParseResult, ParsleyParser};
 
 pub struct BinaryScanner {
     tag: Vec<u8>,
@@ -65,54 +65,190 @@ impl ParsleyParser for BinaryMatcher {
     }
 }
 
-/* Ideally, we would have a binary buffer that keeps a reference
-   with the lifetime of the parser.  The naive approach runs into
-   error E0207.
-
-   A workaround could be to use PhantomData such as something like below.
-   But this doesn't quite work, and variously crashes rustc!
-
-   For now, just do the inefficient thing and copy the data, until
-   we properly grok lifetimes and traits.
-
-pub struct BinaryBuffer {
-    len: usize,
-    phantom: PhantomData<&'a [u8]>
-}
-
-impl<'a> BinaryBuffer<'a> {
-    pub fn new(len: usize) -> BinaryBuffer<'a> {
-        BinaryBuffer { len, phantom: PhantomData }
-    }
-}
-
-impl<'a> ParsleyParser for BinaryBuffer<'a> {
-    type T<'a> = &'a [u8];
-
-    fn parse(&mut self, buf: &mut ParseBuffer) -> ParseResult<Self::T> {
-        buf.extract(self.len)
-    }
-}
-*/
-
-pub struct BinaryBuffer {
+pub struct ByteVecP {
     len: usize,
 }
-
-impl BinaryBuffer {
-    pub fn new(len: usize) -> BinaryBuffer { BinaryBuffer { len } }
+impl ByteVecP {
+    pub fn new(len: usize) -> Self { Self { len } }
 }
-
-impl ParsleyParser for BinaryBuffer {
+impl ParsleyParser for ByteVecP {
     type T = LocatedVal<Vec<u8>>;
 
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
-        let bytes = buf.extract(self.len)?;
-        let mut ret = Vec::new();
-        ret.extend_from_slice(bytes);
-        let end = buf.get_cursor();
-        Ok(LocatedVal::new(ret, start, end))
+        let vec = buf.extract(self.len)?;
+        Ok(LocatedVal::new(Vec::from(vec), start, buf.get_cursor()))
+    }
+}
+
+// Binary integers
+
+#[derive(Debug, Clone, Copy)]
+pub enum Endian {
+    Little,
+    Big,
+}
+
+pub struct UInt8P;
+impl ParsleyParser for UInt8P {
+    type T = LocatedVal<u8>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        match buf.peek() {
+            Some(b) => {
+                buf.incr_cursor_unsafe();
+                let end = buf.get_cursor();
+                Ok(LocatedVal::new(b, start, end))
+            },
+            None => Err(LocatedVal::new(ErrorKind::EndOfBuffer, start, start)),
+        }
+    }
+}
+
+pub struct UInt16P {
+    endian: Endian,
+}
+impl UInt16P {
+    pub fn new(endian: Endian) -> Self { Self { endian } }
+}
+impl ParsleyParser for UInt16P {
+    type T = LocatedVal<u16>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let mut p = UInt8P;
+        let v1 = p.parse(buf)?;
+        match p.parse(buf) {
+            Err(e) => {
+                buf.set_cursor_unsafe(start);
+                Err(e)
+            },
+            Ok(v2) => {
+                let v: u16 = match self.endian {
+                    Endian::Big => ((*v1.val() as u16) << 8) + (*v2.val() as u16),
+                    Endian::Little => ((*v2.val() as u16) << 8) + (*v1.val() as u16),
+                };
+                Ok(LocatedVal::new(v, start, buf.get_cursor()))
+            },
+        }
+    }
+}
+
+pub struct UInt32P {
+    endian: Endian,
+}
+impl UInt32P {
+    pub fn new(endian: Endian) -> Self { Self { endian } }
+}
+impl ParsleyParser for UInt32P {
+    type T = LocatedVal<u32>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let mut p = UInt16P::new(self.endian);
+        let v1 = p.parse(buf)?;
+        match p.parse(buf) {
+            Err(e) => {
+                buf.set_cursor_unsafe(start);
+                Err(e)
+            },
+            Ok(v2) => {
+                let v: u32 = match self.endian {
+                    Endian::Big => ((*v1.val() as u32) << 16) + (*v2.val() as u32),
+                    Endian::Little => ((*v2.val() as u32) << 16) + (*v1.val() as u32),
+                };
+                Ok(LocatedVal::new(v, start, buf.get_cursor()))
+            },
+        }
+    }
+}
+
+pub struct UInt64P {
+    endian: Endian,
+}
+impl UInt64P {
+    pub fn new(endian: Endian) -> Self { Self { endian } }
+}
+impl ParsleyParser for UInt64P {
+    type T = LocatedVal<u64>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let mut p = UInt32P::new(self.endian);
+        let v1 = p.parse(buf)?;
+        match p.parse(buf) {
+            Err(e) => {
+                buf.set_cursor_unsafe(start);
+                Err(e)
+            },
+            Ok(v2) => {
+                let v: u64 = match self.endian {
+                    Endian::Big => ((*v1.val() as u64) << 32) + (*v2.val() as u64),
+                    Endian::Little => ((*v2.val() as u64) << 32) + (*v1.val() as u64),
+                };
+                Ok(LocatedVal::new(v, start, buf.get_cursor()))
+            },
+        }
+    }
+}
+
+pub struct Int8P;
+impl ParsleyParser for Int8P {
+    type T = LocatedVal<i8>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let mut p = UInt8P;
+        let v = p.parse(buf)?;
+        Ok(v.place(*v.val() as i8))
+    }
+}
+
+pub struct Int16P {
+    endian: Endian,
+}
+impl Int16P {
+    pub fn new(endian: Endian) -> Self { Self { endian } }
+}
+impl ParsleyParser for Int16P {
+    type T = LocatedVal<i16>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let mut p = UInt16P::new(self.endian);
+        let v = p.parse(buf)?;
+        Ok(v.place(*v.val() as i16))
+    }
+}
+
+pub struct Int32P {
+    endian: Endian,
+}
+impl Int32P {
+    pub fn new(endian: Endian) -> Self { Self { endian } }
+}
+impl ParsleyParser for Int32P {
+    type T = LocatedVal<i32>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let mut p = UInt32P::new(self.endian);
+        let v = p.parse(buf)?;
+        Ok(v.place(*v.val() as i32))
+    }
+}
+
+pub struct Int64P {
+    endian: Endian,
+}
+impl Int64P {
+    pub fn new(endian: Endian) -> Self { Self { endian } }
+}
+impl ParsleyParser for Int64P {
+    type T = LocatedVal<i64>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let mut p = UInt64P::new(self.endian);
+        let v = p.parse(buf)?;
+        Ok(v.place(*v.val() as i64))
     }
 }
 
@@ -123,7 +259,8 @@ mod test_binary {
     use super::super::parsebuffer::{
         locate_value, ErrorKind, LocatedVal, ParseBuffer, ParseBufferT, ParsleyParser,
     };
-    use super::{BinaryBuffer, BinaryMatcher, BinaryScanner};
+    use super::{BinaryMatcher, BinaryScanner};
+    use super::{Endian, Int16P, Int32P, Int64P, Int8P, UInt16P, UInt32P, UInt64P, UInt8P};
 
     #[test]
     fn scan() {
@@ -167,17 +304,175 @@ mod test_binary {
     }
 
     #[test]
-    fn buffer() {
-        let mut s = BinaryBuffer::new(3);
-        let mut pb = ParseBuffer::new(Vec::from("".as_bytes()));
-        let e = locate_value(ErrorKind::EndOfBuffer, 0, 0);
-        assert_eq!(s.parse(&mut pb), Err(e));
+    fn uint8() {
+        let mut p = UInt8P;
+        let mut pb = ParseBuffer::new(vec![0, 127, 128, 255]);
 
-        let mut s = BinaryBuffer::new(3);
-        let mut pb = ParseBuffer::new(Vec::from("%PDF-".as_bytes()));
-        let v = s.parse(&mut pb).unwrap();
-        let r = Vec::from("%PD".as_bytes());
-        assert_eq!(*v.val(), r);
-        assert_eq!(pb.get_cursor(), 3);
+        let v = LocatedVal::new(0, 0, 1);
+        assert_eq!(p.parse(&mut pb), Ok(v));
+
+        let v = LocatedVal::new(127, 1, 2);
+        assert_eq!(p.parse(&mut pb), Ok(v));
+
+        let v = LocatedVal::new(128, 2, 3);
+        assert_eq!(p.parse(&mut pb), Ok(v));
+
+        let v = LocatedVal::new(255, 3, 4);
+        assert_eq!(p.parse(&mut pb), Ok(v));
+    }
+
+    #[test]
+    fn int8() {
+        let mut p = Int8P;
+        let mut pb = ParseBuffer::new(vec![0, 127, 128, 255]);
+
+        let v = LocatedVal::new(0, 0, 1);
+        assert_eq!(p.parse(&mut pb), Ok(v));
+        let v = LocatedVal::new(127, 1, 2);
+        assert_eq!(p.parse(&mut pb), Ok(v));
+        let v = LocatedVal::new(-128, 2, 3);
+        assert_eq!(p.parse(&mut pb), Ok(v));
+        let v = LocatedVal::new(-1, 3, 4);
+        assert_eq!(p.parse(&mut pb), Ok(v));
+    }
+
+    #[test]
+    fn uint16() {
+        let mut bp = UInt16P::new(Endian::Big);
+        let mut lp = UInt16P::new(Endian::Little);
+
+        let mut pb = ParseBuffer::new(vec![127, 0, 128, 255]);
+        let v = LocatedVal::new(127 * 256, 0, 2);
+        assert_eq!(bp.parse(&mut pb), Ok(v));
+        let v = LocatedVal::new(128 * 256 + 255, 2, 4);
+        assert_eq!(bp.parse(&mut pb), Ok(v));
+
+        let mut pb = ParseBuffer::new(vec![127, 0, 128, 255]);
+        let v = LocatedVal::new(127, 0, 2);
+        assert_eq!(lp.parse(&mut pb), Ok(v));
+        let v = LocatedVal::new(128 + 255 * 256, 2, 4);
+        assert_eq!(lp.parse(&mut pb), Ok(v));
+    }
+
+    #[test]
+    fn int16() {
+        let mut bp = Int16P::new(Endian::Big);
+        let mut lp = Int16P::new(Endian::Little);
+
+        let mut pb = ParseBuffer::new(vec![127, 0, 128, 255]);
+        let v = LocatedVal::new(127 * 256, 0, 2);
+        assert_eq!(bp.parse(&mut pb), Ok(v));
+        let v = LocatedVal::new((128 * 256 + 255) as i16, 2, 4);
+        assert_eq!(bp.parse(&mut pb), Ok(v));
+
+        let mut pb = ParseBuffer::new(vec![127, 0, 128, 255]);
+        let v = LocatedVal::new(127, 0, 2);
+        assert_eq!(lp.parse(&mut pb), Ok(v));
+        let v = LocatedVal::new((128 + 255 * 256) as i16, 2, 4);
+        assert_eq!(lp.parse(&mut pb), Ok(v));
+    }
+
+    #[test]
+    fn uint32() {
+        let mut bp = UInt32P::new(Endian::Big);
+        let mut lp = UInt32P::new(Endian::Little);
+
+        let mut pb = ParseBuffer::new(vec![127, 0, 128, 255, 128, 0, 0, 0, 255, 255, 255, 255]);
+        let v = LocatedVal::new((127 << 24) + (128 << 8) + 255, 0, 4);
+        assert_eq!(bp.parse(&mut pb), Ok(v));
+        let v = LocatedVal::new(128 << 24, 5, 8);
+        assert_eq!(bp.parse(&mut pb), Ok(v));
+        let v = LocatedVal::new(u32::MAX, 9, 12);
+        assert_eq!(bp.parse(&mut pb), Ok(v));
+
+        let mut pb = ParseBuffer::new(vec![127, 0, 128, 255, 128, 0, 0, 0, 255, 255, 255, 255]);
+        let v = LocatedVal::new((255 << 24) + (128 << 16) + 127, 0, 4);
+        assert_eq!(lp.parse(&mut pb), Ok(v));
+        let v = LocatedVal::new(128, 5, 8);
+        assert_eq!(lp.parse(&mut pb), Ok(v));
+        let v = LocatedVal::new(u32::MAX, 9, 12);
+        assert_eq!(lp.parse(&mut pb), Ok(v));
+    }
+
+    #[test]
+    fn int32() {
+        let mut bp = Int32P::new(Endian::Big);
+        let mut lp = Int32P::new(Endian::Little);
+
+        let mut pb = ParseBuffer::new(vec![127, 0, 128, 255, 128, 0, 0, 0, 255, 255, 255, 255]);
+        let v = LocatedVal::new((127 << 24) + (128 << 8) + 255, 0, 4);
+        assert_eq!(bp.parse(&mut pb), Ok(v));
+        let v = LocatedVal::new((128 << 24) as i32, 5, 8);
+        assert_eq!(bp.parse(&mut pb), Ok(v));
+        let v = LocatedVal::new(-1, 9, 12);
+        assert_eq!(bp.parse(&mut pb), Ok(v));
+
+        let mut pb = ParseBuffer::new(vec![127, 0, 128, 255, 128, 0, 0, 0, 255, 255, 255, 255]);
+        let v = LocatedVal::new((255 << 24) + (128 << 16) + 127, 0, 4);
+        assert_eq!(lp.parse(&mut pb), Ok(v));
+        let v = LocatedVal::new(128, 5, 8);
+        assert_eq!(lp.parse(&mut pb), Ok(v));
+        let v = LocatedVal::new(-1, 9, 12);
+        assert_eq!(lp.parse(&mut pb), Ok(v));
+    }
+
+    #[test]
+    fn uint64() {
+        let mut bp = UInt64P::new(Endian::Big);
+        let mut lp = UInt64P::new(Endian::Little);
+
+        let mut pb = ParseBuffer::new(vec![
+            127, 0, 0, 0, 0, 0, 0, 255, 128, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 255, 255,
+            255, 255,
+        ]);
+        let v = ((127 as u64) << 56) + 255;
+        let v = LocatedVal::new(v, 0, 8);
+        assert_eq!(bp.parse(&mut pb), Ok(v));
+        let v = LocatedVal::new(128 << 56, 9, 16);
+        assert_eq!(bp.parse(&mut pb), Ok(v));
+        let v = LocatedVal::new(u64::MAX, 17, 24);
+        assert_eq!(bp.parse(&mut pb), Ok(v));
+
+        let mut pb = ParseBuffer::new(vec![
+            127, 0, 0, 0, 0, 0, 0, 255, 128, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 255, 255,
+            255, 255,
+        ]);
+        let v = 127 + ((255 as u64) << 56);
+        let v = LocatedVal::new(v, 0, 8);
+        assert_eq!(lp.parse(&mut pb), Ok(v));
+        let v = LocatedVal::new(128, 9, 16);
+        assert_eq!(lp.parse(&mut pb), Ok(v));
+        let v = LocatedVal::new(u64::MAX, 17, 24);
+        assert_eq!(lp.parse(&mut pb), Ok(v));
+    }
+
+    #[test]
+    fn int64() {
+        let mut bp = Int64P::new(Endian::Big);
+        let mut lp = Int64P::new(Endian::Little);
+
+        let mut pb = ParseBuffer::new(vec![
+            127, 0, 0, 0, 0, 0, 0, 255, 128, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 255, 255,
+            255, 255,
+        ]);
+        let v = ((127 as i64) << 56) + 255;
+        let v = LocatedVal::new(v, 0, 8);
+        assert_eq!(bp.parse(&mut pb), Ok(v));
+        let v = LocatedVal::new(((128 as u64) << 56) as i64, 9, 16);
+        assert_eq!(bp.parse(&mut pb), Ok(v));
+        let v = LocatedVal::new(-1, 17, 24);
+        assert_eq!(bp.parse(&mut pb), Ok(v));
+
+        let mut pb = ParseBuffer::new(vec![
+            127, 0, 0, 0, 0, 0, 0, 255, 128, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 255, 255,
+            255, 255,
+        ]);
+        let v = 127 + ((255 as i64) << 56);
+        let v = LocatedVal::new(v, 0, 8);
+        assert_eq!(lp.parse(&mut pb), Ok(v));
+        let v = LocatedVal::new(128 as i64, 9, 16);
+        assert_eq!(lp.parse(&mut pb), Ok(v));
+        let v = LocatedVal::new(-1, 17, 24);
+        assert_eq!(lp.parse(&mut pb), Ok(v));
     }
 }
