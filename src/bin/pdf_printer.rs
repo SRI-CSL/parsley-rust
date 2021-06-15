@@ -119,7 +119,12 @@ fn parse_xref_stream(
     let mut sp = IndirectP::new(ctxt);
     let xref_obj_loc = pb.get_cursor();
 
-    ta3_log!(Level::Info, fi.file_offset(0), "xrefobj loc {:?}", xref_obj_loc);
+    ta3_log!(
+        Level::Info,
+        fi.file_offset(0),
+        "xrefobj loc {:?}",
+        xref_obj_loc
+    );
     let xref_obj = sp.parse(pb);
     if let Err(e) = xref_obj {
         ta3_log!(
@@ -182,30 +187,23 @@ fn parse_xref_stream(
     Some((xrefs, root, prev))
 }
 
-
-fn find_xref_ent(
-    xrefs: &Vec<LocatedVal<XrefEntT>>,
-    obj_id: usize)
-    -> Option<XrefEntT> {
+fn find_xref_ent(xrefs: &Vec<LocatedVal<XrefEntT>>, obj_id: usize) -> Option<XrefEntT> {
     let mut iter = xrefs.iter();
 
     match iter.find(|&&x| x.val().obj() == obj_id) {
         Some(x) => Some(*x.val()),
-        None => None
+        None => None,
     }
 }
 
-/* In the xref section there is a /Encrypt object that needs to be parsed first before the
- * XrefStream can be read. This function reads the trialer for the /Encrypt key, finds that object
- * in the xref section and parses it.
+/* In the xref section there is a /Encrypt object that needs to be parsed
+ * first before the XrefStream can be read. This function reads the trialer
+ * for the /Encrypt key, finds that object in the xref section and parses it.
  */
 fn parse_enc_obj(
-    fi: &FileInfo,
-    ctxt: &mut PDFObjContext,
-    pb: &mut dyn ParseBufferT,
-    enc_obj: &LocatedVal<PDFObjT>,
-    xrefs: &Vec<LocatedVal<XrefEntT>>)
-    -> IndirectT {
+    fi: &FileInfo, ctxt: &mut PDFObjContext, pb: &mut dyn ParseBufferT,
+    enc_obj: &LocatedVal<PDFObjT>, xrefs: &Vec<LocatedVal<XrefEntT>>,
+) -> IndirectT {
     let c = pb.get_cursor();
     ta3_log!(Level::Info, fi.file_offset(c), "xrefsection: {:#?}", xrefs);
     if let PDFObjT::Reference(a) = enc_obj.val() {
@@ -220,35 +218,38 @@ fn parse_enc_obj(
                             exit_log!(
                                 fi.file_offset(c),
                                 "Cannot parse Encrypt object. error: {:?}",
-                                e);
+                                e
+                            );
                         },
                     };
                     let io = lobj.unwrap();
                     println!("lobj unwarp: {:?}", io);
-                    return io;
+                    return io
                 } else {
                     exit_log!(
                         fi.file_offset(c),
-                        "Offset of the encrypt object is invalid.");
+                        "Offset of the encrypt object is invalid."
+                    );
                 }
             } else {
-                exit_log!(
-                    fi.file_offset(c),
-                    "Encrypt object ofs not found.");
+                exit_log!(fi.file_offset(c), "Encrypt object ofs not found.");
             }
         } else {
             exit_log!(
                 fi.file_offset(c),
-                "Encrypt object entry not found in the xrefsection table.");
+                "Encrypt object entry not found in the xrefsection table."
+            );
         }
     } else {
         exit_log!(
             fi.file_offset(c),
-            "Encrypt key value in trailer dict is not of type Reference.");
+            "Encrypt key value in trailer dict is not of type Reference."
+        );
     }
 
-    // ta3_log!(Level::Info, fi.file_offset(c), "Parsing the encryption object.. number: {:?}", enc_obj_num);
-    // let enc_parse = parse_enc_dict(fi, ctxt, pb);
+    // ta3_log!(Level::Info, fi.file_offset(c), "Parsing the encryption object..
+    // number: {:?}", enc_obj_num); let enc_parse = parse_enc_dict(fi, ctxt,
+    // pb);
 }
 
 // Parses a single xref section.  This section could be (a) an xref
@@ -328,15 +329,18 @@ fn parse_xref_section(
         let c = pb.get_cursor();
         let enc_obj = t.val().dict().get(b"Encrypt").unwrap();
 
-        ta3_log!(Level::Info, fi.file_offset(c),
+        ta3_log!(
+            Level::Info,
+            fi.file_offset(c),
             "Found encryption object in trailer: {:?}",
-            t.val().dict().get(b"Encrypt").unwrap());
+            t.val().dict().get(b"Encrypt").unwrap()
+        );
 
         ta3_log!(Level::Info, fi.file_offset(c), " trailer: {:#?}", t.val());
 
         let enc_obj = parse_enc_obj(fi, ctxt, pb, &enc_obj, &xrefs);
 
-        let enc_v : i64;
+        let enc_v: i64;
 
         if let PDFObjT::Dict(d) = enc_obj.obj().val() {
             if let Some(fk) = d.get(b"Filter") {
@@ -344,27 +348,34 @@ fn parse_xref_section(
                     if enc_dict_nme.as_string() == "Standard" {
                         //
                     } else {
-                        exit_log!(fi.file_offset(c),
+                        exit_log!(
+                            fi.file_offset(c),
                             "Encryption filter type {} unsupported!",
-                            enc_dict_nme.as_string());
+                            enc_dict_nme.as_string()
+                        );
                     }
                 } else {
-                    exit_log!(fi.file_offset(c),
-                        "Erroneous type of /Filter key value in encryption dict object.");
+                    exit_log!(
+                        fi.file_offset(c),
+                        "Erroneous type of /Filter key value in encryption dict object."
+                    );
                 }
             } else {
-                exit_log!(fi.file_offset(c),
-                    "The filter key is missing in the encryption dictionary.");
+                exit_log!(
+                    fi.file_offset(c),
+                    "The filter key is missing in the encryption dictionary."
+                );
             }
 
             if let Some(lk) = d.get(b"Length") {
                 if let PDFObjT::Integer(enc_dict_length) = lk.val() {
                     println!("length: {:?}", enc_dict_length.int_val());
-
                 }
             } else {
-                exit_log!(fi.file_offset(c),
-                    "The length key is missing in the encryption dictionary.");
+                exit_log!(
+                    fi.file_offset(c),
+                    "The length key is missing in the encryption dictionary."
+                );
             }
 
             if let Some(v_intt) = d.get(b"V") {
@@ -380,12 +391,16 @@ fn parse_xref_section(
                     }
                 }
             } else {
-                exit_log!(fi.file_offset(c),
-                    "The V key is missing in the encryption dictionary.");
+                exit_log!(
+                    fi.file_offset(c),
+                    "The V key is missing in the encryption dictionary."
+                );
             }
         } else {
-            exit_log!(fi.file_offset(c),
-                "The Encryption object is not a dictionary.");
+            exit_log!(
+                fi.file_offset(c),
+                "The Encryption object is not a dictionary."
+            );
         }
     }
 
