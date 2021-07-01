@@ -29,7 +29,7 @@ env_logger = "0.7.1"
 log-panics = "2.0.0"
 flate2 = { version = "1.0.17", features = ["zlib"], default-features = false }
 lzw = "0.10.0"
-jpeg-decoder = "0.1"
+jpeg-decoder = { git = "https://github.com/Shnatsel/jpeg-decoder", branch="rayonless"}
 regex = "1"
 ascii85 = "0.2.1"
 binascii = "0.1.4"
