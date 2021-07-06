@@ -47,11 +47,15 @@ use parsley_rust::pcore::parsebuffer::{
 use parsley_rust::pcore::transforms::{BufferTransformT, RestrictView};
 use parsley_rust::pdf_lib::catalog::catalog_type;
 use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, TrailerP, XrefSectP};
-use parsley_rust::pdf_lib::pdf_obj::{IndirectP, PDFObjContext, PDFObjT};
+use parsley_rust::pdf_lib::pdf_obj::{
+    IndirectP, IndirectT, PDFObjContext, PDFObjT, StreamT
+};
 use parsley_rust::pdf_lib::pdf_streams::{
     decode_stream, ObjStreamP, XrefEntStatus, XrefEntT, XrefStreamP,
 };
 use parsley_rust::pdf_lib::pdf_type_check::{check_type, TypeCheckContext};
+
+use parsley_rust::pdf_lib::pdf_encryption::{decrypt_stream};
 
 /* from: https://osr.jpl.nasa.gov/wiki/pages/viewpage.action?spaceKey=SD&title=TA2+PDF+Safe+Parser+Evaluation
 
@@ -118,6 +122,8 @@ fn parse_xref_stream(
 
     let mut sp = IndirectP::new(ctxt);
     let xref_obj_loc = pb.get_cursor();
+
+    ta3_log!(Level::Info, fi.file_offset(0), "xrefobj loc {:?}", xref_obj_loc);
     let xref_obj = sp.parse(pb);
     if let Err(e) = xref_obj {
         ta3_log!(
@@ -140,6 +146,11 @@ fn parse_xref_stream(
             xref_obj.val().num(),
             xref_obj.val().gen()
         );
+
+        if ctxt.is_encrypted() {
+            // decrypt the stream
+            decrypt_stream(ctxt, s)
+        }
 
         let content = s.stream().val();
         let mut xref_buf = ParseBuffer::new_view(pb, content.start(), content.size());
@@ -179,6 +190,76 @@ fn parse_xref_stream(
     }
     Some((xrefs, root, prev))
 }
+
+/** ENCRYPTION FUNCTIONS
+ */
+// Returns the obj with obj_id in xrefs if it exists as Some(XrefEntT) else None.
+// It is a helper function for parse_enc_obj.
+fn find_xref_ent(
+    xrefs: &Vec<LocatedVal<XrefEntT>>,
+    obj_id: usize)
+    -> Option<XrefEntT> {
+    let mut iter = xrefs.iter();
+
+    match iter.find(|&&x| x.val().obj() == obj_id) {
+        Some(x) => Some(*x.val()),
+        None => None
+    }
+}
+
+/* In the xref section there is a /Encrypt object that needs to be parsed first before the
+ * XrefStream can be read. This function reads the trialer for the /Encrypt key, finds that object
+ * in the xref section and parses it.
+ */
+fn parse_enc_obj(
+    fi: &FileInfo,
+    ctxt: &mut PDFObjContext,
+    pb: &mut dyn ParseBufferT,
+    enc_obj: &LocatedVal<PDFObjT>,
+    xrefs: &Vec<LocatedVal<XrefEntT>>)
+    -> IndirectT {
+    let c = pb.get_cursor();
+    ta3_log!(Level::Info, fi.file_offset(c), "xrefsection: {:#?}", xrefs);
+    if let PDFObjT::Reference(a) = enc_obj.val() {
+        if let Some(xrefent) = find_xref_ent(xrefs, a.num()) {
+            if let XrefEntStatus::InUse { file_ofs } = xrefent.status() {
+                if pb.check_cursor(*file_ofs) {
+                    pb.set_cursor(*file_ofs);
+                    let mut p = IndirectP::new(ctxt);
+                    let lobj = match p.parse(pb) {
+                        Ok(o) => o,
+                        Err(e) => {
+                            exit_log!(
+                                fi.file_offset(c),
+                                "Cannot parse Encrypt object. error: {:?}",
+                                e);
+                        },
+                    };
+                    let io = lobj.unwrap();
+                    println!("lobj unwarp: {:?}", io);
+                    return io;
+                } else {
+                    exit_log!(
+                        fi.file_offset(c),
+                        "Offset of the encrypt object is invalid.");
+                }
+            } else {
+                exit_log!(
+                    fi.file_offset(c),
+                    "Encrypt object ofs not found.");
+            }
+        } else {
+            exit_log!(
+                fi.file_offset(c),
+                "Encrypt object entry not found in the xrefsection table.");
+        }
+    } else {
+        exit_log!(
+            fi.file_offset(c),
+            "Encrypt key value in trailer dict is not of type Reference.");
+    }
+}
+/** ENCRYPTION FUNCTION END */
 
 // Parses a single xref section.  This section could be (a) an xref
 // table with trailer, (b) an xref stream, or (c) a hybrid-reference,
@@ -250,9 +331,74 @@ fn parse_xref_section(
         Some(rt) => Some(Rc::clone(rt)),
         None => None,
     };
+
     // check for encryption
     if t.val().dict().get(b"Encrypt").is_some() {
         ctxt.set_encrypted();
+        let c = pb.get_cursor();
+        let enc_obj = t.val().dict().get(b"Encrypt").unwrap();
+
+        ta3_log!(Level::Info, fi.file_offset(c),
+            "Found encryption object in trailer: {:?}",
+            t.val().dict().get(b"Encrypt").unwrap());
+
+        ta3_log!(Level::Info, fi.file_offset(c), " trailer: {:#?}", t.val());
+
+        let enc_obj = parse_enc_obj(fi, ctxt, pb, &enc_obj, &xrefs);
+
+        // TODO: put in context
+        let enc_v : i64;
+        let enc_len : i64;
+
+        if let PDFObjT::Dict(d) = enc_obj.obj().val() {
+            if let Some(fk) = d.get(b"Filter") {
+                if let PDFObjT::Name(enc_dict_nme) = fk.val() {
+                    if enc_dict_nme.as_string() == "Standard" {
+                        println!("Encryption algorithm is standard.");
+                    } else {
+                        exit_log!(fi.file_offset(c),
+                            "Encryption filter type {} unsupported!",
+                            enc_dict_nme.as_string());
+                    }
+                } else {
+                    exit_log!(fi.file_offset(c),
+                        "Erroneous type of /Filter key value in encryption dict object.");
+                }
+            } else {
+                exit_log!(fi.file_offset(c),
+                    "The filter key is missing in the encryption dictionary.");
+            }
+
+            if let Some(lk) = d.get(b"Length") {
+                if let PDFObjT::Integer(enc_dict_length) = lk.val() {
+                    println!("Encryption length: {:?}", enc_dict_length.int_val());
+                    enc_len = enc_dict_length.int_val();
+                }
+            } else {
+                exit_log!(fi.file_offset(c),
+                    "The length key is missing in the encryption dictionary.");
+            }
+
+            if let Some(v_intt) = d.get(b"V") {
+                if let PDFObjT::Integer(v) = v_intt.val() {
+                    println!("V is: {:?}", v.int_val());
+                    match v.int_val() {
+                        0 => exit_log!(fi.file_offset(c),
+                        "The V key in the encryption dictionary has invalid undocumented algo value 0."),
+                        2 => (),
+                        1 | 3..=5 => enc_v = v.int_val(),
+                        _ => exit_log!(fi.file_offset(c),
+                        "The file has value of V in ecnryption dict either 1 or between 3 .. 5"),
+                    }
+                }
+            } else {
+                exit_log!(fi.file_offset(c),
+                    "The V key is missing in the encryption dictionary.");
+            }
+        } else {
+            exit_log!(fi.file_offset(c),
+                "The Encryption object is not a dictionary.");
+        }
     }
 
     // Section 7.5.8.4: check for XRefStm in hybrid-reference
@@ -260,6 +406,8 @@ fn parse_xref_section(
     // versions < PDF-1.5.
     let xrefstm = t.val().dict().get_usize(b"XRefStm");
     let xrefstm_loc = t.start();
+
+    ta3_log!(Level::Info, fi.file_offset(0), "xrefstm: {:?}", xrefstm);
     if let Some(xrstart) = xrefstm {
         ta3_log!(
             Level::Info,
@@ -713,16 +861,21 @@ fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFOb
                         processed.insert(Rc::clone(v));
                     }
                 }
-                if !ctxt.is_encrypted() {
-                    match decode_stream(s) {
-                        Ok(_) => (),
-                        Err(e) => ta3_log!(
-                            Level::Warn,
-                            fi.file_offset(o.start()),
-                            " error decoding stream: {:?}",
-                            e
-                        ),
-                    }
+
+                if ctxt.is_encrypted() {
+                    // decrypt stream inplace
+                    ta3_log!(Level::Info, fi.file_offset(o.start()), "stream is encrypted. Decrypting now..");
+                    decrypt_stream(ctxt, s);
+                }
+
+                match decode_stream(s) {
+                    Ok(_) => (),
+                    Err(e) => ta3_log!(
+                        Level::Warn,
+                        fi.file_offset(o.start()),
+                        " error decoding stream: {:?}",
+                        e
+                    ),
                 }
             },
             PDFObjT::Reference(r) => {

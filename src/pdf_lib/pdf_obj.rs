@@ -29,6 +29,8 @@ use super::pdf_prim::{
     RealT, StreamContentP, StreamContentT, WhitespaceEOL,
 };
 
+use crate::pdf_lib::pdf_encryption::PDFEncryptionDict;
+
 // Object locations in the PDF file.  This will need to become
 // hierarchical to handle nested object streams.
 
@@ -50,6 +52,7 @@ pub struct PDFObjContext {
     defns:                    BTreeMap<(usize, usize), Rc<LocatedVal<PDFObjT>>>,
     // whether the document is encrypted
     encrypted:                bool,
+    encryption_dict:          Option<PDFEncryptionDict>,
     // Tracks the recursion depth.
     max_depth:                usize,
     cur_depth:                usize,
@@ -62,6 +65,7 @@ impl PDFObjContext {
         PDFObjContext {
             defns: BTreeMap::new(),
             encrypted: false,
+            encryption_dict: None,
             max_depth,
             cur_depth: 0,
             eol_after_stream_content: false, // not strict
