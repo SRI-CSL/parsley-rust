@@ -28,3 +28,4 @@ pub mod pdf_obj;
 pub mod pdf_prim;
 pub mod pdf_streams;
 pub mod pdf_type_check;
+pub mod pdf_encryption;

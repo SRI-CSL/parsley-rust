@@ -47,11 +47,15 @@ use parsley_rust::pcore::parsebuffer::{
 use parsley_rust::pcore::transforms::{BufferTransformT, RestrictView};
 use parsley_rust::pdf_lib::catalog::catalog_type;
 use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, TrailerP, XrefSectP};
-use parsley_rust::pdf_lib::pdf_obj::{IndirectP, IndirectT, PDFObjContext, PDFObjT};
+use parsley_rust::pdf_lib::pdf_obj::{
+    IndirectP, IndirectT, PDFObjContext, PDFObjT, StreamT
+};
 use parsley_rust::pdf_lib::pdf_streams::{
     decode_stream, ObjStreamP, XrefEntStatus, XrefEntT, XrefStreamP,
 };
 use parsley_rust::pdf_lib::pdf_type_check::{check_type, TypeCheckContext};
+
+use parsley_rust::pdf_lib::pdf_encryption::{decrypt_stream};
 
 /* from: https://osr.jpl.nasa.gov/wiki/pages/viewpage.action?spaceKey=SD&title=TA2+PDF+Safe+Parser+Evaluation
 
@@ -143,6 +147,11 @@ fn parse_xref_stream(
             xref_obj.val().gen()
         );
 
+        if ctxt.is_encrypted() {
+            // decrypt the stream
+            decrypt_stream(ctxt, s)
+        }
+
         let content = s.stream().val();
         let mut xref_buf = ParseBuffer::new_view(pb, content.start(), content.size());
         let mut xp = XrefStreamP::new(ctxt.is_encrypted(), s);
@@ -182,7 +191,10 @@ fn parse_xref_stream(
     Some((xrefs, root, prev))
 }
 
-
+/** ENCRYPTION FUNCTIONS
+ */
+// Returns the obj with obj_id in xrefs if it exists as Some(XrefEntT) else None.
+// It is a helper function for parse_enc_obj.
 fn find_xref_ent(
     xrefs: &Vec<LocatedVal<XrefEntT>>,
     obj_id: usize)
@@ -246,10 +258,8 @@ fn parse_enc_obj(
             fi.file_offset(c),
             "Encrypt key value in trailer dict is not of type Reference.");
     }
-
-    // ta3_log!(Level::Info, fi.file_offset(c), "Parsing the encryption object.. number: {:?}", enc_obj_num);
-    // let enc_parse = parse_enc_dict(fi, ctxt, pb);
 }
+/** ENCRYPTION FUNCTION END */
 
 // Parses a single xref section.  This section could be (a) an xref
 // table with trailer, (b) an xref stream, or (c) a hybrid-reference,
@@ -336,13 +346,15 @@ fn parse_xref_section(
 
         let enc_obj = parse_enc_obj(fi, ctxt, pb, &enc_obj, &xrefs);
 
+        // TODO: put in context
         let enc_v : i64;
+        let enc_len : i64;
 
         if let PDFObjT::Dict(d) = enc_obj.obj().val() {
             if let Some(fk) = d.get(b"Filter") {
                 if let PDFObjT::Name(enc_dict_nme) = fk.val() {
                     if enc_dict_nme.as_string() == "Standard" {
-                        //
+                        println!("Encryption algorithm is standard.");
                     } else {
                         exit_log!(fi.file_offset(c),
                             "Encryption filter type {} unsupported!",
@@ -359,8 +371,8 @@ fn parse_xref_section(
 
             if let Some(lk) = d.get(b"Length") {
                 if let PDFObjT::Integer(enc_dict_length) = lk.val() {
-                    println!("length: {:?}", enc_dict_length.int_val());
-
+                    println!("Encryption length: {:?}", enc_dict_length.int_val());
+                    enc_len = enc_dict_length.int_val();
                 }
             } else {
                 exit_log!(fi.file_offset(c),
@@ -376,7 +388,7 @@ fn parse_xref_section(
                         2 => (),
                         1 | 3..=5 => enc_v = v.int_val(),
                         _ => exit_log!(fi.file_offset(c),
-                        "The file"),
+                        "The file has value of V in ecnryption dict either 1 or between 3 .. 5"),
                     }
                 }
             } else {
@@ -828,16 +840,21 @@ fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFOb
                         processed.insert(Rc::clone(v));
                     }
                 }
-                if !ctxt.is_encrypted() {
-                    match decode_stream(s) {
-                        Ok(_) => (),
-                        Err(e) => ta3_log!(
-                            Level::Warn,
-                            fi.file_offset(o.start()),
-                            " error decoding stream: {:?}",
-                            e
-                        ),
-                    }
+
+                if ctxt.is_encrypted() {
+                    // decrypt stream inplace
+                    ta3_log!(Level::Info, fi.file_offset(o.start()), "stream is encrypted. Decrypting now..");
+                    decrypt_stream(ctxt, s);
+                }
+
+                match decode_stream(s) {
+                    Ok(_) => (),
+                    Err(e) => ta3_log!(
+                        Level::Warn,
+                        fi.file_offset(o.start()),
+                        " error decoding stream: {:?}",
+                        e
+                    ),
                 }
             },
             PDFObjT::Reference(r) => {
