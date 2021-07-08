@@ -21,6 +21,7 @@ use flate2::write::ZlibDecoder;
 use lzw::{Decoder, DecoderEarlyChange, LsbReader};
 use std::io::Write;
 use std::num::Wrapping;
+use std::panic;
 
 use super::super::pcore::parsebuffer::{
     locate_value, ErrorKind, Location, ParseBuffer, ParseBufferT,
@@ -485,11 +486,26 @@ impl BufferTransformT for ASCII85Decode<'_> {
                 c => stage.push(*c as char),
             }
         }
-        match ascii85::decode(&stage) {
+
+        let prev_hook = panic::take_hook();
+
+        panic::set_hook(Box::new(|_info| {}));
+
+        let result = panic::catch_unwind(|| match ascii85::decode(&stage) {
             Ok(res) => Ok(ParseBuffer::new(res)),
             Err(e) => {
                 let err =
                     ErrorKind::TransformError(format!("ASCII85Decode: error decoding: {:?}", e));
+                Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+            },
+        });
+        panic::set_hook(prev_hook);
+        match result {
+            Ok(res) => res,
+            Err(e) => {
+                let err = ErrorKind::TransformError(format!(
+                    "Integer overflow error in the JPEG decoder library"
+                ));
                 Err(locate_value(err, loc.loc_start(), loc.loc_end()))
             },
         }
