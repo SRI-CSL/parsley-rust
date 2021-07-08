@@ -27,4 +27,5 @@ pub mod pdf_filters;
 pub mod pdf_obj;
 pub mod pdf_prim;
 pub mod pdf_streams;
+pub mod pdf_traverse_xref;
 pub mod pdf_type_check;
