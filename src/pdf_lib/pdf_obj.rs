@@ -47,7 +47,7 @@ impl Location for PDFLocation {
 
 pub struct PDFObjContext {
     // Maps object identifiers to their objects.
-    defns:                    BTreeMap<(usize, usize), Rc<LocatedVal<PDFObjT>>>,
+    defns:                    BTreeMap<ObjectId, Rc<LocatedVal<PDFObjT>>>,
     // whether the document is encrypted
     encrypted:                bool,
     // Tracks the recursion depth.
@@ -56,6 +56,8 @@ pub struct PDFObjContext {
     // customized strictness
     eol_after_stream_content: bool,
 }
+
+pub type ObjectId = (usize, usize);
 
 impl PDFObjContext {
     pub fn new(max_depth: usize) -> PDFObjContext {
@@ -71,7 +73,7 @@ impl PDFObjContext {
         self.defns
             .insert((p.val().num(), p.val().gen()), Rc::clone(p.val().obj()))
     }
-    pub fn lookup_obj(&self, oid: (usize, usize)) -> Option<&Rc<LocatedVal<PDFObjT>>> {
+    pub fn lookup_obj(&self, oid: ObjectId) -> Option<&Rc<LocatedVal<PDFObjT>>> {
         self.defns.get(&oid)
     }
     pub fn set_encrypted(&mut self) { self.encrypted = true; }
@@ -207,6 +209,13 @@ impl DictT {
     pub fn get_dict(&self, k: &[u8]) -> Option<&DictT> {
         self.get(k).and_then(|lobj| match lobj.val() {
             PDFObjT::Dict(d) => Some(d),
+            _ => None,
+        })
+    }
+    // get an indirect reference value of a key
+    pub fn get_ref(&self, k: &[u8]) -> Option<ReferenceT> {
+        self.get(k).and_then(|lobj| match lobj.val() {
+            PDFObjT::Reference(r) => Some(*r),
             _ => None,
         })
     }
@@ -370,7 +379,7 @@ impl ReferenceT {
     pub fn new(num: usize, gen: usize) -> ReferenceT { ReferenceT { num, gen } }
     pub fn num(&self) -> usize { self.num }
     pub fn gen(&self) -> usize { self.gen }
-    pub fn id(&self) -> (usize, usize) { (self.num, self.gen) }
+    pub fn id(&self) -> ObjectId { (self.num, self.gen) }
 }
 
 struct ReferenceP;
