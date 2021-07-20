@@ -301,8 +301,10 @@ impl Predicate for DateStringPredicate {
          *  (D:YYYYMMDDHHmmSSOHH'mm)
          */
         if let PDFObjT::String(ref s) = obj.val() {
-            // regex for Date
-            let re = regex::Regex::new(r"^D:\d{4}(([0][1-9]|[1][0-2])(([0][1-9]|[1-2][0-9]|[3][0-1])(([0-1][0-9]|[2][0-3])(([0-5][0-9])(([0-5][0-9])([+\-Z](([0-1][0-9]'|[2][0-3]')([0-5][0-9])?)?)?)?)?)?)?)?$").unwrap();
+            // official regex for Date
+            let _re = regex::Regex::new(r"^D:\d{4}(([0][1-9]|[1][0-2])(([0][1-9]|[1-2][0-9]|[3][0-1])(([0-1][0-9]|[2][0-3])(([0-5][0-9])(([0-5][0-9])([+\-Z](([0-1][0-9]'|[2][0-3]')([0-5][0-9])?)?)?)?)?)?)?)?$").unwrap();
+            // relaxed regex that allows a trailing ' at the end.
+            let re = regex::Regex::new(r"^D:\d{4}(([0][1-9]|[1][0-2])(([0][1-9]|[1-2][0-9]|[3][0-1])(([0-1][0-9]|[2][0-3])(([0-5][0-9])(([0-5][0-9])([+\-Z](([0-1][0-9]'|[2][0-3]')([0-5][0-9](')?)?)?)?)?)?)?)?)?$").unwrap();
             let date_string = std::str::from_utf8(s).unwrap_or("");
             if !re.is_match(date_string) {
                 return Some(obj.place(TypeCheckError::PredicateError(
