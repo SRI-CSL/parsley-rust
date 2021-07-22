@@ -278,6 +278,9 @@ pub struct StreamT {
     dict:   Rc<LocatedVal<DictT>>,
     stream: LocatedVal<StreamContentT>,
 }
+impl StreamT {
+    pub fn content(&self) -> &[u8] { &self.stream.val().content() }
+}
 
 pub struct Filter<'a> {
     name:    NameT,
