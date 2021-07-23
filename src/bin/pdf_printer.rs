@@ -40,6 +40,7 @@ use serde_json::Value;
 use parsley_rust::pcore::parsebuffer::{LocatedVal, Location};
 use parsley_rust::pdf_lib::catalog::catalog_type;
 use parsley_rust::pdf_lib::pdf_obj::{PDFObjContext, PDFObjT};
+use parsley_rust::pdf_lib::pdf_page_dom::{to_page_dom, PageKid};
 use parsley_rust::pdf_lib::pdf_streams::decode_stream;
 use parsley_rust::pdf_lib::pdf_traverse_xref::{parse_file, FileInfo};
 use parsley_rust::pdf_lib::pdf_type_check::{check_type, TypeCheckContext};
@@ -195,6 +196,54 @@ fn dump_file(test_file: &str) {
             "Type Check Error: {:?}",
             err.val()
         );
+    }
+    let page_dom = match to_page_dom(&ctxt, &root_obj) {
+        Ok((_cat, dom)) => {
+            println!("Page DOM built with {} page nodes.", dom.pages().len());
+            dom
+        },
+        Err(e) => exit_log!(e.loc_start(), "Page DOM error: {:?}", e.val()),
+    };
+    let mut page_contents = Vec::new();
+    for (pid, p) in page_dom.pages().iter() {
+        match p {
+            PageKid::Leaf(l) => {
+                println!(
+                    " page {:?} with {} content streams",
+                    pid,
+                    l.contents().len()
+                );
+                for c in l.contents() {
+                    match c.val() {
+                        PDFObjT::Stream(s) => match decode_stream(s) {
+                            Ok(cs) => {
+                                print!("Collecting decoded content from page {:?}: ", pid);
+                                let cont = cs.stream().val().content();
+                                match std::str::from_utf8(cont) {
+                                    Ok(v) => println!("{}", v),
+                                    Err(_) => println!("not UTF8"),
+                                };
+                                println!("");
+                                page_contents.push(cs)
+                            },
+                            Err(e) => ta3_log!(
+                                Level::Warn,
+                                0,
+                                " collecting error when decoding stream in page {:?}: {:?}",
+                                pid,
+                                e
+                            ),
+                        },
+                        _ => ta3_log!(
+                            Level::Error,
+                            0,
+                            " unexpected object found as content stream!"
+                        ),
+                    }
+                }
+            },
+            PageKid::Node(n) => println!(" tree node {:?} with {} kids", pid, n.kids().len()),
+        }
     }
 }
 
