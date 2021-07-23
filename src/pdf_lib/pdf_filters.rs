@@ -504,7 +504,8 @@ impl BufferTransformT for ASCII85Decode<'_> {
             Ok(res) => res,
             Err(e) => {
                 let err = ErrorKind::TransformError(format!(
-                    "Integer overflow error in the JPEG decoder library"
+                    "Error in the JPEG decoder library: {:?}",
+                    e
                 ));
                 Err(locate_value(err, loc.loc_start(), loc.loc_end()))
             },
