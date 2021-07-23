@@ -198,6 +198,18 @@ impl DictT {
             _ => None,
         })
     }
+    // get an indirect reference value of a key
+    pub fn get_ref(&self, k: &[u8]) -> Option<ReferenceT> {
+        self.get(k).and_then(|lobj| match lobj.val() {
+            PDFObjT::Reference(r) => Some(*r),
+            _ => None,
+        })
+    }
+
+    // There are a pair of accessors for each compound type: one that
+    // returns the immediate value, and one that resolves a reference
+    // value into the appropriate value.
+
     // get the array value of a key
     pub fn get_array(&self, k: &[u8]) -> Option<&ArrayT> {
         self.get(k).and_then(|lobj| match lobj.val() {
@@ -205,6 +217,20 @@ impl DictT {
             _ => None,
         })
     }
+    // get the resolved array value of a key
+    pub fn get_resolved_array<'a>(
+        &'a self, ctxt: &'a PDFObjContext, k: &[u8],
+    ) -> Option<&'a ArrayT> {
+        self.get(k).and_then(|lobj| match lobj.val() {
+            PDFObjT::Array(a) => Some(a),
+            PDFObjT::Reference(r) => ctxt.lookup_obj(r.id()).and_then(|o| match o.val() {
+                PDFObjT::Array(a) => Some(a),
+                _ => None,
+            }),
+            _ => None,
+        })
+    }
+
     // get the dictionary value of a key
     pub fn get_dict(&self, k: &[u8]) -> Option<&DictT> {
         self.get(k).and_then(|lobj| match lobj.val() {
@@ -212,10 +238,14 @@ impl DictT {
             _ => None,
         })
     }
-    // get an indirect reference value of a key
-    pub fn get_ref(&self, k: &[u8]) -> Option<ReferenceT> {
+    // get the resolved dict value of a key
+    pub fn get_resolved_dict<'a>(&'a self, ctxt: &'a PDFObjContext, k: &[u8]) -> Option<&'a DictT> {
         self.get(k).and_then(|lobj| match lobj.val() {
-            PDFObjT::Reference(r) => Some(*r),
+            PDFObjT::Dict(d) => Some(d),
+            PDFObjT::Reference(r) => ctxt.lookup_obj(r.id()).and_then(|o| match o.val() {
+                PDFObjT::Dict(d) => Some(d),
+                _ => None,
+            }),
             _ => None,
         })
     }
