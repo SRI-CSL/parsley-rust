@@ -19,7 +19,7 @@
 // This is a truncated DOM for PDF that highlights only the elements
 // relevant to text-extraction from pages.
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::rc::Rc;
 
 use super::super::pcore::parsebuffer::LocatedVal;
@@ -29,15 +29,24 @@ use super::pdf_obj::{DictKey, DictT, ObjectId, PDFObjContext, PDFObjT};
 pub struct DOMContext {
     // pages does not contain the root page, since that is contained
     // within the Catalog.
-    pages: BTreeMap<ObjectId, PageKid>,
+    pages:       BTreeMap<ObjectId, PageKid>,
+    font_dicts:  BTreeMap<ObjectId, Rc<FontDictionary>>,
+    font_descrs: BTreeMap<ObjectId, Rc<FontDescriptor>>,
 }
 impl DOMContext {
     pub fn new() -> Self {
         Self {
-            pages: BTreeMap::new(),
+            pages:       BTreeMap::new(),
+            font_dicts:  BTreeMap::new(),
+            font_descrs: BTreeMap::new(),
         }
     }
     pub fn pages(&self) -> &BTreeMap<ObjectId, PageKid> { &self.pages }
+    pub fn font_dicts(&self) -> &BTreeMap<ObjectId, Rc<FontDictionary>> { &self.font_dicts }
+    pub fn font_descrs(&self) -> &BTreeMap<ObjectId, Rc<FontDescriptor>> { &self.font_descrs }
+}
+impl Default for DOMContext {
+    fn default() -> Self { DOMContext::new() }
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
@@ -119,20 +128,127 @@ impl Page {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct Resources {
-    map: BTreeMap<DictKey, Rc<LocatedVal<PDFObjT>>>,
+    fonts: BTreeMap<DictKey, Rc<FontDictionary>>,
 }
 impl Resources {
-    pub fn new(d: &DictT) -> Self {
-        let mut map = BTreeMap::new();
-        for (k, v) in d.map().iter() {
-            map.insert(k.clone(), Rc::clone(v));
+    pub fn new(fonts: BTreeMap<DictKey, Rc<FontDictionary>>) -> Self { Self { fonts } }
+    pub fn fonts(&self) -> &BTreeMap<DictKey, Rc<FontDictionary>> { &self.fonts }
+    /*
+    pub fn has_nonembedded_fonts(&self, ctxt: &PDFObjContext) -> bool {
+        let mut has = false;
+        for (_, f) in self.fonts.iter() {
+            match f {
+                FontResource::Id(id) =>
         }
-        Self { map }
     }
-    pub fn new_default() -> Self {
+     */
+}
+impl Default for Resources {
+    fn default() -> Self {
         Self {
-            map: BTreeMap::new(),
+            fonts: BTreeMap::new(),
         }
+    }
+}
+
+// ternary value for feature presence
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub enum FeaturePresence {
+    True,
+    False,
+    Unknown,
+}
+impl From<bool> for FeaturePresence {
+    fn from(f: bool) -> FeaturePresence {
+        if f {
+            FeaturePresence::True
+        } else {
+            FeaturePresence::False
+        }
+    }
+}
+impl From<Option<bool>> for FeaturePresence {
+    fn from(f: Option<bool>) -> FeaturePresence {
+        match f {
+            Some(true) => FeaturePresence::True,
+            Some(false) => FeaturePresence::False,
+            None => FeaturePresence::Unknown,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub enum FontType {
+    Type0,
+    Type1,
+    MMType1,
+    Type3,
+    TrueType,
+    CIDFontType0,
+    CIDFontType1,
+    Unknown(Vec<u8>),
+}
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub enum FontEncoding {
+    MacRoman,
+    MacExpert,
+    WinAnsi,
+    Unknown(String),
+    Dict(Rc<LocatedVal<PDFObjT>>),
+}
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub enum FontFlag {
+    FixedPitch,
+    Serif,
+    Symbolic,
+    Script,
+    Nonsymbolic,
+    Italic,
+    AllCap,
+    SmallCap,
+    ForceBold,
+}
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub struct FontDescriptor {
+    fontname:  String,
+    flags:     BTreeSet<FontFlag>,
+    fontfile:  Option<ObjectId>,
+    fontfile2: Option<ObjectId>,
+    fontfile3: Option<ObjectId>,
+}
+impl FontDescriptor {
+    pub fn fontname(&self) -> &str { &self.fontname }
+    // FIXME: this is necessary but not sufficient: the ObjectIds may
+    // not exist, or may point to invalid streams.
+    pub fn is_embedded(&self) -> bool {
+        self.fontfile.is_some() || self.fontfile2.is_some() || self.fontfile3.is_some()
+    }
+    pub fn is_symbolic(&self) -> bool { self.flags.contains(&FontFlag::Symbolic) }
+}
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub struct FontDictionary {
+    subtype:        FontType,
+    basefont:       String,
+    fontdescriptor: Option<Rc<FontDescriptor>>,
+    encoding:       Option<FontEncoding>,
+    // ToUnicode
+}
+impl FontDictionary {
+    pub fn basefont(&self) -> &str { &self.basefont }
+    pub fn encoding(&self) -> &Option<FontEncoding> { &self.encoding }
+    pub fn is_embedded(&self) -> FeaturePresence {
+        FeaturePresence::from(
+            self.fontdescriptor
+                .as_ref()
+                .and_then(|fd| Some(fd.is_embedded())),
+        )
+    }
+    pub fn is_symbolic(&self) -> FeaturePresence {
+        FeaturePresence::from(
+            self.fontdescriptor
+                .as_ref()
+                .and_then(|fd| Some(fd.is_symbolic())),
+        )
     }
 }
 
@@ -165,20 +281,27 @@ impl ConversionQ {
     }
 }
 
+// Table 29, page 98 (2020 edn)
 pub fn to_catalog(
-    ctxt: &PDFObjContext, q: &mut ConversionQ, o: &LocatedVal<PDFObjT>,
-) -> Option<Catalog> {
+    ctxt: &PDFObjContext, q: &mut ConversionQ, dom: &mut DOMContext, o: &LocatedVal<PDFObjT>,
+) -> Result<Catalog, LocatedVal<PageDOMError>> {
     match o.val() {
-        PDFObjT::Dict(d) => d.get_ref(b"Pages").and_then(|r| {
-            ctxt.lookup_obj(r.id()).and_then(|o| {
-                to_root_page_tree_node(ctxt, q, o).and_then(|p| Some(Catalog::new(Rc::new(p))))
-            })
-        }),
-        _ => None,
+        PDFObjT::Dict(d) => match d.get_ref(b"Pages") {
+            Some(r) => match ctxt.lookup_obj(r.id()) {
+                Some(o) => {
+                    let root = to_root_page_tree_node(ctxt, q, dom, o)?;
+                    Ok(Catalog::new(Rc::new(root)))
+                },
+                None => return Err(o.place(PageDOMError::CatalogConversionPagesIdNotFound)),
+            },
+            None => return Err(o.place(PageDOMError::CatalogConversionNoPages)),
+        },
+        _ => return Err(o.place(PageDOMError::CatalogConversionBadCatalog)),
     }
 }
 
-pub fn to_page_kids(
+// Table 30, page 103 (2020 edn)
+fn to_page_kids(
     ctxt: &PDFObjContext, q: &mut ConversionQ, r: &Option<Rc<Resources>>, o: &LocatedVal<PDFObjT>,
 ) -> Option<Vec<ObjectId>> {
     match o.val() {
@@ -229,64 +352,73 @@ pub fn to_page_kids(
     }
 }
 
-pub fn to_root_page_tree_node(
-    ctxt: &PDFObjContext, q: &mut ConversionQ, o: &LocatedVal<PDFObjT>,
-) -> Option<RootPageTreeNode> {
+// Table 30, page 103 (2020 edn)
+fn to_root_page_tree_node(
+    ctxt: &PDFObjContext, q: &mut ConversionQ, dom: &mut DOMContext, o: &LocatedVal<PDFObjT>,
+) -> Result<RootPageTreeNode, LocatedVal<PageDOMError>> {
     match o.val() {
         PDFObjT::Dict(d) => {
             let res = match d.get_resolved_dict(ctxt, b"Resources") {
                 None => None,
-                Some(d) => Some(Rc::new(Resources::new(d))),
+                Some(d) => match to_resources(ctxt, dom, d, o) {
+                    Ok(res) => Some(Rc::new(res)),
+                    Err(e) => return Err(e),
+                },
             };
             let count = match d.get_usize(b"Count") {
-                None => return None,
+                None => return Err(o.place(PageDOMError::PageTreeNodeConversionNoCount)),
                 Some(i) => i,
             };
             let kids = match d.get(b"Kids") {
-                None => return None,
+                None => return Err(o.place(PageDOMError::PageTreeNodeConversionNoKids)),
                 Some(o) => to_page_kids(ctxt, q, &res, o),
             };
             match kids {
-                None => None,
-                Some(v) => Some(RootPageTreeNode::new(res, count, v)),
+                None => Err(o.place(PageDOMError::PageTreeNodeConversionBadKids)),
+                Some(v) => Ok(RootPageTreeNode::new(res, count, v)),
             }
         },
-        _ => None,
+        _ => Err(o.place(PageDOMError::PageTreeNodeConversionBadRoot)),
     }
 }
 
-pub fn to_page_tree_node(
-    ctxt: &PDFObjContext, q: &mut ConversionQ, r: &Option<Rc<Resources>>, o: &LocatedVal<PDFObjT>,
-) -> Option<PageTreeNode> {
+// Table 30, page 103 (2020 edn)
+fn to_page_tree_node(
+    ctxt: &PDFObjContext, q: &mut ConversionQ, dom: &mut DOMContext, r: &Option<Rc<Resources>>,
+    o: &LocatedVal<PDFObjT>,
+) -> Result<PageTreeNode, LocatedVal<PageDOMError>> {
     match o.val() {
         PDFObjT::Dict(d) => {
             let parent = match d.get_ref(b"Parent") {
-                None => return None,
+                None => return Err(o.place(PageDOMError::PageTreeNodeConversionNoParent)),
                 Some(p) => p.id(),
             };
             let res = match (d.get_resolved_dict(ctxt, b"Resources"), r) {
-                (Some(d), _) => Some(Rc::new(Resources::new(d))),
+                (Some(d), _) => match to_resources(ctxt, dom, d, o) {
+                    Ok(res) => Some(Rc::new(res)),
+                    Err(e) => return Err(e),
+                },
                 (_, Some(r)) => Some(Rc::clone(r)),
                 (_, _) => None,
             };
             let count = match d.get_usize(b"Count") {
-                None => return None,
+                None => return Err(o.place(PageDOMError::PageTreeNodeConversionNoCount)),
                 Some(i) => i,
             };
             let kids = match d.get(b"Kids") {
-                None => return None,
+                None => return Err(o.place(PageDOMError::PageTreeNodeConversionNoKids)),
                 Some(o) => to_page_kids(ctxt, q, &res, o),
             };
             match kids {
-                None => None,
-                Some(v) => Some(PageTreeNode::new(parent, res, count, v)),
+                None => Err(o.place(PageDOMError::PageTreeNodeConversionBadKids)),
+                Some(v) => Ok(PageTreeNode::new(parent, res, count, v)),
             }
         },
-        _ => None,
+        _ => Err(o.place(PageDOMError::PageTreeNodeConversionBadNode)),
     }
 }
 
-pub fn to_page_content(
+fn to_page_content(
     ctxt: &PDFObjContext, o: &Rc<LocatedVal<PDFObjT>>,
 ) -> Option<Rc<LocatedVal<PDFObjT>>> {
     match o.val() {
@@ -298,7 +430,7 @@ pub fn to_page_content(
     }
 }
 
-pub fn to_page_contents(
+fn to_page_contents(
     ctxt: &PDFObjContext, o: &Rc<LocatedVal<PDFObjT>>,
 ) -> Option<Vec<Rc<LocatedVal<PDFObjT>>>> {
     match o.val() {
@@ -320,90 +452,342 @@ pub fn to_page_contents(
     }
 }
 
-pub fn to_page(
-    ctxt: &PDFObjContext, r: &Option<Rc<Resources>>, o: &LocatedVal<PDFObjT>,
-) -> Option<Page> {
+fn to_resource_font_value(
+    ctxt: &PDFObjContext, dom: &mut DOMContext, o: &LocatedVal<PDFObjT>,
+) -> Result<BTreeMap<DictKey, Rc<FontDictionary>>, LocatedVal<PageDOMError>> {
+    let mut fonts = BTreeMap::new();
+    match o.val() {
+        // The value should be a dictionary mapping font resource
+        // names to font dictionaries.
+        PDFObjT::Dict(d) => {
+            for (frn, fr) in d.map().iter() {
+                match fr.val() {
+                    PDFObjT::Reference(r) => match ctxt.lookup_obj(r.id()) {
+                        None => return Err(o.place(PageDOMError::FontDictUnresolvedId(r.id()))),
+                        Some(o) => {
+                            let fd = match obj_to_font_dict(ctxt, dom, o) {
+                                Err(e) => return Err(e),
+                                Ok(fd) => Rc::new(fd),
+                            };
+                            dom.font_dicts.insert(r.id(), Rc::clone(&fd));
+                            fonts.insert(frn.clone(), fd);
+                        },
+                    },
+                    PDFObjT::Dict(dd) => {
+                        let fd = match to_font_dict(ctxt, dom, dd) {
+                            Err(e) => return Err(o.place(e)),
+                            Ok(fd) => fd,
+                        };
+                        fonts.insert(frn.clone(), Rc::new(fd));
+                    },
+                    _ => return Err(o.place(PageDOMError::FontResourceNotDict)),
+                }
+            }
+        },
+        PDFObjT::Reference(r) => match ctxt.lookup_obj(r.id()) {
+            Some(o) => return to_resource_font_value(ctxt, dom, o),
+            None => return Err(o.place(PageDOMError::ResourceFontValueUnknownObjectId(r.id()))),
+        },
+        _ => return Err(o.place(PageDOMError::ResourceFontValueNotDict)),
+    }
+    Ok(fonts)
+}
+
+// Table 34, page 113 (2020 edn)
+fn to_resources(
+    ctxt: &PDFObjContext, dom: &mut DOMContext, rd: &DictT, _container: &LocatedVal<PDFObjT>,
+) -> Result<Resources, LocatedVal<PageDOMError>> {
+    let mut fonts = None;
+    for (k, v) in rd.map().iter() {
+        if k.as_slice() == b"Font" {
+            match to_resource_font_value(ctxt, dom, v) {
+                Err(e) => return Err(e),
+                Ok(f) => fonts = Some(f),
+            }
+        }
+    }
+    match fonts {
+        None => Ok(Resources::new(BTreeMap::new())),
+        Some(f) => Ok(Resources::new(f)),
+    }
+}
+
+// Table 31, page 104 (2020 edn)
+fn to_page(
+    ctxt: &PDFObjContext, dom: &mut DOMContext, r: &Option<Rc<Resources>>, o: &LocatedVal<PDFObjT>,
+) -> Result<Page, LocatedVal<PageDOMError>> {
     match o.val() {
         PDFObjT::Dict(d) => {
             let parent = match d.get_ref(b"Parent") {
-                None => return None,
+                None => return Err(o.place(PageDOMError::PageNodeConversionNoParent)),
                 Some(p) => p.id(),
             };
             let res = match (d.get_resolved_dict(ctxt, b"Resources"), r) {
-                (Some(d), _) => Rc::new(Resources::new(d)),
+                (Some(d), _) => match to_resources(ctxt, dom, d, o) {
+                    Ok(r) => Rc::new(r),
+                    Err(e) => return Err(e),
+                },
                 (_, Some(r)) => Rc::clone(r),
-                (_, _) => Rc::new(Resources::new_default()),
+                (_, _) => Rc::new(Resources::default()),
             };
             let contents = match d.get(b"Contents") {
-                None => return None,
+                None => return Err(o.place(PageDOMError::PageNodeConversionNoContents)),
                 Some(o) => match to_page_contents(ctxt, o) {
-                    None => return None,
+                    None => return Err(o.place(PageDOMError::PageNodeConversionBadContents)),
                     Some(v) => v,
                 },
             };
-            Some(Page::new(parent, res, contents))
+            Ok(Page::new(parent, res, contents))
         },
-        _ => None,
+        _ => Err(o.place(PageDOMError::PageNodeConversionBadPage)),
     }
+}
+
+fn to_font_descriptor(d: &DictT) -> Result<FontDescriptor, PageDOMError> {
+    let fontname = match d.get_name(b"FontName") {
+        Some(n) => match std::str::from_utf8(n) {
+            Ok(s) => s.to_string(),
+            Err(_) => return Err(PageDOMError::FontDescrConversionBadFontName),
+        },
+        _ => return Err(PageDOMError::FontDescrConversionBadFontName),
+    };
+    let flags = match d.get_usize(b"Flags") {
+        Some(i) => {
+            let check_bit = |i: usize, bit: usize| -> bool { (i >> bit) & 0x01 == 0x01 };
+            let mut flags = BTreeSet::new();
+            if check_bit(i, 0) {
+                flags.insert(FontFlag::FixedPitch);
+            }
+            if check_bit(i, 1) {
+                flags.insert(FontFlag::Serif);
+            }
+            if check_bit(i, 2) {
+                flags.insert(FontFlag::Symbolic);
+            }
+            if check_bit(i, 3) {
+                flags.insert(FontFlag::Script);
+            }
+            if check_bit(i, 5) {
+                flags.insert(FontFlag::Nonsymbolic);
+            }
+            if check_bit(i, 6) {
+                flags.insert(FontFlag::Italic);
+            }
+            if check_bit(i, 16) {
+                flags.insert(FontFlag::AllCap);
+            }
+            if check_bit(i, 17) {
+                flags.insert(FontFlag::SmallCap);
+            }
+            if check_bit(i, 18) {
+                flags.insert(FontFlag::ForceBold);
+            }
+            flags
+        },
+        None => return Err(PageDOMError::FontDescrConversionNoFlags),
+    };
+    let fontfile = d.get_ref(b"FontFile").and_then(|r| Some(r.id()));
+    let fontfile2 = d.get_ref(b"FontFile2").and_then(|r| Some(r.id()));
+    let fontfile3 = d.get_ref(b"FontFile3").and_then(|r| Some(r.id()));
+    Ok(FontDescriptor {
+        fontname,
+        flags,
+        fontfile,
+        fontfile2,
+        fontfile3,
+    })
+}
+
+// Encoding: Section 7.6.5, page 322 (2020 edn)
+fn to_encoding(
+    ctxt: &PDFObjContext, o: &Rc<LocatedVal<PDFObjT>>,
+) -> Result<FontEncoding, LocatedVal<PageDOMError>> {
+    match o.val() {
+        PDFObjT::Name(n) => match std::str::from_utf8(n.val()) {
+            Ok("MacRomanEncoding") => Ok(FontEncoding::MacRoman),
+            Ok("MacExpertEncoding") => Ok(FontEncoding::MacExpert),
+            Ok("WinAnsiEncoding") => Ok(FontEncoding::WinAnsi),
+            Ok(s) => Ok(FontEncoding::Unknown(s.to_string())),
+            Err(_) => Err(o.place(PageDOMError::FontDictConversionUnknownEncoding)),
+        },
+        PDFObjT::Dict(_) => Ok(FontEncoding::Dict(Rc::clone(o))),
+        PDFObjT::Reference(r) => match ctxt.lookup_obj(r.id()) {
+            Some(o) => to_encoding(ctxt, o),
+            None => return Err(o.place(PageDOMError::FontDictConversionBadEncoding)),
+        },
+        _ => Err(o.place(PageDOMError::FontDictConversionBadEncoding)),
+    }
+}
+
+// Type 1 fonts: Table 109, page 313 (2020 edn)
+// Type 3 fonts: Table 110, page 317 (2020 edn)
+fn obj_to_font_dict(
+    ctxt: &PDFObjContext, dom: &mut DOMContext, o: &Rc<LocatedVal<PDFObjT>>,
+) -> Result<FontDictionary, LocatedVal<PageDOMError>> {
+    match o.val() {
+        PDFObjT::Dict(d) => match to_font_dict(ctxt, dom, d) {
+            Ok(fd) => Ok(fd),
+            Err(e) => Err(o.place(e)),
+        },
+        _ => Err(o.place(PageDOMError::FontDictConversionBadFontDictionary)),
+    }
+}
+fn to_font_dict(
+    ctxt: &PDFObjContext, dom: &mut DOMContext, d: &DictT,
+) -> Result<FontDictionary, PageDOMError> {
+    let basefont = match d.get_name(b"BaseFont") {
+        Some(n) => match std::str::from_utf8(n) {
+            Ok(s) => s.to_string(),
+            Err(_) => return Err(PageDOMError::FontDictConversionBadBaseFont),
+        },
+        None => return Err(PageDOMError::FontDictConversionNoBaseFont),
+    };
+    let subtype = match d.get_name(b"Subtype") {
+        Some(n) => match std::str::from_utf8(n) {
+            Ok("Type0") => FontType::Type0,
+            Ok("Type1") => FontType::Type1,
+            Ok("MMType1") => FontType::MMType1,
+            Ok("Type3") => FontType::Type3,
+            Ok("TrueType") => FontType::TrueType,
+            Ok("CIDFontType0") => FontType::CIDFontType0,
+            Ok("CIDFontType1") => FontType::CIDFontType1,
+            _ => FontType::Unknown(n.to_vec()),
+        },
+        _ => return Err(PageDOMError::FontDictConversionNoSubtype),
+    };
+    // TODO: FontDescriptor indirect resolution should be
+    // version-dependent.
+    let fontdescriptor = match d.get(b"FontDescriptor") {
+        Some(o) => match o.val() {
+            PDFObjT::Dict(d) => {
+                let fd = to_font_descriptor(d)?;
+                Some(Rc::new(fd))
+            },
+            PDFObjT::Reference(r) =>
+            // Resolve this if we haven't already.
+            {
+                match dom.font_descrs().get(&r.id()) {
+                    Some(fd) => Some(Rc::clone(&fd)),
+                    None => match ctxt.lookup_obj(r.id()) {
+                        None => {
+                            return Err(PageDOMError::FontDescrConversionUnknownObjectId(r.id()))
+                        },
+                        Some(o) => match o.val() {
+                            PDFObjT::Dict(d) => {
+                                let fd = to_font_descriptor(d)?;
+                                let fd = Rc::new(fd);
+                                dom.font_descrs.insert(r.id(), Rc::clone(&fd));
+                                Some(fd)
+                            },
+                            _ => return Err(PageDOMError::FontDescrConversionBadFontDescr),
+                        },
+                    },
+                }
+            },
+            _ => return Err(PageDOMError::FontDescrConversionBadFontDescr),
+        },
+        None => None,
+    };
+    // Encoding: Table 112, page 323 (2020 edn)
+    let encoding = match d.get(b"Encoding") {
+        Some(o) => match to_encoding(ctxt, o) {
+            Err(e) => return Err(e.val().clone()),
+            Ok(e) => Some(e),
+        },
+        None => None,
+    };
+    Ok(FontDictionary {
+        subtype,
+        basefont,
+        fontdescriptor,
+        encoding,
+    })
 }
 
 /* Errors reported by the page DOM builder */
-#[derive(Debug, PartialEq)]
-pub enum PageDomError {
-    CatalogConversion,
-    PageTreeNodeConversion,
-    PageNodeConversion,
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub enum PageDOMError {
+    CatalogConversionBadCatalog,
+    CatalogConversionNoPages,
+    CatalogConversionPagesIdNotFound,
+    PageTreeNodeNotDict,
+    PageTreeNodeUnexpectedType(Vec<u8>),
+    PageTreeNodeConversionNoCount,
+    PageTreeNodeConversionNoKids,
+    PageTreeNodeConversionNoParent,
+    PageTreeNodeConversionBadKids,
+    PageTreeNodeConversionBadRoot,
+    PageTreeNodeConversionBadNode,
+    PageNodeConversionNoParent,
+    PageNodeConversionNoContents,
+    PageNodeConversionBadContents,
+    PageNodeConversionBadPage,
     NoObjectType,
-    UnexpectedType(Vec<u8>),
-    NonDictPageNode,
+    ResourceFontValueUnknownObjectId(ObjectId),
+    ResourceFontValueNotDict, // /Resources/Font is not dict
+    FontResourceNotDict,      // /Resources/Font/<font-resource-name> is not dict
+    FontDescrConversionUnknownObjectId(ObjectId),
+    FontDescrConversionBadFontName,
+    FontDescrConversionNoFlags,
+    FontDescrConversionBadFontDescr,
+    FontDictConversionNoBaseFont,
+    FontDictConversionNoSubtype,
+    FontDictConversionBadBaseFont,
+    FontDictConversionBadFontDescriptor,
+    FontDictConversionNoEncoding,
+    FontDictConversionUnknownEncoding,
+    FontDictConversionBadEncoding,
+    FontDictConversionBadFontDictionary,
+    FontDictUnresolvedId(ObjectId),
 }
 
-// The DOM constructor, which starts from the '/Root' object.
+// The DOM constructor builds the DOM starting from the '/Root'
+// object.  The built page DOM consists of all the pages getting
+// mapped in DOMContext.  The fonts structures are not mapped here,
+// and need a separate pass.
 
 pub fn to_page_dom(
     ctxt: &PDFObjContext, o: &LocatedVal<PDFObjT>,
-) -> Result<(Catalog, DOMContext), LocatedVal<PageDomError>> {
+) -> Result<(Catalog, DOMContext), LocatedVal<PageDOMError>> {
     let mut q = ConversionQ::new();
-    let c = to_catalog(ctxt, &mut q, o);
-    if c.is_none() {
-        return Err(o.place(PageDomError::CatalogConversion))
-    }
-    let c = c.unwrap();
+    let mut dom = DOMContext::new();
+
+    let c = to_catalog(ctxt, &mut q, &mut dom, o)?;
 
     // TODO: "A page tree shall not contain multiple indirect
     // references to the same page tree node." (Section 7.7.3.2)
-    let mut dom_ctxt = DOMContext::new();
     while !q.page_nodes.is_empty() {
         let (id, r, o) = q.page_nodes.pop_front().unwrap();
         match o.val() {
             PDFObjT::Dict(d) => {
                 match d.get_name(b"Type") {
                     Some(b"Pages") => {
-                        let ptn = to_page_tree_node(ctxt, &mut q, &r, &o);
+                        let ptn = to_page_tree_node(ctxt, &mut q, &mut dom, &r, &o);
                         match ptn {
-                            Some(n) => {
+                            Ok(n) => {
                                 // ignore return value
-                                dom_ctxt.pages.insert(id, PageKid::Node(Rc::new(n)));
+                                dom.pages.insert(id, PageKid::Node(Rc::new(n)));
                             },
-                            None => return Err(o.place(PageDomError::PageTreeNodeConversion)),
+                            Err(e) => return Err(e),
                         }
                     },
                     Some(b"Page") => {
-                        let pn = to_page(ctxt, &r, &o);
+                        let pn = to_page(ctxt, &mut dom, &r, &o);
                         match pn {
-                            Some(p) => {
-                                dom_ctxt.pages.insert(id, PageKid::Leaf(Rc::new(p)));
+                            Ok(p) => {
+                                dom.pages.insert(id, PageKid::Leaf(Rc::new(p)));
                             },
-                            None => return Err(o.place(PageDomError::PageNodeConversion)),
+                            Err(e) => return Err(e),
                         }
                     },
-                    Some(t) => return Err(o.place(PageDomError::UnexpectedType(t.to_vec()))),
-                    None => return Err(o.place(PageDomError::NoObjectType)),
+                    Some(t) => {
+                        return Err(o.place(PageDOMError::PageTreeNodeUnexpectedType(t.to_vec())))
+                    },
+                    None => return Err(o.place(PageDOMError::NoObjectType)),
                 }
             },
-            _ =>
-                return Err(o.place(PageDomError::NonDictPageNode))
+            _ => return Err(o.place(PageDOMError::PageTreeNodeNotDict)),
         }
     }
-    Ok((c, dom_ctxt))
+    Ok((c, dom))
 }

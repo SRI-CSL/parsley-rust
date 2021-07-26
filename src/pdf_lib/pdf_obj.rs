@@ -143,6 +143,7 @@ impl ArrayP<'_> {
 pub struct DictKey(Vec<u8>);
 impl DictKey {
     pub fn new(v: Vec<u8>) -> DictKey { DictKey(v) }
+    pub fn as_slice(&self) -> &[u8] { self.0.as_slice() }
 }
 impl Clone for DictKey {
     fn clone(&self) -> Self { DictKey(self.0.clone()) }

@@ -40,7 +40,7 @@ use serde_json::Value;
 use parsley_rust::pcore::parsebuffer::{LocatedVal, Location};
 use parsley_rust::pdf_lib::catalog::catalog_type;
 use parsley_rust::pdf_lib::pdf_obj::{PDFObjContext, PDFObjT};
-use parsley_rust::pdf_lib::pdf_page_dom::{to_page_dom, PageKid};
+use parsley_rust::pdf_lib::pdf_page_dom::{to_page_dom, FeaturePresence, PageKid};
 use parsley_rust::pdf_lib::pdf_streams::decode_stream;
 use parsley_rust::pdf_lib::pdf_traverse_xref::{parse_file, FileInfo};
 use parsley_rust::pdf_lib::pdf_type_check::{check_type, TypeCheckContext};
@@ -83,18 +83,22 @@ macro_rules! exit_log {
 // Perform a breadth-first traversal of the root object, logging
 // each object type and location as we go.
 fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFObjT>>) {
-    debug!("Beginning breadth-first traversal of root object:");
+    if false {
+        debug!("Beginning breadth-first traversal of root object:");
+    }
 
     let log_obj = |t: &str, loc: &dyn Location, depth: u32| {
-        ta3_log!(
-            Level::Info,
-            fi.file_offset(loc.loc_start()),
-            "depth:{} type:{} start-file-offset:{} end-file-offset:{}  ",
-            depth,
-            t,
-            fi.file_offset(loc.loc_start()),
-            fi.file_offset(loc.loc_end())
-        )
+        if false {
+            ta3_log!(
+                Level::Info,
+                fi.file_offset(loc.loc_start()),
+                "depth:{} type:{} start-file-offset:{} end-file-offset:{}  ",
+                depth,
+                t,
+                fi.file_offset(loc.loc_start()),
+                fi.file_offset(loc.loc_end())
+            )
+        }
     };
 
     let mut obj_queue = VecDeque::new();
@@ -187,7 +191,9 @@ fn dump_file(test_file: &str) {
         None => exit_log!(0, "Root object {:?} not found!", root_id),
     };
 
+    // Run this to get warnings on stream decoding.
     dump_root(&fi, &ctxt, &root_obj);
+
     let mut tctx = TypeCheckContext::new();
     let typ = catalog_type(&mut tctx);
     if let Some(err) = check_type(&ctxt, &tctx, Rc::clone(root_obj), typ) {
@@ -204,7 +210,9 @@ fn dump_file(test_file: &str) {
         },
         Err(e) => exit_log!(e.loc_start(), "Page DOM error: {:?}", e.val()),
     };
-    let mut page_contents = Vec::new();
+    // We will consider a file as having text if it has a non-symbolic
+    // font that is embedded.
+    let mut has_embedded_text = false;
     for (pid, p) in page_dom.pages().iter() {
         match p {
             PageKid::Leaf(l) => {
@@ -213,6 +221,18 @@ fn dump_file(test_file: &str) {
                     pid,
                     l.contents().len()
                 );
+                for (_f, fd) in l.resources().fonts().iter() {
+                    println!(
+                        " page {:?} has font {:?} with symbolic:{:?} embedded:{:?}",
+                        pid,
+                        fd.basefont(),
+                        fd.is_symbolic(),
+                        fd.is_embedded()
+                    );
+                    has_embedded_text |= (fd.is_embedded() == FeaturePresence::True)
+                        && (fd.is_symbolic() == FeaturePresence::False);
+                }
+                /*
                 for c in l.contents() {
                     match c.val() {
                         PDFObjT::Stream(s) => match decode_stream(s) {
@@ -224,7 +244,6 @@ fn dump_file(test_file: &str) {
                                     Err(_) => println!("not UTF8"),
                                 };
                                 println!("");
-                                page_contents.push(cs)
                             },
                             Err(e) => ta3_log!(
                                 Level::Warn,
@@ -241,9 +260,18 @@ fn dump_file(test_file: &str) {
                         ),
                     }
                 }
+                 */
             },
-            PageKid::Node(n) => println!(" tree node {:?} with {} kids", pid, n.kids().len()),
+            PageKid::Node(_n) => {
+                // println!(" tree node {:?} with {} kids", pid, n.kids().len())
+            },
         }
+    }
+    if !has_embedded_text {
+        exit_log!(
+            0,
+            "File has no embedded text fonts, and extracting English text is not supported."
+        )
     }
 }
 
