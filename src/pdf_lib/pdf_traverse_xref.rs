@@ -103,7 +103,7 @@ fn parse_xref_stream(
     let mut prev = None;
 
     let mut sp = IndirectP::new(ctxt);
-    let xref_obj_loc = pb.get_cursor();
+    let _xref_obj_loc = pb.get_cursor();
     let xref_obj = sp.parse(pb);
     if let Err(e) = xref_obj {
         ta3_log!(
@@ -119,6 +119,7 @@ fn parse_xref_stream(
     };
     let xref_obj = xref_obj.unwrap();
     if let PDFObjT::Stream(ref s) = xref_obj.val().obj().val() {
+        /*
         ta3_log!(
             Level::Info,
             fi.file_offset(0),
@@ -126,7 +127,7 @@ fn parse_xref_stream(
             xref_obj.val().num(),
             xref_obj.val().gen()
         );
-
+        */
         let content = s.stream().val();
         let mut xref_buf = ParseBuffer::new_view(pb, content.start(), content.size());
         let mut xp = XrefStreamP::new(ctxt.is_encrypted(), s);
@@ -144,6 +145,7 @@ fn parse_xref_stream(
             return None
         }
         let xref_stm = xref_stm.unwrap();
+        /*
         ta3_log!(
             Level::Info,
             fi.file_offset(pb.get_cursor()),
@@ -151,6 +153,7 @@ fn parse_xref_stream(
             xref_stm.val().ents().len(),
             xref_obj_loc
         );
+         */
         // Convert the XrefStreamT into XrefEntTs so that they
         // can be merged with any XrefSectT.
         for e in xref_stm.val().ents() {
@@ -202,8 +205,10 @@ fn parse_xref_section(
     // Get trailer following the xref table.
     match pb.scan(b"trailer") {
         Ok(_) => {
+            /*
             let c = pb.get_cursor();
             ta3_log!(Level::Info, fi.file_offset(c), "Found trailer at {}.", c)
+             */
         },
         Err(e) => {
             ta3_log!(
@@ -357,18 +362,21 @@ fn get_xref_info(
 }
 
 // Get the in-use object locations from the xref entries.
-fn info_from_xref_entries(fi: &FileInfo, xref_ents: &[LocatedVal<XrefEntT>]) -> Vec<ObjInfo> {
+fn info_from_xref_entries(_fi: &FileInfo, xref_ents: &[LocatedVal<XrefEntT>]) -> Vec<ObjInfo> {
     let mut id_offsets: Vec<ObjInfo> = Vec::new();
     for o in xref_ents {
         let ent = o.val();
         match ent.status() {
-            XrefEntStatus::Free { next } => ta3_log!(
+            XrefEntStatus::Free { next: _ } => (),
+            /* ta3_log!(
                 Level::Info,
                 fi.file_offset(o.loc_start()),
                 "   free object (next is {}).",
                 *next
             ),
+             */
             XrefEntStatus::InUse { file_ofs } => {
+                /*
                 ta3_log!(
                     Level::Info,
                     fi.file_offset(o.loc_start()),
@@ -382,6 +390,7 @@ fn info_from_xref_entries(fi: &FileInfo, xref_ents: &[LocatedVal<XrefEntT>]) -> 
                         ""
                     }
                 );
+                 */
                 id_offsets.push(ObjInfo::InFile {
                     id:  ent.obj(),
                     gen: ent.gen(),
@@ -390,8 +399,9 @@ fn info_from_xref_entries(fi: &FileInfo, xref_ents: &[LocatedVal<XrefEntT>]) -> 
             },
             XrefEntStatus::InStream {
                 stream_obj,
-                obj_index,
+                obj_index: _,
             } => {
+                /*
                 ta3_log!(
                     Level::Info,
                     fi.file_offset(o.loc_start()),
@@ -401,6 +411,7 @@ fn info_from_xref_entries(fi: &FileInfo, xref_ents: &[LocatedVal<XrefEntT>]) -> 
                     obj_index,
                     stream_obj
                 );
+                 */
                 id_offsets.push(ObjInfo::Stream {
                     id:  *stream_obj,
                     gen: 0, // object streams have an implicit generation of 0
@@ -437,6 +448,7 @@ fn parse_objects(
                 // xref-streams are objects themselves, and their catalog of
                 // objects can include an entry for themselves.
                 if ctxt.lookup_obj((*id, *gen)).is_some() {
+                    /*
                     ta3_log!(
                         Level::Info,
                         fi.file_offset(*ofs),
@@ -444,11 +456,13 @@ fn parse_objects(
                         id,
                         gen
                     );
+                     */
                     continue
                 }
 
                 let mut p = IndirectP::new(ctxt);
                 let ofs = *ofs;
+                /*
                 ta3_log!(
                     Level::Info,
                     fi.file_offset(ofs),
@@ -459,6 +473,7 @@ fn parse_objects(
                     fi.file_offset(ofs),
                     ofs
                 );
+                 */
                 if !pb.check_cursor(ofs) {
                     exit_log!(
                         fi.file_offset(ofs),
@@ -509,6 +524,7 @@ fn parse_objects(
     for (id, gen, ofs) in second_pass {
         // If we've already parsed this object, skip it.
         if ctxt.lookup_obj((*id, *gen)).is_some() {
+            /*
             ta3_log!(
                 Level::Info,
                 fi.file_offset(ofs),
@@ -516,10 +532,12 @@ fn parse_objects(
                 id,
                 gen
             );
+             */
             continue
         }
         let mut p = IndirectP::new(ctxt);
         let ofs = ofs;
+        /*
         ta3_log!(
             Level::Info,
             fi.file_offset(ofs),
@@ -530,6 +548,7 @@ fn parse_objects(
             fi.file_offset(ofs),
             ofs
         );
+         */
         if !pb.check_cursor(ofs) {
             exit_log!(
                 fi.file_offset(ofs),
@@ -599,6 +618,7 @@ fn parse_objects(
 
     // Now parse the object streams.
     for (id, obj) in defined_obj_streams.iter() {
+        /*
         ta3_log!(
             Level::Info,
             fi.file_offset(0),
@@ -606,6 +626,7 @@ fn parse_objects(
             id.0,
             id.1
         );
+         */
 
         if let PDFObjT::Stream(ref s) = obj.val() {
             let content = s.stream().val();
@@ -616,7 +637,8 @@ fn parse_objects(
                 ta3_log!(
                     Level::Error,
                     fi.file_offset(pb.get_cursor()),
-                    "Cannot parse object stream in {} at file-offset {} (pdf-offset {}): {}",
+                    "Cannot parse object stream ({},{}) in {} at file-offset {} (pdf-offset {}): {}",
+                    id.0, id.1,
                     fi.path().display(),
                     fi.file_offset(e.start()),
                     e.start(),
@@ -626,7 +648,8 @@ fn parse_objects(
             // a nested parse, we opt to continue for now.
             } else {
                 let obj_stm = obj_stm.unwrap();
-                for o in obj_stm.val().objs() {
+                for _o in obj_stm.val().objs() {
+                    /*
                     ta3_log!(
                         Level::Info,
                         fi.file_offset(content.start()),
@@ -637,6 +660,7 @@ fn parse_objects(
                         id.0,
                         id.1
                     );
+                     */
                 }
             }
         }
@@ -673,12 +697,14 @@ pub fn parse_file(test_file: &str) -> (FileInfo, PDFObjContext, (usize, usize)) 
     let pdf_hdr_ofs = match pb.scan(b"%PDF-") {
         Ok(nbytes) => {
             if nbytes != 0 {
+                /*
                 ta3_log!(
                     Level::Info,
                     nbytes,
                     "Found {} bytes of leading garbage, dropping from buffer.",
                     nbytes
                 );
+                 */
                 let size = pb.remaining();
                 // Restrict the view to the pdf content.
                 let mut view = RestrictView::new(nbytes, size);
@@ -741,6 +767,7 @@ pub fn parse_file(test_file: &str) -> (FileInfo, PDFObjContext, (usize, usize)) 
         );
     }
     let sxref_ofs = buflen - sxref.unwrap();
+    /*
     ta3_log!(
         Level::Info,
         fi.file_offset(sxref_ofs),
@@ -748,6 +775,7 @@ pub fn parse_file(test_file: &str) -> (FileInfo, PDFObjContext, (usize, usize)) 
         fi.file_offset(sxref_ofs),
         sxref_ofs
     );
+     */
     let mut p = StartXrefP;
     let sxref = p.parse(&mut pb);
     if let Err(e) = sxref {
@@ -762,6 +790,7 @@ pub fn parse_file(test_file: &str) -> (FileInfo, PDFObjContext, (usize, usize)) 
     }
     let sxref = sxref.unwrap();
     let sxref_loc_start = sxref.loc_start();
+    /*
     ta3_log!(
         Level::Info,
         fi.file_offset(sxref_loc_start),
@@ -769,8 +798,10 @@ pub fn parse_file(test_file: &str) -> (FileInfo, PDFObjContext, (usize, usize)) 
         fi.file_offset(sxref.loc_start()),
         fi.file_offset(sxref.loc_end())
     );
+     */
     let sxref = sxref.unwrap();
     let sxref_offset = sxref.offset();
+    /*
     ta3_log!(
         Level::Info,
         fi.file_offset(sxref_loc_start),
@@ -778,6 +809,7 @@ pub fn parse_file(test_file: &str) -> (FileInfo, PDFObjContext, (usize, usize)) 
         fi.file_offset(sxref_offset),
         sxref_offset
     );
+     */
 
     // Create the pdf object context.
     // TODO: control max-depth via command-line option.
@@ -793,12 +825,14 @@ pub fn parse_file(test_file: &str) -> (FileInfo, PDFObjContext, (usize, usize)) 
     }
     pb.set_cursor_unsafe(sxref_offset);
     let (xref_ents, root_ref) = get_xref_info(&fi, &mut ctxt, &mut pb);
+    /*
     ta3_log!(
         Level::Info,
         fi.file_offset(pb.get_cursor()),
         "Found {} objects in xref table.",
         xref_ents.len()
     );
+     */
 
     let id_offsets = info_from_xref_entries(&fi, &xref_ents);
 
