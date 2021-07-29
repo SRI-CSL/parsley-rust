@@ -37,9 +37,13 @@ use log::{debug, error, log, Level, LevelFilter};
 use clap::{App, Arg};
 use serde_json::Value;
 
-use parsley_rust::pcore::parsebuffer::{LocatedVal, Location};
+use parsley_rust::pcore::parsebuffer::{
+    LocatedVal, Location, ParseBuffer, ParseResult, ParsleyParser, StreamBufferT,
+};
 use parsley_rust::pdf_lib::catalog::catalog_type;
-use parsley_rust::pdf_lib::pdf_obj::{PDFObjContext, PDFObjT};
+use parsley_rust::pdf_lib::pdf_content_streams::TextExtractor;
+use parsley_rust::pdf_lib::pdf_obj::{ObjectId, PDFObjContext, PDFObjT};
+use parsley_rust::pdf_lib::pdf_page_dom::Resources;
 use parsley_rust::pdf_lib::pdf_page_dom::{to_page_dom, FeaturePresence, PageKid};
 use parsley_rust::pdf_lib::pdf_streams::decode_stream;
 use parsley_rust::pdf_lib::pdf_traverse_xref::{parse_file, FileInfo};
@@ -182,8 +186,22 @@ fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFOb
     }
 }
 
+fn extract_text(
+    ctxt: &mut PDFObjContext, pid: &ObjectId, _r: &Resources, buf: &mut ParseBuffer,
+) -> ParseResult<()> {
+    let mut te = TextExtractor::new(ctxt, pid);
+    let strings = te.parse(buf)?;
+    for s in strings.val().iter() {
+        match std::str::from_utf8(s) {
+            Ok(v) => println!("{}", v),
+            Err(_) => (), // println!("not UTF8"),
+        }
+    }
+    return Ok(())
+}
+
 fn dump_file(test_file: &str) {
-    let (fi, ctxt, root_id) = parse_file(test_file);
+    let (fi, mut ctxt, root_id) = parse_file(test_file);
 
     // TODO: this constraint should be enforced in the library.
     let root_obj: &Rc<LocatedVal<PDFObjT>> = match ctxt.lookup_obj(root_id) {
@@ -213,7 +231,8 @@ fn dump_file(test_file: &str) {
     // We will consider a file as having text if it has a non-symbolic
     // font that is embedded.
     let mut has_embedded_text = false;
-    for (pid, p) in page_dom.pages().iter() {
+
+    'page_loop: for (pid, p) in page_dom.pages().iter() {
         match p {
             PageKid::Leaf(l) => {
                 println!(
@@ -221,7 +240,7 @@ fn dump_file(test_file: &str) {
                     pid,
                     l.contents().len()
                 );
-                for (_f, fd) in l.resources().fonts().iter() {
+                for (_, fd) in l.resources().fonts().iter() {
                     println!(
                         " page {:?} has font {:?} with symbolic:{:?} embedded:{:?}",
                         pid,
@@ -232,35 +251,56 @@ fn dump_file(test_file: &str) {
                     has_embedded_text |= (fd.is_embedded() == FeaturePresence::True)
                         && (fd.is_symbolic() == FeaturePresence::False);
                 }
-                /*
-                for c in l.contents() {
+                // If there are multiple content streams, they need to
+                // be concatenated into a single buffer to work with
+                // the content stream parser.
+                let mut buf = ParseBuffer::new(Vec::new());
+                '_content_loop: for c in l.contents() {
                     match c.val() {
                         PDFObjT::Stream(s) => match decode_stream(s) {
                             Ok(cs) => {
-                                print!("Collecting decoded content from page {:?}: ", pid);
-                                let cont = cs.stream().val().content();
-                                match std::str::from_utf8(cont) {
-                                    Ok(v) => println!("{}", v),
-                                    Err(_) => println!("not UTF8"),
-                                };
-                                println!("");
+                                buf.append(b" ");
+                                buf.append(cs.content());
                             },
-                            Err(e) => ta3_log!(
-                                Level::Warn,
-                                0,
-                                " collecting error when decoding stream in page {:?}: {:?}",
-                                pid,
-                                e
-                            ),
+                            Err(e) => {
+                                ta3_log!(
+                                    Level::Warn,
+                                    0,
+                                    " collecting error when decoding stream in page {:?}: {:?}",
+                                    pid,
+                                    e
+                                );
+                                // go to the next page
+                                continue 'page_loop
+                            },
                         },
-                        _ => ta3_log!(
-                            Level::Error,
-                            0,
-                            " unexpected object found as content stream!"
-                        ),
+                        _ => {
+                            ta3_log!(
+                                Level::Error,
+                                0,
+                                " unexpected object found as content stream!"
+                            );
+                            // go to the next page
+                            continue 'page_loop
+                        },
                     }
                 }
-                 */
+                match extract_text(&mut ctxt, pid, l.resources(), &mut buf) {
+                    Ok(_) => (),
+                    Err(e) =>
+                        exit_log!(1,
+                                  " error parsing content in page {:?}: {:?}",
+                                  pid,
+                                  e),
+                        /*
+                        ta3_log!(
+                            Level::Warn,
+                            0,
+                            " error parsing content in page {:?}: {:?}",
+                            pid,
+                            e
+                        ),*/
+                }
             },
             PageKid::Node(_n) => {
                 // println!(" tree node {:?} with {} kids", pid, n.kids().len())
@@ -268,9 +308,10 @@ fn dump_file(test_file: &str) {
         }
     }
     if !has_embedded_text {
-        exit_log!(
+        ta3_log!(
+            Level::Warn,
             0,
-            "File has no embedded text fonts, and extracting English text is not supported."
+            "\nNo embedded text fonts found."
         )
     }
 }

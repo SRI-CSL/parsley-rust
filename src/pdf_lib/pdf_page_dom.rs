@@ -210,14 +210,14 @@ pub enum FontFlag {
 }
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct FontDescriptor {
-    fontname:  String,
+    fontname:  Vec<u8>,
     flags:     BTreeSet<FontFlag>,
     fontfile:  Option<ObjectId>,
     fontfile2: Option<ObjectId>,
     fontfile3: Option<ObjectId>,
 }
 impl FontDescriptor {
-    pub fn fontname(&self) -> &str { &self.fontname }
+    pub fn fontname(&self) -> &[u8] { &self.fontname }
     // FIXME: this is necessary but not sufficient: the ObjectIds may
     // not exist, or may point to invalid streams.
     pub fn is_embedded(&self) -> bool {
@@ -228,13 +228,13 @@ impl FontDescriptor {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct FontDictionary {
     subtype:        FontType,
-    basefont:       String,
+    basefont:       Vec<u8>,
     fontdescriptor: Option<Rc<FontDescriptor>>,
     encoding:       Option<FontEncoding>,
     // ToUnicode
 }
 impl FontDictionary {
-    pub fn basefont(&self) -> &str { &self.basefont }
+    pub fn basefont(&self) -> &[u8] { &self.basefont }
     pub fn encoding(&self) -> &Option<FontEncoding> { &self.encoding }
     pub fn is_embedded(&self) -> FeaturePresence {
         FeaturePresence::from(
@@ -545,11 +545,8 @@ fn to_page(
 
 fn to_font_descriptor(d: &DictT) -> Result<FontDescriptor, PageDOMError> {
     let fontname = match d.get_name(b"FontName") {
-        Some(n) => match std::str::from_utf8(n) {
-            Ok(s) => s.to_string(),
-            Err(_) => return Err(PageDOMError::FontDescrConversionBadFontName),
-        },
-        _ => return Err(PageDOMError::FontDescrConversionBadFontName),
+        Some(n) => n.to_vec(),
+        _ => return Err(PageDOMError::FontDescrConversionNoFontName),
     };
     let flags = match d.get_usize(b"Flags") {
         Some(i) => {
@@ -636,10 +633,7 @@ fn to_font_dict(
     ctxt: &PDFObjContext, dom: &mut DOMContext, d: &DictT,
 ) -> Result<FontDictionary, PageDOMError> {
     let basefont = match d.get_name(b"BaseFont") {
-        Some(n) => match std::str::from_utf8(n) {
-            Ok(s) => s.to_string(),
-            Err(_) => return Err(PageDOMError::FontDictConversionBadBaseFont),
-        },
+        Some(n) => n.to_vec(),
         None => return Err(PageDOMError::FontDictConversionNoBaseFont),
     };
     let subtype = match d.get_name(b"Subtype") {
@@ -727,12 +721,11 @@ pub enum PageDOMError {
     ResourceFontValueNotDict, // /Resources/Font is not dict
     FontResourceNotDict,      // /Resources/Font/<font-resource-name> is not dict
     FontDescrConversionUnknownObjectId(ObjectId),
-    FontDescrConversionBadFontName,
+    FontDescrConversionNoFontName,
     FontDescrConversionNoFlags,
     FontDescrConversionBadFontDescr,
     FontDictConversionNoBaseFont,
     FontDictConversionNoSubtype,
-    FontDictConversionBadBaseFont,
     FontDictConversionBadFontDescriptor,
     FontDictConversionNoEncoding,
     FontDictConversionUnknownEncoding,

@@ -660,6 +660,108 @@ impl ParsleyParser for NameP {
     }
 }
 
+// Raw operator names: performs UTF decoding.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub struct OperatorT {
+    name: String,
+}
+
+impl OperatorT {
+    pub fn new(name: String) -> Self { Self { name } }
+    pub fn name(&self) -> &str { &self.name }
+}
+
+pub struct OperatorP;
+
+impl ParsleyParser for OperatorP {
+    type T = LocatedVal<OperatorT>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+
+        // terminated by whitespace or delimiter characters.  empty
+        // operator names are not valid.
+        let span = buf.parse_bytes_until(b" \0\t\r\n\x0c()<>[]{}/%")?;
+        let end = buf.get_cursor();
+        if start == end {
+            let err = ErrorKind::GuardError("empty operator".to_string());
+            buf.set_cursor_unsafe(start);
+            return Err(locate_value(err, start, end))
+        }
+
+        // Normalize hex-codes if length permits.
+        let ret = if span.len() < 3 {
+            span
+        } else {
+            let mut r = Vec::new();
+            let mut iter = span.windows(3);
+            let mut w = iter.next();
+
+            while w.is_some() {
+                fn from_hex(b: u8) -> u8 {
+                    if b'0' <= b && b <= b'9' {
+                        b - b'0'
+                    } else {
+                        b - b'a' + 10
+                    }
+                }
+                let triple = w.unwrap();
+                if triple[0] == 35  // '#'
+                        && triple[1].is_ascii_hexdigit() && triple[2].is_ascii_hexdigit()
+                {
+                    let hi = from_hex(triple[1].to_ascii_lowercase());
+                    let lo = from_hex(triple[2].to_ascii_lowercase());
+                    let ch = 16 * hi + lo;
+                    if ch == 0 {
+                        let err = ErrorKind::GuardError("null char in name".to_string());
+                        buf.set_cursor_unsafe(start);
+                        return Err(locate_value(err, start, end))
+                    }
+                    r.push(ch);
+                    // adjust iterator to skip the next two windows if present.
+                    // if not present, properly handle any trailing bytes.
+                    let x = iter.next();
+                    if x.is_none() {
+                        break
+                    }
+                    let y = iter.next();
+                    if y.is_none() {
+                        let x = x.unwrap();
+                        r.push(x[2]);
+                        break
+                    }
+                    w = iter.next();
+                    if w.is_none() {
+                        let y = y.unwrap();
+                        r.push(y[1]);
+                        r.push(y[2]);
+                        break
+                    }
+                } else {
+                    r.push(triple[0]);
+                    w = iter.next();
+                    if w.is_none() {
+                        // push trailing bytes
+                        r.push(triple[1]);
+                        r.push(triple[2]);
+                    }
+                }
+            }
+            r
+        };
+        let name = match std::str::from_utf8(&ret) {
+            Ok(s) => s,
+            Err(_) => {
+                let err = ErrorKind::GuardError("non-UTF8 operator".to_string());
+                buf.set_cursor_unsafe(start);
+                return Err(locate_value(err, start, end))
+            },
+        };
+        let op = OperatorT::new(name.to_string());
+        Ok(LocatedVal::new(op, start, end))
+    }
+}
+
 // Stream object content.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct StreamContentT {

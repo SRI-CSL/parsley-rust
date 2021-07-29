@@ -103,13 +103,13 @@ impl ArrayT {
     pub fn objs(&self) -> &[Rc<LocatedVal<PDFObjT>>] { self.objs.as_slice() }
 }
 
-struct ArrayP<'a> {
+pub struct ArrayP<'a> {
     ctxt: &'a mut PDFObjContext,
 }
 
 impl ArrayP<'_> {
     pub fn new(ctxt: &mut PDFObjContext) -> ArrayP { ArrayP { ctxt } }
-    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<LocatedVal<ArrayT>> {
+    pub fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<LocatedVal<ArrayT>> {
         let start = buf.get_cursor();
         if let Err(e) = buf.exact(b"[") {
             let msg = format!("not at array object: {}", e.val());
