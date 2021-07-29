@@ -187,20 +187,28 @@ fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFOb
 }
 
 fn extract_text(
-    ctxt: &mut PDFObjContext, pid: &ObjectId, _r: &Resources, buf: &mut ParseBuffer,
+    ctxt: &mut PDFObjContext, pid: &ObjectId, _r: &Resources, buf: &mut ParseBuffer, dump: &mut Option<fs::File>
 ) -> ParseResult<()> {
     let mut te = TextExtractor::new(ctxt, pid);
     let strings = te.parse(buf)?;
     for s in strings.val().iter() {
         match std::str::from_utf8(s) {
-            Ok(v) => println!("{}", v),
+            Ok(v) => match dump {
+                None => println!("{}", v),
+                Some(f) => {
+                    match write!(f, "{}", v) {
+                        Ok(_) => (),
+                        Err(_) => ()
+                    }
+                }
+            },
             Err(_) => (), // println!("not UTF8"),
         }
     }
     return Ok(())
 }
 
-fn dump_file(test_file: &str) {
+fn dump_file(test_file: &str, text_dump_file: &mut Option<fs::File>) {
     let (fi, mut ctxt, root_id) = parse_file(test_file);
 
     // TODO: this constraint should be enforced in the library.
@@ -285,7 +293,7 @@ fn dump_file(test_file: &str) {
                         },
                     }
                 }
-                match extract_text(&mut ctxt, pid, l.resources(), &mut buf) {
+                match extract_text(&mut ctxt, pid, l.resources(), &mut buf, text_dump_file) {
                     Ok(_) => (),
                     Err(e) =>
                         exit_log!(1,
@@ -352,6 +360,14 @@ fn main() {
                 .multiple(true)
                 .help("verbosity that increases logging level (default: INFO)"),
         )
+        .arg(
+            Arg::with_name("output_text_extract")
+                .short("t")
+                .long("output_text_extract")
+                .value_name("TEXT_FILE")
+                .takes_value(true)
+                .help("output file where to store extracted text"),
+        )
         .get_matches();
 
     // set logging level based on -v:
@@ -407,6 +423,20 @@ fn main() {
                                                          // parse_file()?
         }
     }
+    let mut output_text_file =
+        if matches.is_present("output_text_extract") {
+            let fname = matches.value_of("output_text_extract").unwrap();
+            match fs::File::create(fname) {
+                Ok(f) => Some(f),
+                Err(e) =>
+                    exit_log!(1,
+                              "Could not create output file at {}: {}",
+                              fname,
+                              e)
+            }
+        } else {
+            None
+        };
 
-    dump_file(matches.value_of("pdf_file").unwrap())
+    dump_file(matches.value_of("pdf_file").unwrap(), &mut output_text_file);
 }
