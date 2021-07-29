@@ -225,6 +225,24 @@ impl FontDescriptor {
     }
     pub fn is_symbolic(&self) -> bool { self.flags.contains(&FontFlag::Symbolic) }
 }
+
+pub const STANDARD_FONTS: &'static [&str] = &[
+    "Times-Roman",
+    "Times-Bold",
+    "Times-Italic",
+    "Times-BoldItalic",
+    "Helvetica",
+    "Helvetica-Bold",
+    "Helvetica-Oblique",
+    "Helvetica-BoldOblique",
+    "Courier",
+    "Courier-Bold",
+    "Courier-Oblique",
+    "Courier-BoldOblique",
+    "Symbol",
+    "ZapfDingbats"
+];
+
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct FontDictionary {
     subtype:        FontType,
@@ -237,18 +255,35 @@ impl FontDictionary {
     pub fn basefont(&self) -> &[u8] { &self.basefont }
     pub fn encoding(&self) -> &Option<FontEncoding> { &self.encoding }
     pub fn is_embedded(&self) -> FeaturePresence {
-        FeaturePresence::from(
-            self.fontdescriptor
-                .as_ref()
-                .and_then(|fd| Some(fd.is_embedded())),
-        )
+        if self.is_base_font() {
+            FeaturePresence::from(Some(true))
+        } else {
+            FeaturePresence::from(
+                self.fontdescriptor
+                    .as_ref()
+                    .and_then(|fd| Some(fd.is_embedded()))
+            )
+        }
     }
     pub fn is_symbolic(&self) -> FeaturePresence {
         FeaturePresence::from(
             self.fontdescriptor
                 .as_ref()
-                .and_then(|fd| Some(fd.is_symbolic())),
+                .and_then(|fd| Some(fd.is_symbolic()))
         )
+    }
+    pub fn is_base_font(&self) -> bool {
+        match (&self.subtype, std::str::from_utf8(&self.basefont)) {
+            (FontType::Type1, Ok(s)) => {
+                for f in STANDARD_FONTS {
+                    if f == &s {
+                        return true
+                    }
+                }
+                false
+            },
+            _ => false
+        }
     }
 }
 
