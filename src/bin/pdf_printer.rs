@@ -55,7 +55,7 @@ use parsley_rust::pdf_lib::pdf_streams::{
 };
 use parsley_rust::pdf_lib::pdf_type_check::{check_type, TypeCheckContext};
 
-use parsley_rust::pdf_lib::pdf_encryption::{decrypt_stream};
+use parsley_rust::pdf_lib::pdf_encryption::{PDFEncryptionDict, decrypt_stream};
 
 /* from: https://osr.jpl.nasa.gov/wiki/pages/viewpage.action?spaceKey=SD&title=TA2+PDF+Safe+Parser+Evaluation
 
@@ -149,7 +149,9 @@ fn parse_xref_stream(
 
         if ctxt.is_encrypted() {
             // decrypt the stream
-            decrypt_stream(ctxt, s)
+            ta3_log!(Level::Info, fi.file_offset(0), "parse_xref_stream:: ctxt.is_encrypted is true. calling decryption fuinction\n");
+            println!("inside: parse_xref_stream calling ");
+            decrypt_stream(ctxt, &xref_obj, s)
         }
 
         let content = s.stream().val();
@@ -346,15 +348,16 @@ fn parse_xref_section(
 
         let enc_obj = parse_enc_obj(fi, ctxt, pb, &enc_obj, &xrefs);
 
-        // TODO: put in context
-        let enc_v : i64;
-        let enc_len : i64;
+        // these variables will be added to the context.
+        let mut enc_v : i64 = 0;
+        let mut enc_len : i64 = 0;
 
         if let PDFObjT::Dict(d) = enc_obj.obj().val() {
             if let Some(fk) = d.get(b"Filter") {
                 if let PDFObjT::Name(enc_dict_nme) = fk.val() {
                     if enc_dict_nme.as_string() == "Standard" {
                         println!("Encryption algorithm is standard.");
+                        ctxt.set_encrypted();
                     } else {
                         exit_log!(fi.file_offset(c),
                             "Encryption filter type {} unsupported!",
@@ -385,21 +388,40 @@ fn parse_xref_section(
                     match v.int_val() {
                         0 => exit_log!(fi.file_offset(c),
                         "The V key in the encryption dictionary has invalid undocumented algo value 0."),
-                        2 => (),
-                        1 | 3..=5 => enc_v = v.int_val(),
+                        2 | 1 | 3..=5 => enc_v = v.int_val(),
                         _ => exit_log!(fi.file_offset(c),
-                        "The file has value of V in ecnryption dict either 1 or between 3 .. 5"),
+                        "The file has value of V in ecnryption dict not between 1 .. 5 (inclusive)"),
                     }
                 }
             } else {
                 exit_log!(fi.file_offset(c),
                     "The V key is missing in the encryption dictionary.");
             }
+
+            if let Some(r_obj)  = d.get(b"R"){
+                if let PDFObjT::Integer(r) = r_obj.val() {
+                    println!("R is: {:?}", r.int_val());
+                    match r.int_val() {
+                        2| 3| 4| 5| 6=> println!("valid R values\n"),
+                        _ => println!("invalid R values...\n")
+                    }
+                }
+            }
+
+            if let Some(o_obj)  = d.get(b"O"){
+                if let PDFObjT::String(o) = o_obj.val() {
+                    println!("O is: {:?}", o);
+                }
+            }
         } else {
             exit_log!(fi.file_offset(c),
                 "The Encryption object is not a dictionary.");
         }
+
+        let enc_dict = PDFEncryptionDict::new(enc_obj, enc_v, enc_len);
+        ctxt.set_encryption_dict(enc_dict);
     }
+
 
     // Section 7.5.8.4: check for XRefStm in hybrid-reference
     // file. TODO: This should be conditioned on a flag for
@@ -809,6 +831,7 @@ fn parse_objects(
 // each object type and location as we go.
 fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFObjT>>) {
     debug!("Beginning breadth-first traversal of root object:");
+    println!("inside: dump_root function.\n");
 
     let log_obj = |t: &str, loc: &dyn Location, depth: u32| {
         ta3_log!(
@@ -855,7 +878,6 @@ fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFOb
             PDFObjT::Stream(s) => {
                 log_obj("stream", o.as_ref() as &dyn Location, depth);
                 for (_, v) in s.dict().val().map().iter() {
-                    // TODO: print key names
                     if !processed.contains(v) {
                         obj_queue.push_back((Rc::clone(v), depth + 1));
                         processed.insert(Rc::clone(v));
@@ -865,7 +887,8 @@ fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFOb
                 if ctxt.is_encrypted() {
                     // decrypt stream inplace
                     ta3_log!(Level::Info, fi.file_offset(o.start()), "stream is encrypted. Decrypting now..");
-                    decrypt_stream(ctxt, s);
+                } else {
+                    ta3_log!(Level::Info, fi.file_offset(o.start()), "ctxt.is_encrypted() is fasle...\n");
                 }
 
                 match decode_stream(s) {

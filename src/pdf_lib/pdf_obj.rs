@@ -78,7 +78,17 @@ impl PDFObjContext {
     pub fn lookup_obj(&self, oid: (usize, usize)) -> Option<&Rc<LocatedVal<PDFObjT>>> {
         self.defns.get(&oid)
     }
+
     pub fn set_encrypted(&mut self) { self.encrypted = true; }
+
+    pub fn set_encryption_dict(&mut self, e: PDFEncryptionDict) {
+        self.encryption_dict = Some(e);
+    }
+
+    pub fn get_encryption_dict(&self) -> &Option<PDFEncryptionDict> {
+        return &self.encryption_dict;
+    }
+
     pub fn is_encrypted(&self) -> bool { self.encrypted }
     pub fn enter_obj(&mut self) -> bool {
         if self.cur_depth == self.max_depth {
