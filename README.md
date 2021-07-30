@@ -4,7 +4,7 @@
 
 ## Requirements
 
-Rust compiler 1.37.0 or higher
+Rust compiler 1.55.0-nightly or higher
 Cargo package manager (included with Rust)
 
 Install on Mac OS X with homebrew:
@@ -18,6 +18,14 @@ Install on Mac OS X with homebrew:
     rustc 1.38.0 (625451e37 2019-09-23)
     $ cargo --version
     cargo 1.38.0 (23ef9a4ef 2019-08-20)
+
+Frequently, we need updated Rust tool chains, so:
+
+    $ rustup update
+
+To switch to the `nightly` toolchain:
+
+    $ rustup default nightly
 
 ## Building with Cargo
 
@@ -65,16 +73,16 @@ for example:
     INFO     - minimal_leading_garbage.pdf at          0 - Found trailer 0 bytes from end of xref table.
     DEBUG    - minimal_leading_garbage.pdf Beginning breadth-first traversal of root object:
     [...]
-    
+
 Or the stand-alone binary:
 
     $ target/release/pdf_printer
     error: The following required arguments were not provided:
         <PDF_FILE>
-    
+
     USAGE:
         pdf_printer [FLAGS] [OPTIONS] <PDF_FILE>
-    
+
     For more information try --help
 
 and:
@@ -82,19 +90,19 @@ and:
     $ target/release/pdf_printer --help
     Parsley PDF Parser
     => parses given PDF file
-    
+
     USAGE:
         pdf_printer [FLAGS] [OPTIONS] <PDF_FILE>
-    
+
     FLAGS:
         -h, --help       Prints help information
         -V, --version    Prints version information
         -v               verbosity that increases logging level (default: INFO)
-    
+
     OPTIONS:
         -i, --input <JSON_FILE>     input file with TA1 JSON content to guide the parsing
         -o, --output <JSON_FILE>    output file where to write JSON for TA1 to
-    
+
     ARGS:
         <PDF_FILE>    the PDF file to parse
 
@@ -104,7 +112,7 @@ An example of using the new input argument:
     DEBUG    - minimal.pdf parsed input JSON: {"COMMENT":"Testing capability of PDF parser to consume an input JSON file","value":42}
     [...]
 
-    
+
 ## Installing a static binary
 
     $ cargo install --path .
@@ -127,7 +135,7 @@ An example of using the new input argument:
        Installed package `parsley-rust v0.1.0 (/Users/linda/git/GitHub/Parsley_repos/parsley-rust)` (executable `pdf_printer`)
     CSL-CAS15874:parsley-rust linda$ which pdf_printer
     /Users/linda/.cargo/bin/pdf_printer
-         
+
 ## Running unit tests
 
     $ make test  # -> actually calls:
