@@ -240,7 +240,7 @@ pub const STANDARD_FONTS: &'static [&str] = &[
     "Courier-Oblique",
     "Courier-BoldOblique",
     "Symbol",
-    "ZapfDingbats"
+    "ZapfDingbats",
 ];
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
@@ -261,7 +261,7 @@ impl FontDictionary {
             FeaturePresence::from(
                 self.fontdescriptor
                     .as_ref()
-                    .and_then(|fd| Some(fd.is_embedded()))
+                    .and_then(|fd| Some(fd.is_embedded())),
             )
         }
     }
@@ -269,7 +269,7 @@ impl FontDictionary {
         FeaturePresence::from(
             self.fontdescriptor
                 .as_ref()
-                .and_then(|fd| Some(fd.is_symbolic()))
+                .and_then(|fd| Some(fd.is_symbolic())),
         )
     }
     pub fn is_base_font(&self) -> bool {
@@ -282,7 +282,7 @@ impl FontDictionary {
                 }
                 false
             },
-            _ => false
+            _ => false,
         }
     }
 }

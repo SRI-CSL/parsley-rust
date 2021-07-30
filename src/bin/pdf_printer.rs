@@ -187,7 +187,8 @@ fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFOb
 }
 
 fn extract_text(
-    ctxt: &mut PDFObjContext, pid: &ObjectId, _r: &Resources, buf: &mut ParseBuffer, dump: &mut Option<fs::File>
+    ctxt: &mut PDFObjContext, pid: &ObjectId, _r: &Resources, buf: &mut ParseBuffer,
+    dump: &mut Option<fs::File>,
 ) -> ParseResult<()> {
     let mut te = TextExtractor::new(ctxt, pid);
     let tokens = te.parse(buf)?;
@@ -201,7 +202,7 @@ fn extract_text(
                         None => print!(" "),
                         Some(f) => {
                             let _ = write!(f, " X ");
-                        }
+                        },
                     };
                     spaced = true;
                 }
@@ -214,11 +215,11 @@ fn extract_text(
                         None => println!("{}", v),
                         Some(f) => {
                             let _ = write!(f, "{}", v);
-                        }
+                        },
                     },
                     Err(_) => (), // println!("not UTF8"),
                 }
-            }
+            },
         }
     }
     return Ok(())
@@ -311,19 +312,15 @@ fn dump_file(test_file: &str, text_dump_file: &mut Option<fs::File>) {
                 }
                 match extract_text(&mut ctxt, pid, l.resources(), &mut buf, text_dump_file) {
                     Ok(_) => (),
-                    Err(e) =>
-                        exit_log!(1,
-                                  " error parsing content in page {:?}: {:?}",
-                                  pid,
-                                  e),
-                        /*
-                        ta3_log!(
-                            Level::Warn,
-                            0,
-                            " error parsing content in page {:?}: {:?}",
-                            pid,
-                            e
-                        ),*/
+                    Err(e) => exit_log!(1, " error parsing content in page {:?}: {:?}", pid, e),
+                    /*
+                    ta3_log!(
+                        Level::Warn,
+                        0,
+                        " error parsing content in page {:?}: {:?}",
+                        pid,
+                        e
+                    ),*/
                 }
             },
             PageKid::Node(_n) => {
@@ -332,11 +329,7 @@ fn dump_file(test_file: &str, text_dump_file: &mut Option<fs::File>) {
         }
     }
     if !has_embedded_text {
-        ta3_log!(
-            Level::Warn,
-            0,
-            "\nNo embedded text fonts found."
-        )
+        ta3_log!(Level::Warn, 0, "\nNo embedded text fonts found.")
     }
 }
 
@@ -439,20 +432,15 @@ fn main() {
                                                          // parse_file()?
         }
     }
-    let mut output_text_file =
-        if matches.is_present("output_text_extract") {
-            let fname = matches.value_of("output_text_extract").unwrap();
-            match fs::File::create(fname) {
-                Ok(f) => Some(f),
-                Err(e) =>
-                    exit_log!(1,
-                              "Could not create output file at {}: {}",
-                              fname,
-                              e)
-            }
-        } else {
-            None
-        };
+    let mut output_text_file = if matches.is_present("output_text_extract") {
+        let fname = matches.value_of("output_text_extract").unwrap();
+        match fs::File::create(fname) {
+            Ok(f) => Some(f),
+            Err(e) => exit_log!(1, "Could not create output file at {}: {}", fname, e),
+        }
+    } else {
+        None
+    };
 
     dump_file(matches.value_of("pdf_file").unwrap(), &mut output_text_file);
 }
