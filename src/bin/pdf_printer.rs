@@ -256,8 +256,6 @@ fn dump_file(test_file: &str, text_dump_file: &mut Option<fs::File>) {
     };
     // We will consider a file as having text if it has a non-symbolic
     // font that is embedded.
-    let mut has_embedded_text = false;
-
     'page_loop: for (pid, p) in page_dom.pages().iter() {
         match p {
             PageKid::Leaf(l) => {
@@ -267,15 +265,10 @@ fn dump_file(test_file: &str, text_dump_file: &mut Option<fs::File>) {
                     l.contents().len()
                 );
                 for (_, fd) in l.resources().fonts().iter() {
-                    println!(
-                        " page {:?} has font {:?} with symbolic:{:?} embedded:{:?}",
-                        pid,
-                        fd.basefont(),
-                        fd.is_symbolic(),
-                        fd.is_embedded()
-                    );
-                    has_embedded_text |= (fd.is_embedded() == FeaturePresence::True)
-                        && (fd.is_symbolic() == FeaturePresence::False);
+                    if fd.is_embedded() == FeaturePresence::False {
+                        exit_log!(1, "page {:?} has a non-embedded font",
+                                  pid)
+                    }
                 }
                 // If there are multiple content streams, they need to
                 // be concatenated into a single buffer to work with
@@ -328,9 +321,6 @@ fn dump_file(test_file: &str, text_dump_file: &mut Option<fs::File>) {
                 // println!(" tree node {:?} with {} kids", pid, n.kids().len())
             },
         }
-    }
-    if !has_embedded_text {
-        ta3_log!(Level::Warn, 0, "\nNo embedded text fonts found.")
     }
 }
 
