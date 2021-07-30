@@ -201,7 +201,7 @@ fn extract_text(
                     match dump {
                         None => print!(" "),
                         Some(f) => {
-                            let _ = write!(f, " X ");
+                            let _ = write!(f, " ");
                         },
                     };
                     spaced = true;
@@ -218,7 +218,8 @@ fn extract_text(
                         },
                     },
                     Err(_) => (), // println!("not UTF8"),
-                }
+                };
+                spaced = false
             },
         }
     }
