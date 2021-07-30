@@ -157,6 +157,15 @@ impl ParsleyParser for CSObjP<'_> {
     }
 }
 
+// The text extractor needs to preserve word spacing for legible
+// output, and hence extracted text will be represented by the
+// following token.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum TextToken {
+    Space,
+    RawText(Vec<u8>)
+}
+
 // Raw text extractor for the content stream.  It does not handle any font
 // processing.
 
@@ -200,9 +209,9 @@ impl<'a> TextExtractor<'a> {
     // concatenated first (with inserted whitespace at their join
     // points) before calling this parser.
 
-    pub fn parse_internal(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Vec<Vec<u8>>> {
+    pub fn parse_internal(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Vec<TextToken>> {
         // the collected text objects
-        let mut texts = Vec::new();
+        let mut texts : Vec<TextToken> = Vec::new();
 
         // the internal parsers
         let mut op = CSObjP::new(self.ctxt);
@@ -322,7 +331,18 @@ impl<'a> TextExtractor<'a> {
                     }
                     for a in args.iter() {
                         match a.val() {
-                            CSObjT::String(v) => texts.push(v.clone()),
+                            CSObjT::String(v) => {
+                                // We haven't type-checked the args,
+                                // so we are relying on the fact that
+                                // there is a single text argument to
+                                // these operators.
+                                if op_name.as_str() != "Tj" {
+                                    texts.push(TextToken::Space);
+                                }
+                                texts.push(TextToken::RawText(v.clone()))
+                            },
+                            CSObjT::Integer(_) | CSObjT::Real(_)
+                                if op_name.as_str() == "\"" => (),
                             _ => {
                                 let msg = format!(
                                     "content stream {:?}: unexpected arg type {:?} for {}",
@@ -343,8 +363,16 @@ impl<'a> TextExtractor<'a> {
                             CSObjT::Array(array) => {
                                 for o in array.objs() {
                                     match o.val() {
-                                        PDFObjT::String(v) => texts.push(v.clone()),
+                                        PDFObjT::String(v) =>
+                                            texts.push(TextToken::RawText(v.clone())),
+
+                                        // TODO: handle the case when
+                                        // the "TJ" adjustments are
+                                        // actually quite large,
+                                        // effectively equivalent to
+                                        // word-spacing.
                                         PDFObjT::Integer(_) | PDFObjT::Real(_) => (),
+
                                         _ => {
                                             let msg = format!(
                                                 "content stream {:?}: unexpected array element type {:?} for {}",
@@ -374,6 +402,11 @@ impl<'a> TextExtractor<'a> {
                         None => (), // empty array should be valid
                     }
                 },
+                (OpType::TextPositioning, "Td" | "TD" | "T*") =>
+                    texts.push(TextToken::Space),
+                // Introduce a space at the start and end of a text object.
+                (OpType::TextObject, _) =>
+                    texts.push(TextToken::Space),
                 (OpType::Compat, "BX") => self.nested_compats += 1,
                 (OpType::Compat, "EX") => {
                     if self.nested_compats > 0 {
@@ -401,7 +434,7 @@ impl<'a> TextExtractor<'a> {
 }
 
 impl ParsleyParser for TextExtractor<'_> {
-    type T = LocatedVal<Vec<Vec<u8>>>;
+    type T = LocatedVal<Vec<TextToken>>;
 
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         // First, consume possibly empty whitespace.

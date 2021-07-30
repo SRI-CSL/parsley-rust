@@ -41,7 +41,7 @@ use parsley_rust::pcore::parsebuffer::{
     LocatedVal, Location, ParseBuffer, ParseResult, ParsleyParser, StreamBufferT,
 };
 use parsley_rust::pdf_lib::catalog::catalog_type;
-use parsley_rust::pdf_lib::pdf_content_streams::TextExtractor;
+use parsley_rust::pdf_lib::pdf_content_streams::{TextExtractor, TextToken};
 use parsley_rust::pdf_lib::pdf_obj::{ObjectId, PDFObjContext, PDFObjT};
 use parsley_rust::pdf_lib::pdf_page_dom::Resources;
 use parsley_rust::pdf_lib::pdf_page_dom::{to_page_dom, FeaturePresence, PageKid};
@@ -190,19 +190,35 @@ fn extract_text(
     ctxt: &mut PDFObjContext, pid: &ObjectId, _r: &Resources, buf: &mut ParseBuffer, dump: &mut Option<fs::File>
 ) -> ParseResult<()> {
     let mut te = TextExtractor::new(ctxt, pid);
-    let strings = te.parse(buf)?;
-    for s in strings.val().iter() {
-        match std::str::from_utf8(s) {
-            Ok(v) => match dump {
-                None => println!("{}", v),
-                Some(f) => {
-                    match write!(f, "{}", v) {
-                        Ok(_) => (),
-                        Err(_) => ()
-                    }
+    let tokens = te.parse(buf)?;
+    // condense multiple spaces into a single one.
+    let mut spaced = false;
+    for t in tokens.val().iter() {
+        match t {
+            TextToken::Space => {
+                if !spaced {
+                    match dump {
+                        None => print!(" "),
+                        Some(f) => {
+                            let _ = write!(f, " X ");
+                        }
+                    };
+                    spaced = true;
                 }
             },
-            Err(_) => (), // println!("not UTF8"),
+            TextToken::RawText(s) => {
+                // TODO: font conversion.  For now, just try blind
+                // unicode conversion.
+                match std::str::from_utf8(s) {
+                    Ok(v) => match dump {
+                        None => println!("{}", v),
+                        Some(f) => {
+                            let _ = write!(f, "{}", v);
+                        }
+                    },
+                    Err(_) => (), // println!("not UTF8"),
+                }
+            }
         }
     }
     return Ok(())
