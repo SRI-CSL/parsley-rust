@@ -36,10 +36,10 @@ test:
 
 # Requires cargo install afl
 kuduafl:
-	RUSTFLAGS="-A unused_imports" cargo afl build --features kuduafl
+	RUSTFLAGS="-A unused_imports" cargo afl build --features kuduafl --target-dir target/kudu
 
 runafl:
-	cargo afl fuzz -i tests/test_files -o out target/debug/pdf_printer
+	cargo afl fuzz -i tests/test_files -o out target/kudu/debug/pdf_printer
 
 fmt:
 	cargo +nightly fmt
