@@ -24,9 +24,12 @@ extern crate log_panics;
 extern crate serde;
 extern crate serde_json;
 
+#[cfg(feature = "kuduafl")]
+extern crate afl;
+
 use std::collections::{BTreeSet, VecDeque};
 use std::fs;
-use std::io::prelude::*;
+use std::io::Write;
 use std::path::Path;
 use std::process;
 use std::rc::Rc;
@@ -48,6 +51,9 @@ use parsley_rust::pdf_lib::pdf_page_dom::{to_page_dom, FeaturePresence, PageKid}
 use parsley_rust::pdf_lib::pdf_streams::decode_stream;
 use parsley_rust::pdf_lib::pdf_traverse_xref::{parse_file, FileInfo};
 use parsley_rust::pdf_lib::pdf_type_check::{check_type, TypeCheckContext};
+
+#[cfg(feature = "kuduafl")]
+use parsley_rust::pdf_lib::pdf_traverse_xref::parse_data;
 
 /* from: https://osr.jpl.nasa.gov/wiki/pages/viewpage.action?spaceKey=SD&title=TA2+PDF+Safe+Parser+Evaluation
 
@@ -266,8 +272,7 @@ fn dump_file(test_file: &str, text_dump_file: &mut Option<fs::File>) {
                 );
                 for (_, fd) in l.resources().fonts().iter() {
                     if fd.is_embedded() == FeaturePresence::False {
-                        exit_log!(1, "page {:?} has a non-embedded font",
-                                  pid)
+                        exit_log!(1, "page {:?} has a non-embedded font", pid)
                     }
                 }
                 // If there are multiple content streams, they need to
@@ -324,6 +329,7 @@ fn dump_file(test_file: &str, text_dump_file: &mut Option<fs::File>) {
     }
 }
 
+#[cfg(not(feature = "kuduafl"))]
 fn main() {
     // parsing command line arguments:
     let matches = App::new("Parsley PDF Parser")
@@ -434,4 +440,13 @@ fn main() {
     };
 
     dump_file(matches.value_of("pdf_file").unwrap(), &mut output_text_file);
+}
+
+#[cfg(feature = "kuduafl")]
+fn main() {
+    let path = std::env::current_dir();
+    let path = path.unwrap();
+    afl::fuzz!(|data: &[u8]| {
+        let _ = parse_data(&path, data);
+    });
 }

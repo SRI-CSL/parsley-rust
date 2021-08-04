@@ -690,8 +690,13 @@ pub fn parse_file(test_file: &str) -> (FileInfo, PDFObjContext, (usize, usize)) 
     if let Err(why) = file.read_to_end(&mut v) {
         exit_log!(0, "Couldn't read {}: {}", display, why.to_string());
     };
+    parse_data(&path, &v)
+}
 
-    let mut pb = ParseBuffer::new(v);
+pub fn parse_data(
+    path: &std::path::PathBuf, data: &[u8],
+) -> (FileInfo, PDFObjContext, (usize, usize)) {
+    let mut pb = ParseBuffer::new(data.to_vec());
 
     // Handle leading garbage.
     let pdf_hdr_ofs = match pb.scan(b"%PDF-") {
