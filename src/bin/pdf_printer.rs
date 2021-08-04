@@ -261,7 +261,7 @@ fn type_check_file(fi: &FileInfo, ctxt: &mut PDFObjContext, root_id: ObjectId) {
 }
 
 fn file_extract_text(
-    ctxt: &mut PDFObjContext, root_id: ObjectId, text_dump_file: &mut Option<fs::File>
+    ctxt: &mut PDFObjContext, root_id: ObjectId, text_dump_file: &mut Option<fs::File>,
 ) {
     let root_obj: &Rc<LocatedVal<PDFObjT>> = match ctxt.lookup_obj(root_id) {
         Some(obj) => obj,
@@ -345,7 +345,8 @@ fn file_extract_text(
 }
 
 fn process_file(
-    fi: &FileInfo, ctxt: &mut PDFObjContext, root_id: ObjectId, text_dump_file: &mut Option<fs::File>
+    fi: &FileInfo, ctxt: &mut PDFObjContext, root_id: ObjectId,
+    text_dump_file: &mut Option<fs::File>,
 ) {
     dump_file(fi, ctxt, root_id);
     type_check_file(fi, ctxt, root_id);

@@ -36,7 +36,7 @@ use crate::pcore::parsebuffer::{
 };
 use crate::pcore::transforms::{BufferTransformT, RestrictView};
 use crate::pdf_lib::pdf_file::{HeaderP, StartXrefP, TrailerP, XrefSectP};
-use crate::pdf_lib::pdf_obj::{IndirectP, PDFObjContext, PDFObjT};
+use crate::pdf_lib::pdf_obj::{IndirectP, ObjectId, PDFObjContext, PDFObjT};
 use crate::pdf_lib::pdf_streams::{ObjStreamP, XrefEntStatus, XrefEntT, XrefStreamP};
 
 /* from: https://osr.jpl.nasa.gov/wiki/pages/viewpage.action?spaceKey=SD&title=TA2+PDF+Safe+Parser+Evaluation
@@ -667,7 +667,7 @@ fn parse_objects(
     }
 }
 
-pub fn parse_file(test_file: &str) -> (FileInfo, PDFObjContext, (usize, usize)) {
+pub fn parse_file(test_file: &str) -> (FileInfo, PDFObjContext, ObjectId) {
     // Print current path
     let path = env::current_dir();
     if path.is_err() {
@@ -693,9 +693,7 @@ pub fn parse_file(test_file: &str) -> (FileInfo, PDFObjContext, (usize, usize)) 
     parse_data(&path, &v)
 }
 
-pub fn parse_data(
-    path: &std::path::PathBuf, data: &[u8],
-) -> (FileInfo, PDFObjContext, (usize, usize)) {
+pub fn parse_data(path: &std::path::PathBuf, data: &[u8]) -> (FileInfo, PDFObjContext, ObjectId) {
     let mut pb = ParseBuffer::new(data.to_vec());
 
     // Handle leading garbage.
@@ -844,7 +842,7 @@ pub fn parse_data(
     // Parse the objects using their xref entries, and put them into the context.
     parse_objects(&fi, &mut ctxt, &id_offsets, &mut pb);
 
-    let root_id: (usize, usize) = if let PDFObjT::Reference(r) = root_ref.val() {
+    let root_id: ObjectId = if let PDFObjT::Reference(r) = root_ref.val() {
         r.id()
     } else {
         // Is there any case where this is not the case?  Should
