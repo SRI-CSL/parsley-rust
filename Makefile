@@ -36,7 +36,7 @@ test:
 
 # Requires cargo install afl
 kuduafl:
-	RUSTFLAGS="-A unused_imports -A dead_code" cargo afl build --features kuduafl
+	RUSTFLAGS="-A unused_imports" cargo afl build --features kuduafl
 
 runafl:
 	cargo afl fuzz -i tests/test_files -o out target/debug/pdf_printer

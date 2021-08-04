@@ -232,9 +232,7 @@ fn extract_text(
     return Ok(())
 }
 
-fn dump_file(test_file: &str, text_dump_file: &mut Option<fs::File>) {
-    let (fi, mut ctxt, root_id) = parse_file(test_file);
-
+fn dump_file(fi: &FileInfo, ctxt: &mut PDFObjContext, root_id: ObjectId) {
     // TODO: this constraint should be enforced in the library.
     let root_obj: &Rc<LocatedVal<PDFObjT>> = match ctxt.lookup_obj(root_id) {
         Some(obj) => obj,
@@ -242,7 +240,14 @@ fn dump_file(test_file: &str, text_dump_file: &mut Option<fs::File>) {
     };
 
     // Run this to get warnings on stream decoding.
-    dump_root(&fi, &ctxt, &root_obj);
+    dump_root(fi, ctxt, root_obj);
+}
+
+fn type_check_file(fi: &FileInfo, ctxt: &mut PDFObjContext, root_id: ObjectId) {
+    let root_obj: &Rc<LocatedVal<PDFObjT>> = match ctxt.lookup_obj(root_id) {
+        Some(obj) => obj,
+        None => exit_log!(0, "Root object {:?} not found!", root_id),
+    };
 
     let mut tctx = TypeCheckContext::new();
     let typ = catalog_type(&mut tctx);
@@ -253,6 +258,16 @@ fn dump_file(test_file: &str, text_dump_file: &mut Option<fs::File>) {
             err.val()
         );
     }
+}
+
+fn file_extract_text(
+    ctxt: &mut PDFObjContext, root_id: ObjectId, text_dump_file: &mut Option<fs::File>
+) {
+    let root_obj: &Rc<LocatedVal<PDFObjT>> = match ctxt.lookup_obj(root_id) {
+        Some(obj) => obj,
+        None => exit_log!(0, "Root object {:?} not found!", root_id),
+    };
+
     let page_dom = match to_page_dom(&ctxt, &root_obj) {
         Ok((_cat, dom)) => {
             println!("Page DOM built with {} page nodes.", dom.pages().len());
@@ -309,7 +324,7 @@ fn dump_file(test_file: &str, text_dump_file: &mut Option<fs::File>) {
                         },
                     }
                 }
-                match extract_text(&mut ctxt, pid, l.resources(), &mut buf, text_dump_file) {
+                match extract_text(ctxt, pid, l.resources(), &mut buf, text_dump_file) {
                     Ok(_) => (),
                     Err(e) => exit_log!(1, " error parsing content in page {:?}: {:?}", pid, e),
                     /*
@@ -327,6 +342,14 @@ fn dump_file(test_file: &str, text_dump_file: &mut Option<fs::File>) {
             },
         }
     }
+}
+
+fn process_file(
+    fi: &FileInfo, ctxt: &mut PDFObjContext, root_id: ObjectId, text_dump_file: &mut Option<fs::File>
+) {
+    dump_file(fi, ctxt, root_id);
+    type_check_file(fi, ctxt, root_id);
+    file_extract_text(ctxt, root_id, text_dump_file);
 }
 
 #[cfg(not(feature = "kuduafl"))]
@@ -439,7 +462,9 @@ fn main() {
         None
     };
 
-    dump_file(matches.value_of("pdf_file").unwrap(), &mut output_text_file);
+    let test_file = matches.value_of("pdf_file").unwrap();
+    let (fi, mut ctxt, root_id) = parse_file(test_file);
+    process_file(&fi, &mut ctxt, root_id, &mut output_text_file);
 }
 
 #[cfg(feature = "kuduafl")]
@@ -447,6 +472,7 @@ fn main() {
     let path = std::env::current_dir();
     let path = path.unwrap();
     afl::fuzz!(|data: &[u8]| {
-        let _ = parse_data(&path, data);
+        let (fi, mut ctxt, root_id) = parse_data(&path, data);
+        process_file(&fi, &mut ctxt, root_id, &mut None);
     });
 }
