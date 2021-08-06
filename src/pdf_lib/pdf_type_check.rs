@@ -579,6 +579,8 @@ pub fn check_type(
         // reset for the next check.
         result = None;
 
+        // println!("\n\n {:?}\n\n against {:?}\n\n", o.val(), c);
+
         match (o.val(), c.typ(), c.indirect()) {
             // Indirects are best handled first.
             (PDFObjT::Reference(refnc), _, IndirectSpec::Allowed)
@@ -731,6 +733,8 @@ pub fn check_type(
                 )))
             },
         }
+
+        // println!("\n\n with result {:?}\n\n", result);
     }
 }
 
