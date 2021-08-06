@@ -79,13 +79,13 @@ Note: Rust level trace! is not included.  Those messages will print without the 
 // use this macro to log messages with position argument:
 macro_rules! ta3_log {
     ($lvl:expr, $pos:expr, $($arg:tt)+) => ({
-        log!($lvl, "at {:>10} - {}", $pos, format_args!($($arg)+))
+        log!($lvl, "at {:>10} ({:#x}) - {}", $pos, $pos, format_args!($($arg)+))
     })
 }
 
 macro_rules! exit_log {
     ($pos:expr, $($arg:tt)+) => ({
-        log!(Level::Error, "at {:>10} - {}", $pos, format_args!($($arg)+));
+        log!(Level::Error, "at {:>10} ({:#x}) - {}", $pos, $pos, format_args!($($arg)+));
         process::exit(1)
     })
 }
@@ -287,7 +287,7 @@ fn file_extract_text(
                 );
                 for (_, fd) in l.resources().fonts().iter() {
                     if fd.is_embedded() == FeaturePresence::False {
-                        exit_log!(1, "page {:?} has a non-embedded font", pid)
+                        exit_log!(0, "page {:?} has a non-embedded font", pid)
                     }
                 }
                 // If there are multiple content streams, they need to
@@ -326,7 +326,7 @@ fn file_extract_text(
                 }
                 match extract_text(ctxt, pid, l.resources(), &mut buf, text_dump_file) {
                     Ok(_) => (),
-                    Err(e) => exit_log!(1, " error parsing content in page {:?}: {:?}", pid, e),
+                    Err(e) => exit_log!(0, " error parsing content in page {:?}: {:?}", pid, e),
                     /*
                     ta3_log!(
                         Level::Warn,
@@ -457,7 +457,7 @@ fn main() {
         let fname = matches.value_of("output_text_extract").unwrap();
         match fs::File::create(fname) {
             Ok(f) => Some(f),
-            Err(e) => exit_log!(1, "Could not create output file at {}: {}", fname, e),
+            Err(e) => exit_log!(0, "Could not create output file at {}: {}", fname, e),
         }
     } else {
         None
