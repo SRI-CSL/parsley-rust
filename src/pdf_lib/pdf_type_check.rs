@@ -21,7 +21,7 @@ use super::pdf_obj::{DictKey, PDFObjContext, PDFObjT, ReferenceT};
 use std::collections::{BTreeMap, VecDeque};
 use std::rc::Rc;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Clone, Copy)]
 pub enum PDFPrimType {
     Bool,
     String,
@@ -32,14 +32,14 @@ pub enum PDFPrimType {
     Comment,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Clone, Copy)]
 pub enum IndirectSpec {
     Required,
     Allowed, // the default
     Forbidden,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Clone, Copy)]
 pub enum DictKeySpec {
     Required,
     Optional,
@@ -289,169 +289,180 @@ fn check_predicate(
 type PendingCheck = (Rc<LocatedVal<PDFObjT>>, Rc<TypeCheck>);
 /* An entry on the stack */
 type PendingSet = VecDeque<PendingCheck>;
+
 /* The state */
-type State = VecDeque<(PendingSet, usize)>;
+struct State {
+    todo: VecDeque<(PendingSet, usize)>,
+}
 
 /* The result of picking the next check given the current state. */
 type GetResult = Result<Option<PendingCheck>, ()>;
 
-/* This picks the next check from the given state, given the current
- * check error if any. */
-fn get_next_check(
-    state: &mut State, check_error: &Option<LocatedVal<TypeCheckError>>,
-) -> GetResult {
-    loop {
-        if let Some((pending, next_idx)) = state.get_mut(0) {
-            if let Some((obj, tc)) = pending.pop_front() {
-                match tc.as_ref() {
-                    TypeCheck::Rep(chk) => {
-                        match chk.as_ref().typ() {
-                            // an in-progress disjunct
-                            PDFType::Disjunct(set) if *next_idx > 0 => {
-                                // if there is no match error, this
-                                // disjunct checked successfully, so
-                                // we can take the next check after
-                                // resetting the index.
-                                if check_error.is_none() {
-                                    *next_idx = 0;
-                                    continue
-                                } else {
-                                    // if there is an error, but there
-                                    // are remaining cases to try in
-                                    // the disjunct, we adjust the
-                                    // index and return the next case.
-                                    if *next_idx < set.len() {
-                                        let c = Rc::clone(&set[*next_idx]);
-                                        *next_idx += 1;
-                                        pending.push_front((Rc::clone(&obj), tc));
-                                        return Ok(Some((obj, c)))
+impl State {
+    fn new(obj: &Rc<LocatedVal<PDFObjT>>, chk: &Rc<TypeCheck>) -> State {
+        let mut first = VecDeque::new();
+        first.push_back((Rc::clone(obj), Rc::clone(chk)));
+        let mut todo = VecDeque::new();
+        todo.push_back((first, 0));
+        State { todo }
+    }
+
+    /* returns the last retrieved check back to the state, which must
+     * be non-empty (i.e. it should not have been modified since the
+     * retrieval.) */
+    fn return_check(&mut self, chk: PendingCheck) {
+        if let Some((pending, _)) = self.todo.get_mut(0) {
+            pending.push_front(chk);
+        } else {
+            unreachable!()
+        }
+    }
+
+    /* adds a new set of checks to the state */
+    fn push_checks(&mut self, chks: Vec<PendingCheck>) {
+        let mut set = VecDeque::new();
+        for c in chks {
+            set.push_back(c)
+        }
+        self.todo.push_front((set, 0))
+    }
+
+    /* This picks the next check from the given state, given the current
+     * check error if any. */
+    fn get_next_check(&mut self, check_error: &Option<LocatedVal<TypeCheckError>>) -> GetResult {
+        loop {
+            if let Some((pending, next_idx)) = self.todo.get_mut(0) {
+                if let Some((obj, tc)) = pending.pop_front() {
+                    match tc.as_ref() {
+                        TypeCheck::Rep(chk) => {
+                            match chk.as_ref().typ() {
+                                // an in-progress disjunct
+                                PDFType::Disjunct(set) if *next_idx > 0 => {
+                                    // if there is no match error, this
+                                    // disjunct checked successfully, so
+                                    // we can take the next check after
+                                    // resetting the index.
+                                    if check_error.is_none() {
+                                        *next_idx = 0;
+                                        continue
                                     } else {
-                                        // if there is an error but
-                                        // there is no remaining case
-                                        // in the disjunct, we need to
-                                        // unwind to the previous
-                                        // disjunct if any.
-                                        if unwind(state) {
-                                            continue
+                                        // if there is an error, but there
+                                        // are remaining cases to try in
+                                        // the disjunct, we adjust the
+                                        // index and return the next case.
+                                        if *next_idx < set.len() {
+                                            let c = Rc::clone(&set[*next_idx]);
+                                            *next_idx += 1;
+                                            pending.push_front((Rc::clone(&obj), tc));
+                                            return Ok(Some((obj, c)))
                                         } else {
-                                            return Err(())
+                                            // if there is an error but
+                                            // there is no remaining case
+                                            // in the disjunct, we need to
+                                            // unwind to the previous
+                                            // disjunct if any.
+                                            if self.unwind() {
+                                                continue
+                                            } else {
+                                                return Err(())
+                                            }
                                         }
                                     }
-                                }
-                            },
-                            _ if check_error.is_some() => {
-                                // unwind to the previous disjunct
-                                if unwind(state) {
-                                    continue
-                                } else {
-                                    return Err(())
-                                }
-                            },
-                            // an unprocessed disjunct
-                            PDFType::Disjunct(set) => {
-                                if set.is_empty() {
-                                    // No options to try: this is a
-                                    // check specification error.
-                                    unreachable!()
-                                } else {
-                                    // Take the first option, and mark
-                                    // this disjunct in progress.
-                                    let c = Rc::clone(&set[0]);
-                                    *next_idx = 1;
-                                    pending.push_front((Rc::clone(&obj), tc));
-                                    return Ok(Some((obj, c)))
-                                }
-                            },
-                            // a normal singular check
-                            _ => return Ok(Some((obj, tc))),
-                        }
-                    },
-                    TypeCheck::Named(_) if check_error.is_some() => {
-                        // unwind to the previous disjunct
-                        if unwind(state) {
+                                },
+                                _ if check_error.is_some() => {
+                                    // unwind to the previous disjunct
+                                    if self.unwind() {
+                                        continue
+                                    } else {
+                                        return Err(())
+                                    }
+                                },
+                                // an unprocessed disjunct
+                                PDFType::Disjunct(set) => {
+                                    if set.is_empty() {
+                                        // No options to try: this is a
+                                        // check specification error.
+                                        unreachable!()
+                                    } else {
+                                        // Take the first option, and mark
+                                        // this disjunct in progress.
+                                        let c = Rc::clone(&set[0]);
+                                        *next_idx = 1;
+                                        pending.push_front((Rc::clone(&obj), tc));
+                                        return Ok(Some((obj, c)))
+                                    }
+                                },
+                                // a normal singular check
+                                _ => return Ok(Some((obj, tc))),
+                            }
+                        },
+                        TypeCheck::Named(_) if check_error.is_some() => {
+                            // unwind to the previous disjunct
+                            if self.unwind() {
+                                continue
+                            } else {
+                                return Err(())
+                            }
+                        },
+                        TypeCheck::Named(_) => return Ok(Some((obj, tc))),
+                    }
+                } else {
+                    // we finished the last check in the set at the top.
+                    if check_error.is_some() {
+                        if self.unwind() {
                             continue
                         } else {
                             return Err(())
                         }
-                    },
-                    TypeCheck::Named(_) => return Ok(Some((obj, tc))),
-                }
-            } else {
-                // we finished the last check in the set at the top.
-                if check_error.is_some() {
-                    if unwind(state) {
-                        continue
                     } else {
-                        return Err(())
+                        self.todo.pop_front();
+                        continue
                     }
-                } else {
-                    state.pop_front();
-                    continue
                 }
-            }
-        } else {
-            // no more pending checks.
-            if check_error.is_some() {
-                return Err(())
             } else {
-                return Ok(None)
+                // no more pending checks.
+                if check_error.is_some() {
+                    return Err(())
+                } else {
+                    return Ok(None)
+                }
             }
         }
     }
-}
 
-/* Unwinds a state upto an in-progress disjunct, if any; returns
- * whether it was successful. */
-fn unwind(state: &mut State) -> bool {
-    loop {
-        if let Some((pending, next_idx)) = state.get_mut(0) {
-            if let Some((_, tc)) = pending.front() {
-                match tc.as_ref() {
-                    TypeCheck::Rep(chk) => match chk.typ() {
-                        // found an in-progress disjunct
-                        PDFType::Disjunct(_) if *next_idx > 0 => return true,
-                        _ => {
+    /* Unwinds a state upto an in-progress disjunct, if any; returns
+     * whether it was successful. */
+    fn unwind(&mut self) -> bool {
+        loop {
+            if let Some((pending, next_idx)) = self.todo.get_mut(0) {
+                if let Some((_, tc)) = pending.front() {
+                    match tc.as_ref() {
+                        TypeCheck::Rep(chk) => match chk.typ() {
+                            // found an in-progress disjunct
+                            PDFType::Disjunct(_) if *next_idx > 0 => return true,
+                            _ => {
+                                // discard this pending set
+                                self.todo.pop_front();
+                                continue
+                            },
+                        },
+                        TypeCheck::Named(_) => {
                             // discard this pending set
-                            state.pop_front();
+                            self.todo.pop_front();
                             continue
                         },
-                    },
-                    TypeCheck::Named(_) => {
-                        // discard this pending set
-                        state.pop_front();
-                        continue
-                    },
+                    }
+                } else {
+                    // no more in the top level set.
+                    self.todo.pop_front();
+                    continue
                 }
             } else {
-                // no more in the top level set.
-                state.pop_front();
-                continue
+                // no more pending checks
+                return false
             }
-        } else {
-            // no more pending checks
-            return false
         }
     }
-}
-
-/* returns the last retrieved check back to the state, which must
- * non-empty (i.e. it should not have been modified since the
- * retrieval.) */
-fn return_check(state: &mut State, chk: PendingCheck) {
-    if let Some((pending, _)) = state.get_mut(0) {
-        pending.push_front(chk);
-    } else {
-        unreachable!()
-    }
-}
-
-/* adds a new set of checks to the state */
-fn push_checks(state: &mut State, chks: Vec<PendingCheck>) {
-    let mut set = VecDeque::new();
-    for c in chks {
-        set.push_back(c)
-    }
-    state.push_front((set, 0))
 }
 
 /* removes directly nested disjuncts */
@@ -545,16 +556,13 @@ pub fn check_type(
     let chk = Rc::new(TypeCheck::Rep(normalize_check(&rep)));
 
     /* state initialization */
-    let mut first = VecDeque::new();
-    first.push_back((Rc::clone(&obj), Rc::clone(&chk)));
-    let mut state = VecDeque::new();
-    state.push_back((first, 0));
+    let mut state = State::new(&obj, &chk);
 
     let mut result = None;
 
     /* work loop */
     loop {
-        let next: GetResult = get_next_check(&mut state, &result);
+        let next: GetResult = state.get_next_check(&result);
         if next.is_err() {
             // there can only be an error in getting the next check if
             // we already have an error.
@@ -571,6 +579,7 @@ pub fn check_type(
         }
         let (o, tc) = next.unwrap();
 
+        // resolve a named type-check.
         let c = match resolve(tctx, &tc) {
             Ok(rep) => rep,
             Err(err) => return Some(o.place(err)),
@@ -579,7 +588,7 @@ pub fn check_type(
         // reset for the next check.
         result = None;
 
-        // println!("\n\n {:?}\n\n against {:?}\n\n", o.val(), c);
+        println!("\n\n {:?}\n\n against {:?}\n\n", o.val(), c);
 
         match (o.val(), c.typ(), c.indirect()) {
             // Indirects are best handled first.
@@ -590,13 +599,13 @@ pub fn check_type(
                     Some(obj) => {
                         // Remove any Required indirect from the check.
                         let chk = Rc::new(TypeCheck::Rep(c.allow_indirect()));
-                        return_check(&mut state, (Rc::clone(obj), chk));
+                        state.return_check((Rc::clone(obj), chk));
                     },
                     None => {
                         // References to undefined objects are treated
                         // as references to the null object.
                         let obj = o.place(PDFObjT::Null(()));
-                        return_check(&mut state, (Rc::new(obj), tc));
+                        state.return_check((Rc::new(obj), tc));
                     },
                 }
             },
@@ -669,7 +678,7 @@ pub fn check_type(
                 for e in ao.objs() {
                     chks.push((Rc::clone(e), Rc::clone(elem)))
                 }
-                push_checks(&mut state, chks);
+                state.push_checks(chks);
             },
             (PDFObjT::Dict(dict), PDFType::Dict(ents), _) => {
                 let mut chks = Vec::new();
@@ -695,7 +704,7 @@ pub fn check_type(
                     }
                 }
                 if result.is_none() {
-                    push_checks(&mut state, chks)
+                    state.push_checks(chks)
                 }
             },
             (PDFObjT::Stream(s), PDFType::Stream(ents), _) => {
@@ -723,7 +732,7 @@ pub fn check_type(
                     }
                 }
                 if result.is_none() {
-                    push_checks(&mut state, chks)
+                    state.push_checks(chks)
                 }
             },
             (obj, _, _) => {
@@ -734,7 +743,7 @@ pub fn check_type(
             },
         }
 
-        // println!("\n\n with result {:?}\n\n", result);
+        println!("\n\n with result {:?}\n\n", result);
     }
 }
 
