@@ -18,10 +18,11 @@
 
 use super::super::pcore::parsebuffer::LocatedVal;
 use super::pdf_obj::{DictKey, PDFObjContext, PDFObjT, ReferenceT};
-use std::collections::{BTreeMap, VecDeque};
+use std::cmp::Ordering;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::rc::Rc;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum PDFPrimType {
     Bool,
     String,
@@ -32,21 +33,21 @@ pub enum PDFPrimType {
     Comment,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum IndirectSpec {
     Required,
     Allowed, // the default
     Forbidden,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum DictKeySpec {
     Required,
     Optional,
     Forbidden,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub struct DictEntry {
     pub(super) key: Vec<u8>,
     pub(super) chk: Rc<TypeCheck>,
@@ -66,7 +67,7 @@ impl std::fmt::Debug for DictEntry {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PDFType {
     Any,
     PrimType(PDFPrimType),
@@ -163,9 +164,34 @@ impl TypeCheckRep {
     }
 }
 
+// When comparing TypeCheckReps, we should not really ignore the
+// predicate, but trait objects are not comparable.  So we approximate
+// using a coarser comparison that is modulo the predicates.
+impl PartialEq for TypeCheckRep {
+    fn eq(&self, other: &Self) -> bool { *self.typ == *other.typ }
+}
+
+impl PartialOrd for TypeCheckRep {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> { (*self.typ).partial_cmp(&*other.typ) }
+}
+impl Eq for TypeCheckRep {}
+impl Ord for TypeCheckRep {
+    fn cmp(&self, other: &Self) -> Ordering { (*self.typ).cmp(&*other.typ) }
+}
+
+impl std::fmt::Debug for TypeCheckRep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TypeCheck")
+            .field("name", &self.name)
+            .field("typ", &self.typ)
+            .field("indirect", &self.indirect)
+            .finish()
+    }
+}
+
 // a type check either is a full representation, or the name of a
 // representation.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TypeCheck {
     Rep(Rc<TypeCheckRep>),
     Named(String),
@@ -230,20 +256,6 @@ impl TypeCheck {
     pub fn new_named(name: &str) -> Rc<Self> { Rc::new(TypeCheck::Named(String::from(name))) }
 }
 
-impl PartialEq for TypeCheckRep {
-    fn eq(&self, other: &Self) -> bool { *self.typ == *other.typ }
-}
-
-impl std::fmt::Debug for TypeCheckRep {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("TypeCheck")
-            .field("name", &self.name)
-            .field("typ", &self.typ)
-            .field("indirect", &self.indirect)
-            .finish()
-    }
-}
-
 /* computes the top-most general type of an object without descending into it */
 fn type_of(obj: &PDFObjT) -> PDFType {
     // create a dummy context.
@@ -292,7 +304,8 @@ type PendingSet = VecDeque<PendingCheck>;
 
 /* The state */
 struct State {
-    todo: VecDeque<(PendingSet, usize)>,
+    todo:     VecDeque<(PendingSet, usize)>,
+    examined: BTreeSet<PendingCheck>,
 }
 
 /* The result of picking the next check given the current state. */
@@ -304,7 +317,9 @@ impl State {
         first.push_back((Rc::clone(obj), Rc::clone(chk)));
         let mut todo = VecDeque::new();
         todo.push_back((first, 0));
-        State { todo }
+        let mut examined = BTreeSet::new();
+        examined.insert((Rc::clone(obj), Rc::clone(chk)));
+        State { todo, examined }
     }
 
     /* returns the last retrieved check back to the state, which must
@@ -322,17 +337,35 @@ impl State {
     fn push_checks(&mut self, chks: Vec<PendingCheck>) {
         let mut set = VecDeque::new();
         for c in chks {
-            set.push_back(c)
+            let (o, tc) = &c;
+            if !self.have_examined(o, tc) {
+                set.push_back(c)
+            }
         }
-        self.todo.push_front((set, 0))
+        if !set.is_empty() {
+            self.todo.push_front((set, 0))
+        }
+    }
+
+    /* adds a check to the examined set */
+    fn examine(&mut self, o: &Rc<LocatedVal<PDFObjT>>, c: &Rc<TypeCheck>) {
+        let chk = (Rc::clone(o), Rc::clone(c));
+        self.examined.insert(chk);
+    }
+
+    fn have_examined(&self, o: &Rc<LocatedVal<PDFObjT>>, c: &Rc<TypeCheck>) -> bool {
+        let chk = (Rc::clone(o), Rc::clone(c));
+        self.examined.contains(&chk)
     }
 
     /* This picks the next check from the given state, given the current
      * check error if any. */
     fn get_next_check(&mut self, check_error: &Option<LocatedVal<TypeCheckError>>) -> GetResult {
+        //let mut cnt = -1;
         loop {
             if let Some((pending, next_idx)) = self.todo.get_mut(0) {
                 if let Some((obj, tc)) = pending.pop_front() {
+                    //println!(" get_next_check({}): todo[0] tc={:?}", cnt, tc);
                     match tc.as_ref() {
                         TypeCheck::Rep(chk) => {
                             match chk.as_ref().typ() {
@@ -344,6 +377,10 @@ impl State {
                                     // resetting the index.
                                     if check_error.is_none() {
                                         *next_idx = 0;
+                                        //println!(
+                                        //    " get_next_check({}): successful with disjunct, done ",
+                                        //    cnt
+                                        //);
                                         continue
                                     } else {
                                         // if there is an error, but there
@@ -362,6 +399,7 @@ impl State {
                                             // unwind to the previous
                                             // disjunct if any.
                                             if self.unwind() {
+                                                //println!(" get_next_check({}): failed all cases of disjunct, unwinding ", cnt);
                                                 continue
                                             } else {
                                                 return Err(())
@@ -372,6 +410,7 @@ impl State {
                                 _ if check_error.is_some() => {
                                     // unwind to the previous disjunct
                                     if self.unwind() {
+                                        //println!(" get_next_check({}): unwinding ", cnt);
                                         continue
                                     } else {
                                         return Err(())
@@ -399,6 +438,7 @@ impl State {
                         TypeCheck::Named(_) if check_error.is_some() => {
                             // unwind to the previous disjunct
                             if self.unwind() {
+                                //println!(" get_next_check({}): unwinding ", cnt);
                                 continue
                             } else {
                                 return Err(())
@@ -410,11 +450,16 @@ impl State {
                     // we finished the last check in the set at the top.
                     if check_error.is_some() {
                         if self.unwind() {
+                            //println!(
+                            //    " get_next_check({}): unwinding from failure of last top check",
+                            //    cnt
+                            //);
                             continue
                         } else {
                             return Err(())
                         }
                     } else {
+                        //println!(" get_next_check({}): popping top of todo", cnt);
                         self.todo.pop_front();
                         continue
                     }
@@ -442,23 +487,27 @@ impl State {
                             PDFType::Disjunct(_) if *next_idx > 0 => return true,
                             _ => {
                                 // discard this pending set
+                                //println!(" unwind: discarding non-disjunct from pending set");
                                 self.todo.pop_front();
                                 continue
                             },
                         },
                         TypeCheck::Named(_) => {
                             // discard this pending set
+                            //println!(" unwind: discarding named check from pending set");
                             self.todo.pop_front();
                             continue
                         },
                     }
                 } else {
                     // no more in the top level set.
+                    //println!(" unwind: discarding empty top pending set");
                     self.todo.pop_front();
                     continue
                 }
             } else {
                 // no more pending checks
+                //println!(" unwind: no more pending sets");
                 return false
             }
         }
@@ -579,16 +628,22 @@ pub fn check_type(
         }
         let (o, tc) = next.unwrap();
 
+        if state.have_examined(&o, &tc) {
+            //println!(" skipping examined object check");
+            continue
+        }
+
         // resolve a named type-check.
         let c = match resolve(tctx, &tc) {
             Ok(rep) => rep,
             Err(err) => return Some(o.place(err)),
         };
 
+        state.examine(&o, &tc);
         // reset for the next check.
         result = None;
 
-        println!("\n\n {:?}\n\n against {:?}\n\n", o.val(), c);
+        // println!("\n\n {:?}\n\n against {:?}\n\n", o.val(), c);
 
         match (o.val(), c.typ(), c.indirect()) {
             // Indirects are best handled first.
@@ -743,7 +798,7 @@ pub fn check_type(
             },
         }
 
-        println!("\n\n with result {:?}\n\n", result);
+        // println!("\n\n with result {:?}\n\n", result);
     }
 }
 
