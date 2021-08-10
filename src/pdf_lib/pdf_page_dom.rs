@@ -307,13 +307,32 @@ impl FontDictionary {
 
 pub struct ConversionQ {
     page_nodes: VecDeque<(ObjectId, Option<Rc<Resources>>, Rc<LocatedVal<PDFObjT>>)>,
+    examined:   BTreeSet<ObjectId>,
 }
 impl ConversionQ {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             page_nodes: VecDeque::new(),
+            examined:   BTreeSet::new(),
         }
     }
+
+    fn add(&mut self, id: ObjectId, r: Option<Rc<Resources>>, o: Rc<LocatedVal<PDFObjT>>) {
+        // There might be cycles in the page tree.  Our type-checker
+        // cannot currently catch them, so we just handle them by
+        // ensuring we don't keep adding the pages in the cycle to the
+        // queue.
+        if !self.examined.contains(&id) {
+            self.page_nodes.push_back((id, r, o));
+            self.examined.insert(id);
+        }
+    }
+
+    fn next(&mut self) -> Option<(ObjectId, Option<Rc<Resources>>, Rc<LocatedVal<PDFObjT>>)> {
+        self.page_nodes.pop_front()
+    }
+
+    fn is_empty(&self) -> bool { self.page_nodes.is_empty() }
 }
 
 // Table 29, page 98 (2020 edn)
@@ -352,12 +371,8 @@ fn to_page_kids(
                     PDFObjT::Reference(rf) => {
                         match ctxt.lookup_obj(rf.id()) {
                             Some(o) => match r {
-                                None => q.page_nodes.push_back((rf.id(), None, Rc::clone(o))),
-                                Some(r) => q.page_nodes.push_back((
-                                    rf.id(),
-                                    Some(Rc::clone(r)),
-                                    Rc::clone(o),
-                                )),
+                                None => q.add(rf.id(), None, Rc::clone(o)),
+                                Some(r) => q.add(rf.id(), Some(Rc::clone(r)), Rc::clone(o)),
                             },
                             None => (),
                         };
@@ -784,8 +799,8 @@ pub fn to_page_dom(
 
     // TODO: "A page tree shall not contain multiple indirect
     // references to the same page tree node." (Section 7.7.3.2)
-    while !q.page_nodes.is_empty() {
-        let (id, r, o) = q.page_nodes.pop_front().unwrap();
+    while !q.is_empty() {
+        let (id, r, o) = q.next().unwrap();
         match o.val() {
             PDFObjT::Dict(d) => {
                 match d.get_name(b"Type") {
