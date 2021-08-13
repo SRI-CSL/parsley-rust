@@ -224,7 +224,18 @@ impl<'a> TextExtractor<'a> {
             ws.parse(buf)?;
 
             let start = buf.get_cursor();
-            let o = op.parse(buf)?;
+            let o = match op.parse(buf) {
+                Ok(o) => o,
+                Err(e) => {
+                    // This is most likely a state-machine error;
+                    // capture the state in error message to be sure.
+                    let msg = format!("content stream {:?}: error {:?} in state {:?}",
+                                      self.objectid, e.val(), &self.state);
+                    let err = ErrorKind::GuardError(msg);
+                    let end = buf.get_cursor();
+                    return Err(LocatedVal::new(err, start, end))
+                }
+            };
             let op_name = match o.val() {
                 CSObjT::Comment(_) => continue, // drop comments
                 CSObjT::Op(n) => n,
@@ -241,7 +252,8 @@ impl<'a> TextExtractor<'a> {
                         args.clear();
                         continue
                     }
-                    let msg = format!("unknown PDF operator: {:?}", op_name);
+                    let msg = format!("content stream {:?}: unknown PDF operator: {:?}",
+                                      self.objectid, op_name);
                     let err = ErrorKind::GuardError(msg);
                     let end = buf.get_cursor();
                     return Err(LocatedVal::new(err, start, end))
@@ -301,8 +313,8 @@ impl<'a> TextExtractor<'a> {
                     ParserState::Content,
                 _ => {
                     // incompatible operator for this state.
-                    let msg = format!("unexpected {:?} operator {:?} in state {:?}",
-                                      op_type, op_name, &self.state);
+                    let msg = format!("content stream {:?}: unexpected {:?} operator {:?} in state {:?}",
+                                      self.objectid, op_type, op_name, &self.state);
                     let err = ErrorKind::GuardError(msg);
                     let end = buf.get_cursor();
                     return Err(LocatedVal::new(err, start, end))
