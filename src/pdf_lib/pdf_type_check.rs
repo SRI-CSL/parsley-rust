@@ -317,8 +317,7 @@ impl State {
         first.push_back((Rc::clone(obj), Rc::clone(chk)));
         let mut todo = VecDeque::new();
         todo.push_back((first, 0));
-        let mut examined = BTreeSet::new();
-        examined.insert((Rc::clone(obj), Rc::clone(chk)));
+        let examined = BTreeSet::new();
         State { todo, examined }
     }
 
@@ -628,17 +627,16 @@ pub fn check_type(
         }
         let (o, tc) = next.unwrap();
 
-        if state.have_examined(&o, &tc) {
-            //println!(" skipping examined object check");
-            continue
-        }
-
         // resolve a named type-check.
         let c = match resolve(tctx, &tc) {
             Ok(rep) => rep,
             Err(err) => return Some(o.place(err)),
         };
 
+        if state.have_examined(&o, &tc) {
+            //println!(" skipping examined object check");
+            continue
+        }
         state.examine(&o, &tc);
         // reset for the next check.
         result = None;
