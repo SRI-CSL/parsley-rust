@@ -76,7 +76,7 @@ pub enum PDFType {
         size: Option<usize>,
     },
     HetArray {
-        elems: Vec<Rc<TypeCheck>>
+        elems: Vec<Rc<TypeCheck>>,
     },
     Dict(Vec<DictEntry>),
     Stream(Vec<DictEntry>),
@@ -380,8 +380,8 @@ impl State {
                                     if check_error.is_none() {
                                         *next_idx = 0;
                                         //println!(
-                                        //    " get_next_check({}): successful with disjunct, done ",
-                                        //    cnt
+                                        //    " get_next_check({}): successful with disjunct, done
+                                        // ",    cnt
                                         //);
                                         continue
                                     } else {
@@ -401,7 +401,8 @@ impl State {
                                             // unwind to the previous
                                             // disjunct if any.
                                             if self.unwind() {
-                                                //println!(" get_next_check({}): failed all cases of disjunct, unwinding ", cnt);
+                                                //println!(" get_next_check({}): failed all cases
+                                                // of disjunct, unwinding ", cnt);
                                                 continue
                                             } else {
                                                 return Err(())
@@ -538,8 +539,8 @@ pub(super) fn normalize_check(typ: &Rc<TypeCheckRep>) -> Rc<TypeCheckRep> {
                     _ => Rc::clone(e),
                 })
             }
-            TypeCheckRep::new_replace_typ(PDFType::HetArray {elems: v}, typ)
-        }
+            TypeCheckRep::new_replace_typ(PDFType::HetArray { elems: v }, typ)
+        },
         PDFType::Dict(ents) => {
             let mut v = Vec::new();
             for e in ents {
@@ -748,9 +749,10 @@ pub fn check_type(
             },
             (PDFObjT::Array(ao), PDFType::HetArray { elems }, _) => {
                 if ao.objs().len() != elems.len() {
-                    result = Some(
-                        o.place(TypeCheckError::ArraySizeMismatch(elems.len(), ao.objs().len())),
-                    );
+                    result = Some(o.place(TypeCheckError::ArraySizeMismatch(
+                        elems.len(),
+                        ao.objs().len(),
+                    )));
                     continue
                 }
                 // The processing as done for Array above will have to be done per-entry,
@@ -764,25 +766,100 @@ pub fn check_type(
             },
             (PDFObjT::Dict(dict), PDFType::Dict(ents), _) => {
                 let mut chks = Vec::new();
-                for ent in ents {
-                    let val = dict.get(&ent.key);
-                    let chk = match resolve(tctx, &ent.chk) {
-                        Ok(rep) => rep,
-                        Err(err) => return Some(o.place(err)),
-                    };
-                    match (val, ent.opt, chk.typ()) {
-                        (None, DictKeySpec::Optional, _) => continue,
-                        (None, DictKeySpec::Forbidden, _) => continue,
-                        (None, DictKeySpec::Required, _) => {
-                            let key = DictKey::new(ent.key.clone());
-                            result = Some(o.place(TypeCheckError::MissingKey(key)))
-                        },
-                        (Some(_), DictKeySpec::Forbidden, _) => {
-                            let key = DictKey::new(ent.key.clone());
-                            result = Some(o.place(TypeCheckError::ForbiddenKey(key)))
-                        },
-                        (Some(_), _, PDFType::Any) => continue,
-                        (Some(v), _, _) => chks.push((Rc::clone(v), Rc::clone(&ent.chk))),
+                let mut star_flag = false;
+                // Check if its equal to "star"
+                // If so, we need to do a different check
+                if ents.len() > 0 {
+                    let last = ents.last().unwrap();
+                    if last.key == [115, 116, 97, 114] {
+                        star_flag = true;
+                    }
+                }
+                // If star is present, it will only occur as the last entry in a schema
+                // Some arrays/dictionaries have star as the only entry
+                if !star_flag {
+                    for ent in ents {
+                        let val = dict.get(&ent.key);
+                        let chk = match resolve(tctx, &ent.chk) {
+                            Ok(rep) => rep,
+                            Err(err) => return Some(o.place(err)),
+                        };
+                        match (val, ent.opt, chk.typ()) {
+                            (None, DictKeySpec::Optional, _) => continue,
+                            (None, DictKeySpec::Forbidden, _) => continue,
+                            (None, DictKeySpec::Required, _) => {
+                                let key = DictKey::new(ent.key.clone());
+                                result = Some(o.place(TypeCheckError::MissingKey(key)))
+                            },
+                            (Some(_), DictKeySpec::Forbidden, _) => {
+                                let key = DictKey::new(ent.key.clone());
+                                result = Some(o.place(TypeCheckError::ForbiddenKey(key)))
+                            },
+                            (Some(_), _, PDFType::Any) => continue,
+                            (Some(v), _, _) => chks.push((Rc::clone(v), Rc::clone(&ent.chk))),
+                        }
+                    }
+                } else {
+                    let ents_n = &ents[0 .. ents.len() - 1];
+                    let mut list_of_keys = vec![];
+                    let keys = dict.get_keys();
+                    for ent in ents_n {
+                        let val = dict.get(&ent.key);
+                        match val {
+                            Some(_) => {
+                                list_of_keys.push(&ent.key);
+                            },
+                            None => {},
+                        }
+                        let chk = match resolve(tctx, &ent.chk) {
+                            Ok(rep) => rep,
+                            Err(err) => return Some(o.place(err)),
+                        };
+                        match (val, ent.opt, chk.typ()) {
+                            (None, DictKeySpec::Optional, _) => continue,
+                            (None, DictKeySpec::Forbidden, _) => continue,
+                            (None, DictKeySpec::Required, _) => {
+                                let key = DictKey::new(ent.key.clone());
+                                result = Some(o.place(TypeCheckError::MissingKey(key)))
+                            },
+                            (Some(_), DictKeySpec::Forbidden, _) => {
+                                let key = DictKey::new(ent.key.clone());
+                                result = Some(o.place(TypeCheckError::ForbiddenKey(key)))
+                            },
+                            (Some(_), _, PDFType::Any) => continue,
+                            (Some(v), _, _) => chks.push((Rc::clone(v), Rc::clone(&ent.chk))),
+                        }
+                    }
+                    // Logic for star starts here
+                    // For all the key, value pairs present in the dictionary,
+                    // apply the type for value
+                    let last_entry = &ents[ents.len() - 1];
+                    for key in keys {
+                        if !list_of_keys.contains(&&key.as_slice().to_vec()) {
+                            println!("{:?}", key.as_slice());
+                            let val_last = dict.get(&key.as_slice().to_vec());
+                            let chk_last = match resolve(tctx, &last_entry.chk) {
+                                Ok(rep) => rep,
+                                Err(err) => return Some(o.place(err)),
+                            };
+
+                            match (val_last, last_entry.opt, chk_last.typ()) {
+                                (None, DictKeySpec::Optional, _) => continue,
+                                (None, DictKeySpec::Forbidden, _) => continue,
+                                (None, DictKeySpec::Required, _) => {
+                                    let key = DictKey::new(last_entry.key.clone());
+                                    result = Some(o.place(TypeCheckError::MissingKey(key)))
+                                },
+                                (Some(_), DictKeySpec::Forbidden, _) => {
+                                    let key = DictKey::new(last_entry.key.clone());
+                                    result = Some(o.place(TypeCheckError::ForbiddenKey(key)))
+                                },
+                                (Some(_), _, PDFType::Any) => continue,
+                                (Some(v), _, _) => {
+                                    chks.push((Rc::clone(v), Rc::clone(&last_entry.chk)))
+                                },
+                            }
+                        }
                     }
                 }
                 if result.is_none() {
@@ -986,7 +1063,6 @@ mod test_pdf_types {
         assert_eq!(check_type(&ctxt, &tctx, Rc::clone(&obj), typ), Some(err));
     }
 
-
     #[test]
     fn test_hetarray() {
         let mut ctxt = mk_new_context();
@@ -997,24 +1073,32 @@ mod test_pdf_types {
 
         let mut tctx = TypeCheckContext::new();
         let mut elems = Vec::new();
-        elems.push(TypeCheck::new(&mut tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Integer))));
-        elems.push(TypeCheck::new(&mut tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Bool))));
-        let typ = TypeCheck::new(
+        elems.push(TypeCheck::new(
             &mut tctx,
-            "het-array",
-            Rc::new(PDFType::HetArray { elems }),
-        );
+            "",
+            Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
+        ));
+        elems.push(TypeCheck::new(
+            &mut tctx,
+            "",
+            Rc::new(PDFType::PrimType(PDFPrimType::Bool)),
+        ));
+        let typ = TypeCheck::new(&mut tctx, "het-array", Rc::new(PDFType::HetArray { elems }));
         assert_eq!(check_type(&ctxt, &tctx, Rc::clone(&obj), typ), None);
 
         let mut tctx = TypeCheckContext::new();
         let mut elems = Vec::new();
-        elems.push(TypeCheck::new(&mut tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Integer))));
-        elems.push(TypeCheck::new(&mut tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Integer))));
-        let typ = TypeCheck::new(
+        elems.push(TypeCheck::new(
             &mut tctx,
-            "het-array",
-            Rc::new(PDFType::HetArray { elems }),
-        );
+            "",
+            Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
+        ));
+        elems.push(TypeCheck::new(
+            &mut tctx,
+            "",
+            Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
+        ));
+        let typ = TypeCheck::new(&mut tctx, "het-array", Rc::new(PDFType::HetArray { elems }));
         let err = obj.place(TypeCheckError::TypeMismatch(
             Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
             PDFType::PrimType(PDFPrimType::Bool),
@@ -1534,5 +1618,51 @@ mod test_pdf_types {
             check_type(&ctxt, &tctx, Rc::clone(&obj), Rc::clone(&typ)),
             None
         );
+    }
+
+    #[test]
+    fn test_dict_star() {
+        let mut ctxt = mk_new_context();
+        let v = Vec::from("<< /FOO [ 1 1 4 5 ] /BAR [ 1 2 3 4 ]>>".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+
+        let mut tctx = TypeCheckContext::new();
+        let rect = mk_rectangle_typchk(&mut tctx);
+        let ent1 = DictEntry {
+            key: Vec::from("star"),
+            chk: Rc::clone(&rect),
+            opt: DictKeySpec::Required,
+        };
+        let typ = TypeCheck::new(&mut tctx, "dict", Rc::new(PDFType::Dict(vec![ent1])));
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), None);
+    }
+
+    #[test]
+    fn test_dict_star_error() {
+        let mut ctxt = mk_new_context();
+        let v = Vec::from("<< /First [1 2 3 4] /FOO [ 1 1 4 ] /BAR [ 1 2 3 4 6]>>".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
+
+        let mut tctx = TypeCheckContext::new();
+        let rect = mk_rectangle_typchk(&mut tctx);
+        let ent1 = DictEntry {
+            key: Vec::from("First"),
+            chk: Rc::clone(&rect),
+            opt: DictKeySpec::Optional,
+        };
+        let entlast = DictEntry {
+            key: Vec::from("star"),
+            chk: Rc::clone(&rect),
+            opt: DictKeySpec::Required,
+        };
+        let typ = TypeCheck::new(
+            &mut tctx,
+            "dict",
+            Rc::new(PDFType::Dict(vec![ent1, entlast])),
+        );
+        let err = obj.place(TypeCheckError::ArraySizeMismatch(4, 5));
+        assert_eq!(check_type(&ctxt, &tctx, Rc::new(obj), typ), Some(err));
     }
 }
