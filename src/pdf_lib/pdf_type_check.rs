@@ -766,12 +766,14 @@ pub fn check_type(
             },
             (PDFObjT::Dict(dict), PDFType::Dict(ents), _) => {
                 let mut chks = Vec::new();
-                let last = ents.last().unwrap();
                 let mut star_flag = false;
                 // Check if its equal to "star"
                 // If so, we need to do a different check
-                if last.key == [115, 116, 97, 114] {
-                    star_flag = true;
+                if ents.len() > 0 {
+                    let last = ents.last().unwrap();
+                    if last.key == [115, 116, 97, 114] {
+                        star_flag = true;
+                    }
                 }
                 // If star is present, it will only occur as the last entry in a schema
                 // Some arrays/dictionaries have star as the only entry
