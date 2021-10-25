@@ -274,7 +274,7 @@ pub fn template_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     let mut generic_ents = mk_generic_page_entries(tctx);
     ents.append(&mut generic_ents);
 
-    TypeCheck::new(tctx, "template", Rc::new(PDFType::Dict(ents)))
+    TypeCheck::new(tctx, "template", Rc::new(PDFType::Dict(ents, None)))
 }
 pub fn page_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     let typ = DictEntry {
@@ -301,7 +301,7 @@ pub fn page_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     let mut generic_ents = mk_generic_page_entries(tctx);
     ents.append(&mut generic_ents);
 
-    TypeCheck::new(tctx, "page", Rc::new(PDFType::Dict(ents)))
+    TypeCheck::new(tctx, "page", Rc::new(PDFType::Dict(ents, None)))
 }
 #[cfg(test)]
 

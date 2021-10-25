@@ -79,7 +79,7 @@ pub fn root_page_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     TypeCheck::new(
         tctx,
         "root-page-tree",
-        Rc::new(PDFType::Dict(vec![pages, count, kids, parent])),
+        Rc::new(PDFType::Dict(vec![pages, count, kids, parent], None)),
     )
 }
 
@@ -116,7 +116,7 @@ pub fn non_root_page_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     TypeCheck::new(
         tctx,
         "root-non-page-tree",
-        Rc::new(PDFType::Dict(vec![pages, count, kids, parent])),
+        Rc::new(PDFType::Dict(vec![pages, count, kids, parent], None)),
     )
 }
 

@@ -70,16 +70,19 @@ pub fn resources(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     TypeCheck::new(
         tctx,
         "resources",
-        Rc::new(PDFType::Dict(vec![
-            extgstate, colorspace, pattern, shading, xobject, font, procset, properties,
-        ])),
+        Rc::new(PDFType::Dict(
+            vec![
+                extgstate, colorspace, pattern, shading, xobject, font, procset, properties,
+            ],
+            None,
+        )),
     )
 }
 
 // A generic dictionary, typically used for out-of-scope
 // dictionary values.
 pub fn mk_generic_dict_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
-    TypeCheck::new(tctx, "", Rc::new(PDFType::Dict(vec![])))
+    TypeCheck::new(tctx, "", Rc::new(PDFType::Dict(vec![], None)))
 }
 
 // A generic dictionary that is required to be an indirect reference,
@@ -88,7 +91,7 @@ pub fn mk_generic_indirect_dict_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCh
     TypeCheck::new_indirect(
         tctx,
         "",
-        Rc::new(PDFType::Dict(vec![])),
+        Rc::new(PDFType::Dict(vec![], None)),
         IndirectSpec::Required,
     )
 }
@@ -219,18 +222,21 @@ pub fn name_dictionary(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     TypeCheck::new(
         tctx,
         "namedictionary",
-        Rc::new(PDFType::Dict(vec![
-            dests,
-            ap,
-            javascript,
-            pages,
-            templates,
-            ids,
-            urls,
-            alternate_presentations,
-            embedded_files,
-            renditions,
-        ])),
+        Rc::new(PDFType::Dict(
+            vec![
+                dests,
+                ap,
+                javascript,
+                pages,
+                templates,
+                ids,
+                urls,
+                alternate_presentations,
+                embedded_files,
+                renditions,
+            ],
+            None,
+        )),
     )
 }
 struct SingleReferencePredicate;
