@@ -164,6 +164,40 @@ impl ParsleyParser for UInt32P {
     }
 }
 
+pub struct F32P {
+    endian: Endian,
+}
+impl F32P {
+    pub fn new(endian: Endian) -> Self { Self { endian } }
+}
+impl ParsleyParser for F32P {
+    type T = LocatedVal<f32>;
+
+    fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
+        let start = buf.get_cursor();
+        let mut p = UInt32P::new(self.endian);
+        match p.parse(buf) {
+            Err(e) => {
+                buf.set_cursor_unsafe(start);
+                Err(e)
+            },
+            Ok(v2) => {
+                let v: f32 = match self.endian {
+                    Endian::Big => {
+                        let bytes = v2.val().to_be_bytes();
+                        f32::from_be_bytes(bytes)
+                    },
+                    Endian::Little => {
+                        let bytes = v2.val().to_be_bytes();
+                        f32::from_be_bytes(bytes)
+                    },
+                };
+                Ok(LocatedVal::new(v, start, buf.get_cursor()))
+            },
+        }
+    }
+}
+
 pub struct UInt64P {
     endian: Endian,
 }
@@ -260,7 +294,7 @@ mod test_binary {
         locate_value, ErrorKind, LocatedVal, ParseBuffer, ParseBufferT, ParsleyParser,
     };
     use super::{BinaryMatcher, BinaryScanner};
-    use super::{Endian, Int16P, Int32P, Int64P, Int8P, UInt16P, UInt32P, UInt64P, UInt8P};
+    use super::{Endian, Int16P, Int32P, Int64P, Int8P, UInt16P, UInt32P, UInt64P, UInt8P, F32P};
 
     #[test]
     fn scan() {
@@ -474,5 +508,20 @@ mod test_binary {
         assert_eq!(lp.parse(&mut pb), Ok(v));
         let v = LocatedVal::new(-1, 17, 24);
         assert_eq!(lp.parse(&mut pb), Ok(v));
+    }
+    #[test]
+    fn f32() {
+        let pi = 3.1456_f32;
+        let mut bp = F32P::new(Endian::Big);
+        let mut pb = ParseBuffer::new(vec![64, 73, 81, 131]);
+
+        let bytes = bp.parse(&mut pb);
+        assert_eq!(pi, bytes.unwrap().unwrap());
+
+        let pi1 = -0.01_f32;
+        pb = ParseBuffer::new(vec![188, 35, 215, 10]);
+
+        let bytes1 = bp.parse(&mut pb);
+        assert_eq!(pi1, bytes1.unwrap().unwrap());
     }
 }

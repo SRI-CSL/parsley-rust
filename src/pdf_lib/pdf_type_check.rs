@@ -76,7 +76,7 @@ pub enum PDFType {
         size: Option<usize>,
     },
     HetArray {
-        elems: Vec<Rc<TypeCheck>>
+        elems: Vec<Rc<TypeCheck>>,
     },
     Dict(Vec<DictEntry>),
     Stream(Vec<DictEntry>),
@@ -380,8 +380,8 @@ impl State {
                                     if check_error.is_none() {
                                         *next_idx = 0;
                                         //println!(
-                                        //    " get_next_check({}): successful with disjunct, done ",
-                                        //    cnt
+                                        //    " get_next_check({}): successful with disjunct, done
+                                        // ",    cnt
                                         //);
                                         continue
                                     } else {
@@ -401,7 +401,8 @@ impl State {
                                             // unwind to the previous
                                             // disjunct if any.
                                             if self.unwind() {
-                                                //println!(" get_next_check({}): failed all cases of disjunct, unwinding ", cnt);
+                                                //println!(" get_next_check({}): failed all cases
+                                                // of disjunct, unwinding ", cnt);
                                                 continue
                                             } else {
                                                 return Err(())
@@ -538,8 +539,8 @@ pub(super) fn normalize_check(typ: &Rc<TypeCheckRep>) -> Rc<TypeCheckRep> {
                     _ => Rc::clone(e),
                 })
             }
-            TypeCheckRep::new_replace_typ(PDFType::HetArray {elems: v}, typ)
-        }
+            TypeCheckRep::new_replace_typ(PDFType::HetArray { elems: v }, typ)
+        },
         PDFType::Dict(ents) => {
             let mut v = Vec::new();
             for e in ents {
@@ -748,9 +749,10 @@ pub fn check_type(
             },
             (PDFObjT::Array(ao), PDFType::HetArray { elems }, _) => {
                 if ao.objs().len() != elems.len() {
-                    result = Some(
-                        o.place(TypeCheckError::ArraySizeMismatch(elems.len(), ao.objs().len())),
-                    );
+                    result = Some(o.place(TypeCheckError::ArraySizeMismatch(
+                        elems.len(),
+                        ao.objs().len(),
+                    )));
                     continue
                 }
                 // The processing as done for Array above will have to be done per-entry,
@@ -986,7 +988,6 @@ mod test_pdf_types {
         assert_eq!(check_type(&ctxt, &tctx, Rc::clone(&obj), typ), Some(err));
     }
 
-
     #[test]
     fn test_hetarray() {
         let mut ctxt = mk_new_context();
@@ -997,24 +998,32 @@ mod test_pdf_types {
 
         let mut tctx = TypeCheckContext::new();
         let mut elems = Vec::new();
-        elems.push(TypeCheck::new(&mut tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Integer))));
-        elems.push(TypeCheck::new(&mut tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Bool))));
-        let typ = TypeCheck::new(
+        elems.push(TypeCheck::new(
             &mut tctx,
-            "het-array",
-            Rc::new(PDFType::HetArray { elems }),
-        );
+            "",
+            Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
+        ));
+        elems.push(TypeCheck::new(
+            &mut tctx,
+            "",
+            Rc::new(PDFType::PrimType(PDFPrimType::Bool)),
+        ));
+        let typ = TypeCheck::new(&mut tctx, "het-array", Rc::new(PDFType::HetArray { elems }));
         assert_eq!(check_type(&ctxt, &tctx, Rc::clone(&obj), typ), None);
 
         let mut tctx = TypeCheckContext::new();
         let mut elems = Vec::new();
-        elems.push(TypeCheck::new(&mut tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Integer))));
-        elems.push(TypeCheck::new(&mut tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Integer))));
-        let typ = TypeCheck::new(
+        elems.push(TypeCheck::new(
             &mut tctx,
-            "het-array",
-            Rc::new(PDFType::HetArray { elems }),
-        );
+            "",
+            Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
+        ));
+        elems.push(TypeCheck::new(
+            &mut tctx,
+            "",
+            Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
+        ));
+        let typ = TypeCheck::new(&mut tctx, "het-array", Rc::new(PDFType::HetArray { elems }));
         let err = obj.place(TypeCheckError::TypeMismatch(
             Rc::new(PDFType::PrimType(PDFPrimType::Integer)),
             PDFType::PrimType(PDFPrimType::Bool),

@@ -63,7 +63,7 @@ where
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Alt<T1, T2> {
     Left(T1),
     Right(T2),

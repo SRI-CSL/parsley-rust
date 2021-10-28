@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 SRI International.
+// Copyright (c) 2019-2021 SRI International.
 // All rights reserved.
 //
 //    This file is part of the Parsley parser.
@@ -16,7 +16,4 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-pub mod iccmax_lib;
-pub mod pcore;
-pub mod pdf_lib;
-pub mod rtps_lib;
+pub mod iccmax_prim;

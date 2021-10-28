@@ -229,12 +229,16 @@ impl<'a> TextExtractor<'a> {
                 Err(e) => {
                     // This is most likely a state-machine error;
                     // capture the state in error message to be sure.
-                    let msg = format!("content stream {:?}: error {:?} in state {:?}",
-                                      self.objectid, e.val(), &self.state);
+                    let msg = format!(
+                        "content stream {:?}: error {:?} in state {:?}",
+                        self.objectid,
+                        e.val(),
+                        &self.state
+                    );
                     let err = ErrorKind::GuardError(msg);
                     let end = buf.get_cursor();
                     return Err(LocatedVal::new(err, start, end))
-                }
+                },
             };
             let op_name = match o.val() {
                 CSObjT::Comment(_) => continue, // drop comments
@@ -252,8 +256,10 @@ impl<'a> TextExtractor<'a> {
                         args.clear();
                         continue
                     }
-                    let msg = format!("content stream {:?}: unknown PDF operator: {:?}",
-                                      self.objectid, op_name);
+                    let msg = format!(
+                        "content stream {:?}: unknown PDF operator: {:?}",
+                        self.objectid, op_name
+                    );
                     let err = ErrorKind::GuardError(msg);
                     let end = buf.get_cursor();
                     return Err(LocatedVal::new(err, start, end))

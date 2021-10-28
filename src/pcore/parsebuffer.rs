@@ -243,6 +243,7 @@ pub trait ParseBufferT {
     // visibility   pub(in self::ParseBuffer)
     // but this is not supported (surprisingly).
     fn rc_buf(&self) -> Rc<Vec<u8>>;
+    fn rc_buf_cut(&self, ofs: usize, size: usize) -> Rc<Vec<u8>>;
     fn start(&self) -> usize;
     fn shared_count(&self) -> usize; // Returns the number of sharers of the buffer
 
@@ -351,6 +352,26 @@ impl ParseBuffer {
             size,
         }
     }
+
+    // Creates a subset view, but cuts it.
+    pub fn new_view_cut(buf: &dyn ParseBufferT, start: usize, size: usize) -> ParseBuffer {
+        assert!(start + size <= buf.size());
+        ParseBuffer {
+            buf: buf.rc_buf_cut(start, size),
+            start: 0,
+            ofs: 0,
+            size,
+        }
+    }
+
+    // Converts a buffer to a string
+    pub fn buf_to_string(buf: &dyn ParseBufferT) {
+        let s = buf.buf();
+        for ch in s {
+            print!("{}", *ch as char);
+        }
+        println!("-----------\n");
+    }
 }
 
 // Parsing a single element of the Parsley primitive type P; it
@@ -400,6 +421,11 @@ impl ParseBufferT for ParseBuffer {
     fn buf(&self) -> &[u8] { &self.buf[(self.start + self.ofs) .. (self.start + self.size)] }
 
     fn rc_buf(&self) -> Rc<Vec<u8>> { Rc::clone(&self.buf) }
+
+    fn rc_buf_cut(&self, ofs: usize, size: usize) -> Rc<Vec<u8>> {
+        let new_buf = self.buf[ofs .. (ofs + size)].to_vec();
+        return Rc::new(new_buf)
+    }
 
     fn shared_count(&self) -> usize { Rc::strong_count(&self.buf) }
 
