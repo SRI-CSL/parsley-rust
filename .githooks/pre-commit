@@ -1,0 +1,38 @@
+#!/bin/bash
+
+HAS_ISSUES=0
+FIRST_FILE=1
+
+RUSTUP=`which rustup`
+if [[ ! -x $RUSTUP  ]]; then
+    echo "Rustup is needed for nightly rustfmt; cannot commit."
+    exit 1
+fi
+
+RUSTFMT=`rustup which --toolchain nightly rustfmt`
+if [[ ! -x $RUSTFMT ]]; then
+    echo "Error finding nightly version of rustfmt; cannot commit."
+    exit 1
+fi
+pat='.*\.rs$'
+for file in $(git diff --name-only --staged); do
+    if [[ $file =~ $pat ]]; then
+        FMT_RESULT="$($RUSTFMT --check $file)"
+        if [[ $? != 0 || "$FMT_RESULT" != "" ]]; then
+            if [ $FIRST_FILE -eq 0 ]; then
+                echo -n ", "
+            fi
+            echo -n "$file"
+            HAS_ISSUES=1
+            FIRST_FILE=0
+        fi
+    fi
+done
+
+if [ $HAS_ISSUES -eq 0 ]; then
+    exit 0
+fi
+
+echo "."
+echo "Your code has formatting issues in files listed above. Format your code with \`make fmt\`."
+exit 1

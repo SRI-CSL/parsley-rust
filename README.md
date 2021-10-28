@@ -149,3 +149,11 @@ or
     $ make docker
 
 See `etc/docker/README.md` for more details.
+
+## Development workflow
+
+To ensure code is properly formatted before committing, do
+
+    $ git config core.hooksPath .githooks
+
+otherwise pull-requests may be hard to review.

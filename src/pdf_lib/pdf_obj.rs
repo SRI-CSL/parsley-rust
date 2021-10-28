@@ -169,6 +169,7 @@ impl DictT {
     pub fn get(&self, k: &[u8]) -> Option<&Rc<LocatedVal<PDFObjT>>> {
         self.map.get(&DictKey::new(Vec::from(k)))
     }
+    pub fn get_keys(&self) -> Vec<DictKey> { self.map.keys().cloned().collect() }
     // conveniences:
     // get the usize value of a key
     pub fn get_usize(&self, k: &[u8]) -> Option<usize> {
