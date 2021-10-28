@@ -137,39 +137,42 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "rotl" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+
+            if (stack.len() as u16) < s + 1 {
+                exit_log!("Not enough stack elements to rtol");
+            }
+
             // rotate left top S+1 elements T+1 positions on stack
             let mut tmp: Vec<f32> = vec![];
-            for _i in 0..s+1 {
+            for _i in 0 .. s + 1 {
                 tmp.insert(0, stack.pop().unwrap());
             }
-            println!("before rot:{:?}", tmp);
             // rotate left
-            tmp.rotate_left((t+1).into()); // t+1 was type u16. .into() converts to usize
-            println!("after rot: {:?}", tmp);
-            // reinsert into stack
-            for _i in 0..s+1 {
+            tmp.rotate_left((t + 1).into()); // t+1 was type u16. .into() converts to usize
+                                             // reinsert into stack
+            for _i in 0 .. s + 1 {
                 stack.push(tmp.remove(0));
-                tmp.pop();
             }
-            println!("stack: {:?}", stack);
         },
         "rotr" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+
+            if stack.len() < (s as usize) + 1 {
+                exit_log!("Stack underflowed on rotr operation");
+            }
             // rotate right top S+1 elements T+1 positions on stack
             let mut tmp: Vec<f32> = vec![];
-            for _i in 0..s+1 {
+            for _i in 0 .. s + 1 {
                 tmp.insert(0, stack.pop().unwrap());
             }
             // rotate right
-            tmp.rotate_right((t+1).into());
+            tmp.rotate_right((t + 1).into());
 
             // reinsert into stack
-            for _i in 0..s+1 {
+            for _i in 0 .. s + 1 {
                 stack.push(tmp.remove(0));
-                tmp.pop();
             }
-            println!("{:?}", stack);
         },
         "posd" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
@@ -199,12 +202,16 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "flip" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+
+            if (stack.len() as u16) < s + 1 {
+                exit_log!("Not enough stack elements to pop");
+            }
             // TODO: t shall be 0
             let mut tmp: Vec<f32> = vec![];
-            for _i in 0..s+1 {
+            for _i in 0 .. s + 1 {
                 tmp.insert(0, stack.pop().unwrap());
             }
-            for _i in 0..s+1 {
+            for _i in 0 .. s + 1 {
                 stack.push(tmp.pop().unwrap());
             }
         },
@@ -212,7 +219,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             // TODO: t shall be 0
-            if (stack.len() as u16) < s+1 {
+            if (stack.len() as u16) < s + 1 {
                 exit_log!("Not enough stack elements to pop");
             }
             for _i in 0 .. s + 1 {
@@ -347,7 +354,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         },
         "add " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            if stack.len() < (2 * (s+1)).into() {
+            if stack.len() < (2 * (s + 1)).into() {
                 exit_log!("Stack underflow, not enough arguments for add");
             }
             let mut arr_x: Vec<f32> = vec![];
@@ -364,7 +371,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         },
         "sub " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            if stack.len() < (2 * (s+1)).into() {
+            if stack.len() < (2 * (s + 1)).into() {
                 exit_log!("Stack underflow, not enough arguments for sub");
             }
             let mut arr_x: Vec<f32> = vec![];
@@ -381,7 +388,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         },
         "mul " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            if stack.len() < (2 * (s+1)).into() {
+            if stack.len() < (2 * (s + 1)).into() {
                 exit_log!("Stack underflow, not enough arguments for mul");
             }
             let mut arr_x: Vec<f32> = vec![];
@@ -398,7 +405,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         },
         "div " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            if stack.len() < (2 * (s+1)).into() {
+            if stack.len() < (2 * (s + 1)).into() {
                 exit_log!("Stack underflow, not enough arguments for div");
             }
             let mut arr_x: Vec<f32> = vec![];
@@ -416,13 +423,13 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "mod " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             // TODO
-            if stack.len() < (2 * (s+1)).into() {
+            if stack.len() < (2 * (s + 1)).into() {
                 exit_log!("Stack underflow, not enough arguments for mod");
             }
         },
         "pow " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            if stack.len() < (2 * (s+1)).into() {
+            if stack.len() < (2 * (s + 1)).into() {
                 exit_log!("Stack underflow, not enough arguments for pow");
             }
             let mut arr_x: Vec<f32> = vec![];
@@ -513,16 +520,27 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
                 exit_log!("Stack underflow, not enough arguments for sq");
             }
             let mut arr_x: Vec<f32> = vec![];
-            for _i in 0..s+1 {
+            for _i in 0 .. s + 1 {
                 let s = stack.pop().unwrap();
-                arr_x.push(s*s);
+                arr_x.push(s * s);
             }
-            for _i in 0..s+1 {
+            for _i in 0 .. s + 1 {
                 stack.push(arr_x.pop().unwrap());
             }
         },
         "sqrt" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            if stack.len() < (s + 1).into() {
+                exit_log!("Stack underflow, not enough arguments for sqrt");
+            }
+            let mut arr_x: Vec<f32> = vec![];
+            for _i in 0 .. s + 1 {
+                let s = stack.pop().unwrap();
+                arr_x.push(s.sqrt());
+            }
+            for _i in 0 .. s + 1 {
+                stack.push(arr_x.pop().unwrap());
+            }
         },
         "cb  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
@@ -530,16 +548,27 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
                 exit_log!("Stack underflow, not enough arguments for cb");
             }
             let mut arr_x: Vec<f32> = vec![];
-            for _i in 0..s+1 {
+            for _i in 0 .. s + 1 {
                 let s = stack.pop().unwrap();
-                arr_x.push(s*s*s);
+                arr_x.push(s * s * s);
             }
-            for _i in 0..s+1 {
+            for _i in 0 .. s + 1 {
                 stack.push(arr_x.pop().unwrap());
             }
         },
         "cbrt" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            if stack.len() < (s + 1).into() {
+                exit_log!("Stack underflow, not enough arguments for sqrt");
+            }
+            let mut arr_x: Vec<f32> = vec![];
+            for _i in 0 .. s + 1 {
+                let s = stack.pop().unwrap();
+                arr_x.push(s.cbrt());
+            }
+            for _i in 0 .. s + 1 {
+                stack.push(arr_x.pop().unwrap());
+            }
         },
         "abs " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
@@ -547,30 +576,29 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
                 exit_log!("Stack underflow, not enough arguments for abs");
             }
             let mut arr_x: Vec<f32> = vec![];
-            for _i in 0..s+1 {
+            for _i in 0 .. s + 1 {
                 let s = stack.pop().unwrap();
                 if s < 0.0 {
                     arr_x.push(-s);
-                }
-                else {
+                } else {
                     arr_x.push(s);
                 }
             }
-            for _i in 0..s+1 {
+            for _i in 0 .. s + 1 {
                 stack.push(arr_x.pop().unwrap());
             }
         },
         "neg " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for abs");
+                exit_log!("Stack underflow, not enough arguments for neg");
             }
             let mut arr_x: Vec<f32> = vec![];
-            for _i in 0..s+1 {
+            for _i in 0 .. s + 1 {
                 let s = stack.pop().unwrap();
                 arr_x.push(-s);
             }
-            for _i in 0..s+1 {
+            for _i in 0 .. s + 1 {
                 stack.push(arr_x.pop().unwrap());
             }
         },
@@ -579,45 +607,231 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         },
         "flor" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            if stack.len() < (s + 1).into() {
+                exit_log!("Stack underflow, not enough arguments for flor");
+            }
+            let mut arr_x: Vec<f32> = vec![];
+            for _i in 0 .. s + 1 {
+                let s = stack.pop().unwrap();
+                arr_x.push(s.floor());
+            }
+            for _i in 0 .. s + 1 {
+                stack.push(arr_x.pop().unwrap());
+            }
         },
         "ceil" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            if stack.len() < (s + 1).into() {
+                exit_log!("Stack underflow, not enough arguments for ceil");
+            }
+            let mut arr_x: Vec<f32> = vec![];
+            for _i in 0 .. s + 1 {
+                let s = stack.pop().unwrap();
+                arr_x.push(s.ceil());
+            }
+            for _i in 0 .. s + 1 {
+                stack.push(arr_x.pop().unwrap());
+            }
         },
         "trnc" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            if stack.len() < (s + 1).into() {
+                exit_log!("Stack underflow, not enough arguments for trunc");
+            }
+            let mut arr_x: Vec<f32> = vec![];
+            for _i in 0 .. s + 1 {
+                let s = stack.pop().unwrap();
+                arr_x.push(s.trunc());
+            }
+            for _i in 0 .. s + 1 {
+                stack.push(arr_x.pop().unwrap());
+            }
         },
         "sign" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            if stack.len() < (s + 1).into() {
+                exit_log!("Stack underflow, not enough arguments for sign");
+            }
+            let mut arr_x: Vec<f32> = vec![];
+            for _i in 0 .. s + 1 {
+                let s = stack.pop().unwrap();
+                if s < 0.0 {
+                    arr_x.push(-1.0);
+                } else if s > 0.0 {
+                    arr_x.push(1.0);
+                } else {
+                    arr_x.push(0.0);
+                }
+            }
+            for _i in 0 .. s + 1 {
+                stack.push(arr_x.pop().unwrap());
+            }
         },
         "exp " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            if stack.len() < (s + 1).into() {
+                exit_log!("Stack underflow, not enough arguments for sign");
+            }
+            let mut arr_x: Vec<f32> = vec![];
+            for _i in 0 .. s + 1 {
+                let s = stack.pop().unwrap();
+                arr_x.push(s.exp());
+            }
+            for _i in 0 .. s + 1 {
+                stack.push(arr_x.pop().unwrap());
+            }
         },
         "log " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            if stack.len() < (s + 1).into() {
+                exit_log!("Stack underflow, not enough arguments for sign");
+            }
+            let mut arr_x: Vec<f32> = vec![];
+            for _i in 0 .. s + 1 {
+                let s = stack.pop().unwrap();
+                arr_x.push(s.log10());
+            }
+            for _i in 0 .. s + 1 {
+                stack.push(arr_x.pop().unwrap());
+            }
         },
         "ln  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            if stack.len() < (s + 1).into() {
+                exit_log!("Stack underflow, not enough arguments for sign");
+            }
+            let mut arr_x: Vec<f32> = vec![];
+            for _i in 0 .. s + 1 {
+                let s = stack.pop().unwrap();
+                arr_x.push(s.ln());
+            }
+            for _i in 0 .. s + 1 {
+                stack.push(arr_x.pop().unwrap());
+            }
         },
         "sin " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            if stack.len() < (s + 1).into() {
+                exit_log!("Stack underflow, not enough arguments for sin");
+            }
+
+            let mut arr_x: Vec<f32> = vec![];
+
+            for _i in 0 .. s + 1 {
+                let s = stack.pop().unwrap();
+                arr_x.push(s.sin());
+            }
+
+            for _i in 0 .. s + 1 {
+                stack.push(arr_x.pop().unwrap());
+            }
         },
         "cos " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            if stack.len() < (s + 1).into() {
+                exit_log!("Stack underflow, not enough arguments for cos");
+            }
+
+            let mut arr_x: Vec<f32> = vec![];
+
+            for _i in 0 .. s + 1 {
+                let s = stack.pop().unwrap();
+                arr_x.push(s.cos());
+            }
+
+            for _i in 0 .. s + 1 {
+                stack.push(arr_x.pop().unwrap());
+            }
         },
         "tan " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            if stack.len() < (s + 1).into() {
+                exit_log!("Stack underflow, not enough arguments for tan");
+            }
+
+            let mut arr_x: Vec<f32> = vec![];
+
+            for _i in 0 .. s + 1 {
+                let s = stack.pop().unwrap();
+                arr_x.push(s.tan());
+            }
+
+            for _i in 0 .. s + 1 {
+                stack.push(arr_x.pop().unwrap());
+            }
         },
         "asin" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            if stack.len() < (s + 1).into() {
+                exit_log!("Stack underflow, not enough arguments for asin");
+            }
+
+            let mut arr_x: Vec<f32> = vec![];
+
+            for _i in 0 .. s + 1 {
+                let s = stack.pop().unwrap();
+                arr_x.push(s.asin());
+            }
+
+            for _i in 0 .. s + 1 {
+                stack.push(arr_x.pop().unwrap());
+            }
         },
         "acos" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            if stack.len() < (s + 1).into() {
+                exit_log!("Stack underflow, not enough arguments for acos");
+            }
+
+            let mut arr_x: Vec<f32> = vec![];
+
+            for _i in 0 .. s + 1 {
+                let s = stack.pop().unwrap();
+                arr_x.push(s.acos());
+            }
+
+            for _i in 0 .. s + 1 {
+                stack.push(arr_x.pop().unwrap());
+            }
         },
         "atan" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            if stack.len() < (s + 1).into() {
+                exit_log!("Stack underflow, not enough arguments for atan");
+            }
+
+            let mut arr_x: Vec<f32> = vec![];
+
+            for _i in 0 .. s + 1 {
+                let s = stack.pop().unwrap();
+                arr_x.push(s.atan());
+            }
+
+            for _i in 0 .. s + 1 {
+                stack.push(arr_x.pop().unwrap());
+            }
         },
         "atn2" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            if stack.len() < (s + 1).into() {
+                exit_log!("Stack underflow, not enough arguments for atan");
+            }
+
+            let mut arr_y: Vec<f32> = vec![];
+            let mut arr_x: Vec<f32> = vec![];
+            for _i in 0 .. s + 1 {
+                arr_y.push(stack.pop().unwrap());
+            }
+
+            for i in 0 .. s + 1 {
+                let s = stack.pop().unwrap();
+                // y.atan2(x)
+                arr_x.push(arr_y[i as usize].atan2(s));
+            }
+
+            for _i in 0 .. s + 1 {
+                stack.push(arr_x.pop().unwrap());
+            }
         },
         "ctop" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
@@ -630,8 +844,8 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         },
         "lt  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            if stack.len() < (2*(s + 1)).into() {
-               exit_log!("Stack underflow, not enough arguments for lt");
+            if stack.len() < (2 * (s + 1)).into() {
+                exit_log!("Stack underflow, not enough arguments for lt");
             }
             let mut arr_y: Vec<f32> = vec![];
             let mut arr_x: Vec<f32> = vec![];
@@ -642,8 +856,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
                 let x_i = stack.pop().unwrap();
                 if x_i < arr_y[i as usize] {
                     arr_x.push(1.0);
-                }
-                else {
+                } else {
                     arr_x.push(0.0);
                 }
             }
@@ -654,8 +867,8 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "le  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            if stack.len() < (2*(s + 1)).into() {
-               exit_log!("Stack underflow, not enough arguments for le");
+            if stack.len() < (2 * (s + 1)).into() {
+                exit_log!("Stack underflow, not enough arguments for le");
             }
             let mut arr_y: Vec<f32> = vec![];
             let mut arr_x: Vec<f32> = vec![];
@@ -666,8 +879,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
                 let x_i = stack.pop().unwrap();
                 if x_i <= arr_y[i as usize] {
                     arr_x.push(1.0);
-                }
-                else {
+                } else {
                     arr_x.push(0.0);
                 }
             }
@@ -677,8 +889,8 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         },
         "eq  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            if stack.len() < (2*(s + 1)).into() {
-               exit_log!("Stack underflow, not enough arguments for le");
+            if stack.len() < (2 * (s + 1)).into() {
+                exit_log!("Stack underflow, not enough arguments for le");
             }
             let mut arr_y: Vec<f32> = vec![];
             let mut arr_x: Vec<f32> = vec![];
@@ -689,8 +901,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
                 let x_i = stack.pop().unwrap();
                 if x_i == arr_y[i as usize] {
                     arr_x.push(1.0);
-                }
-                else {
+                } else {
                     arr_x.push(0.0);
                 }
             }
@@ -704,8 +915,8 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         },
         "ge  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            if stack.len() < (2*(s + 1)).into() {
-               exit_log!("Stack underflow, not enough arguments for le");
+            if stack.len() < (2 * (s + 1)).into() {
+                exit_log!("Stack underflow, not enough arguments for le");
             }
             let mut arr_y: Vec<f32> = vec![];
             let mut arr_x: Vec<f32> = vec![];
@@ -716,8 +927,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
                 let x_i = stack.pop().unwrap();
                 if x_i >= arr_y[i as usize] {
                     arr_x.push(1.0);
-                }
-                else {
+                } else {
                     arr_x.push(0.0);
                 }
             }
@@ -727,8 +937,8 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         },
         "gt  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            if stack.len() < (2*(s + 1)).into() {
-               exit_log!("Stack underflow, not enough arguments for le");
+            if stack.len() < (2 * (s + 1)).into() {
+                exit_log!("Stack underflow, not enough arguments for le");
             }
             let mut arr_y: Vec<f32> = vec![];
             let mut arr_x: Vec<f32> = vec![];
@@ -739,8 +949,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
                 let x_i = stack.pop().unwrap();
                 if x_i > arr_y[i as usize] {
                     arr_x.push(1.0);
-                }
-                else {
+                } else {
                     arr_x.push(0.0);
                 }
             }
@@ -750,15 +959,83 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         },
         "vmin" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            if stack.len() < (2 * (s + 1)).into() {
+                exit_log!("Stack underflow, not enough arguments for le");
+            }
+            let mut arr_y: Vec<f32> = vec![];
+            let mut arr_x: Vec<f32> = vec![];
+            for _i in 0 .. s + 1 {
+                arr_y.push(stack.pop().unwrap());
+            }
+            for i in 0 .. s + 1 {
+                let x_i = stack.pop().unwrap();
+                arr_x.push(f32::min(x_i, arr_y[i as usize]));
+            }
+            for _i in 0 .. s + 1 {
+                stack.push(arr_x.pop().unwrap());
+            }
         },
         "vmax" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            if stack.len() < (2 * (s + 1)).into() {
+                exit_log!("Stack underflow, not enough arguments for le");
+            }
+            let mut arr_y: Vec<f32> = vec![];
+            let mut arr_x: Vec<f32> = vec![];
+            for _i in 0 .. s + 1 {
+                arr_y.push(stack.pop().unwrap());
+            }
+            for i in 0 .. s + 1 {
+                let x_i = stack.pop().unwrap();
+                arr_x.push(f32::max(x_i, arr_y[i as usize]));
+            }
+            for _i in 0 .. s + 1 {
+                stack.push(arr_x.pop().unwrap());
+            }
         },
         "vand" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            if stack.len() < (2 * (s + 1)).into() {
+                exit_log!("Stack underflow, not enough arguments for vand");
+            }
+            let mut arr_y: Vec<f32> = vec![];
+            let mut arr_x: Vec<f32> = vec![];
+            for _i in 0 .. s + 1 {
+                arr_y.push(stack.pop().unwrap());
+            }
+            for i in 0 .. s + 1 {
+                let x_i = stack.pop().unwrap();
+                if x_i >= 0.5 && arr_y[i as usize] >= 0.5 {
+                    arr_x.push(1.0);
+                } else {
+                    arr_x.push(0.0);
+                }
+            }
+            for _i in 0 .. s + 1 {
+                stack.push(arr_x.pop().unwrap());
+            }
         },
         "vor " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            if stack.len() < (2 * (s + 1)).into() {
+                exit_log!("Stack underflow, not enough arguments for vand");
+            }
+            let mut arr_y: Vec<f32> = vec![];
+            let mut arr_x: Vec<f32> = vec![];
+            for _i in 0 .. s + 1 {
+                arr_y.push(stack.pop().unwrap());
+            }
+            for i in 0 .. s + 1 {
+                let x_i = stack.pop().unwrap();
+                if x_i >= 0.5 || arr_y[i as usize] >= 0.5 {
+                    arr_x.push(1.0);
+                } else {
+                    arr_x.push(0.0);
+                }
+            }
+            for _i in 0 .. s + 1 {
+                stack.push(arr_x.pop().unwrap());
+            }
         },
         "tLab" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
@@ -1907,6 +2184,85 @@ mod test_iccmax_prim {
         assert_eq!(1.0, stack.pop().unwrap());
     }
     #[test]
+    fn test_operations_vector_vmin() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("vmin\x00\x02\x00\x00".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        stack.push(3.0);
+        stack.push(2.0);
+        stack.push(2.0);
+        stack.push(4.0);
+        stack.push(1.0);
+        stack.push(3.0);
+        resolve_operations(r, &mut stack);
+        assert_eq!(2.0, stack.pop().unwrap());
+        assert_eq!(1.0, stack.pop().unwrap());
+        assert_eq!(3.0, stack.pop().unwrap());
+    }
+    #[test]
+    fn test_operations_vector_vmax() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("vmax\x00\x02\x00\x00".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        stack.push(3.0);
+        stack.push(2.0);
+        stack.push(2.0);
+        stack.push(4.0);
+        stack.push(1.0);
+        stack.push(3.0);
+        resolve_operations(r, &mut stack);
+        assert_eq!(3.0, stack.pop().unwrap());
+        assert_eq!(2.0, stack.pop().unwrap());
+        assert_eq!(4.0, stack.pop().unwrap());
+    }
+
+    #[test]
+    fn test_operations_vector_vand() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("vand\x00\x02\x00\x00".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        stack.push(0.0);
+        stack.push(0.5);
+        stack.push(2.0);
+        stack.push(4.0);
+        stack.push(0.5);
+        stack.push(3.0);
+        resolve_operations(r, &mut stack);
+        assert_eq!(1.0, stack.pop().unwrap());
+        assert_eq!(1.0, stack.pop().unwrap());
+        assert_eq!(0.0, stack.pop().unwrap());
+    }
+
+    #[test]
+    fn test_operations_vector_vor() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("vor \x00\x02\x00\x00".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        stack.push(0.0);
+        stack.push(0.3);
+        stack.push(2.0);
+        stack.push(0.0);
+        stack.push(0.5);
+        stack.push(3.0);
+        resolve_operations(r, &mut stack);
+        assert_eq!(1.0, stack.pop().unwrap());
+        assert_eq!(1.0, stack.pop().unwrap());
+        assert_eq!(0.0, stack.pop().unwrap());
+    }
+
+    #[test]
     fn test_operations_vector_sq() {
         let mut parser = DataOperationP;
         let v = Vec::from("sq  \x00\x02\x00\x00".as_bytes());
@@ -1958,6 +2314,159 @@ mod test_iccmax_prim {
     }
 
     #[test]
+    fn test_operations_vector_sqrt() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("sqrt\x00\x02\x00\x00".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        stack.push(9.0);
+        stack.push(4.0);
+        stack.push(1.0);
+        resolve_operations(r, &mut stack);
+        assert_eq!(1.0, stack.pop().unwrap());
+        assert_eq!(2.0, stack.pop().unwrap());
+        assert_eq!(3.0, stack.pop().unwrap());
+    }
+
+    #[test]
+    fn test_operations_vector_cbrt() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("cbrt\x00\x02\x00\x00".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        stack.push(27.0);
+        stack.push(8.0);
+        stack.push(1.0);
+        resolve_operations(r, &mut stack);
+        assert_eq!(1.0, stack.pop().unwrap());
+        assert_eq!(2.0, stack.pop().unwrap());
+        assert_eq!(3.0, stack.pop().unwrap());
+    }
+
+    #[test]
+    fn test_operations_vector_flor() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("flor\x00\x02\x00\x00".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        stack.push(27.6);
+        stack.push(8.9);
+        stack.push(1.1);
+        resolve_operations(r, &mut stack);
+        assert_eq!(1.0, stack.pop().unwrap());
+        assert_eq!(8.0, stack.pop().unwrap());
+        assert_eq!(27.0, stack.pop().unwrap());
+    }
+
+    #[test]
+    fn test_operations_vector_ceil() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("ceil\x00\x02\x00\x00".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        stack.push(27.6);
+        stack.push(8.9);
+        stack.push(1.1);
+        resolve_operations(r, &mut stack);
+        assert_eq!(2.0, stack.pop().unwrap());
+        assert_eq!(9.0, stack.pop().unwrap());
+        assert_eq!(28.0, stack.pop().unwrap());
+    }
+
+    #[test]
+    fn test_operations_vector_trunc() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("trnc\x00\x02\x00\x00".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        stack.push(27.6);
+        stack.push(8.9);
+        stack.push(1.1);
+        resolve_operations(r, &mut stack);
+        assert_eq!(1.0, stack.pop().unwrap());
+        assert_eq!(8.0, stack.pop().unwrap());
+        assert_eq!(27.0, stack.pop().unwrap());
+    }
+
+    #[test]
+    fn test_operations_vector_exp() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("exp \x00\x02\x00\x00".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        stack.push(27.6);
+        stack.push(8.9);
+        stack.push(1.1);
+        resolve_operations(r, &mut stack);
+        assert_eq!(1.1_f32.exp(), stack.pop().unwrap());
+        assert_eq!(8.9_f32.exp(), stack.pop().unwrap());
+        assert_eq!(27.6_f32.exp(), stack.pop().unwrap());
+    }
+
+    #[test]
+    fn test_operations_vector_log() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("log \x00\x02\x00\x00".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        stack.push(27.6);
+        stack.push(8.9);
+        stack.push(1.1);
+        resolve_operations(r, &mut stack);
+        assert_eq!(1.1_f32.log10(), stack.pop().unwrap());
+        assert_eq!(8.9_f32.log10(), stack.pop().unwrap());
+        assert_eq!(27.6_f32.log10(), stack.pop().unwrap());
+    }
+
+    #[test]
+    fn test_operations_vector_ln() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("ln  \x00\x02\x00\x00".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        stack.push(27.6);
+        stack.push(8.9);
+        stack.push(1.1);
+        resolve_operations(r, &mut stack);
+        assert_eq!(1.1_f32.ln(), stack.pop().unwrap());
+        assert_eq!(8.9_f32.ln(), stack.pop().unwrap());
+        assert_eq!(27.6_f32.ln(), stack.pop().unwrap());
+    }
+
+    #[test]
+    fn test_operations_vector_sign() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("sign\x00\x02\x00\x00".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        stack.push(27.6);
+        stack.push(-8.9);
+        stack.push(0.0);
+        resolve_operations(r, &mut stack);
+        assert_eq!(0.0, stack.pop().unwrap());
+        assert_eq!(-1.0, stack.pop().unwrap());
+        assert_eq!(1.0, stack.pop().unwrap());
+    }
+
+    #[test]
     fn test_operations_vector_cb() {
         let mut parser = DataOperationP;
         let v = Vec::from("cb  \x00\x02\x00\x00".as_bytes());
@@ -1986,9 +2495,9 @@ mod test_iccmax_prim {
         stack.push(2.0);
         stack.push(1.0);
         resolve_operations(r, &mut stack);
-        assert_eq!(2.0, stack.pop().unwrap());
         assert_eq!(3.0, stack.pop().unwrap());
         assert_eq!(1.0, stack.pop().unwrap());
+        assert_eq!(2.0, stack.pop().unwrap());
     }
 
     #[test]
@@ -2006,5 +2515,128 @@ mod test_iccmax_prim {
         assert_eq!(2.0, stack.pop().unwrap());
         assert_eq!(3.0, stack.pop().unwrap());
         assert_eq!(1.0, stack.pop().unwrap());
+    }
+
+    #[test]
+    fn test_operations_vector_sin() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("sin \x00\x02\x00\x00".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        stack.push(45.0);
+        stack.push(70.0);
+        stack.push(120.0);
+        resolve_operations(r, &mut stack);
+        assert_eq!(f32::sin(120.0), stack.pop().unwrap());
+        assert_eq!(f32::sin(70.0), stack.pop().unwrap());
+        assert_eq!(f32::sin(45.0), stack.pop().unwrap());
+    }
+
+    #[test]
+    fn test_operations_vector_cos() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("cos \x00\x02\x00\x00".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        stack.push(45.0);
+        stack.push(70.0);
+        stack.push(120.0);
+        resolve_operations(r, &mut stack);
+        assert_eq!(f32::cos(120.0), stack.pop().unwrap());
+        assert_eq!(f32::cos(70.0), stack.pop().unwrap());
+        assert_eq!(f32::cos(45.0), stack.pop().unwrap());
+    }
+
+    #[test]
+    fn test_operations_vector_tan() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("tan \x00\x02\x00\x00".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        stack.push(45.0);
+        stack.push(70.0);
+        stack.push(120.0);
+        resolve_operations(r, &mut stack);
+        assert_eq!(f32::tan(120.0), stack.pop().unwrap());
+        assert_eq!(f32::tan(70.0), stack.pop().unwrap());
+        assert_eq!(f32::tan(45.0), stack.pop().unwrap());
+    }
+
+    #[test]
+    fn test_operations_vector_asin() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("asin\x00\x02\x00\x00".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        stack.push(0.4);
+        stack.push(0.5);
+        stack.push(0.27);
+        resolve_operations(r, &mut stack);
+        assert_eq!(f32::asin(0.27), stack.pop().unwrap());
+        assert_eq!(f32::asin(0.5), stack.pop().unwrap());
+        assert_eq!(f32::asin(0.4), stack.pop().unwrap());
+    }
+
+    #[test]
+    fn test_operations_vector_acos() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("acos\x00\x02\x00\x00".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        stack.push(0.28);
+        stack.push(0.78);
+        stack.push(0.4);
+        resolve_operations(r, &mut stack);
+        assert_eq!(f32::acos(0.4), stack.pop().unwrap());
+        assert_eq!(f32::acos(0.78), stack.pop().unwrap());
+        assert_eq!(f32::acos(0.28), stack.pop().unwrap());
+    }
+
+    #[test]
+    fn test_operations_vector_atan() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("atan\x00\x02\x00\x00".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        stack.push(0.5);
+        stack.push(0.3);
+        stack.push(0.78);
+        resolve_operations(r, &mut stack);
+        assert_eq!(f32::atan(0.78), stack.pop().unwrap());
+        assert_eq!(f32::atan(0.3), stack.pop().unwrap());
+        assert_eq!(f32::atan(0.5), stack.pop().unwrap());
+    }
+
+    #[test]
+    fn test_operations_vector_atan2() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("atn2\x00\x02\x00\x00".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        stack.push(0.5);
+        stack.push(0.3);
+        stack.push(0.78);
+        stack.push(0.5);
+        stack.push(0.5);
+        stack.push(0.5);
+        resolve_operations(r, &mut stack);
+        let y = 0.5f32;
+        assert_eq!(y.atan2(0.78), stack.pop().unwrap());
+        assert_eq!(y.atan2(0.3), stack.pop().unwrap());
+        assert_eq!(y.atan2(0.5), stack.pop().unwrap());
     }
 }
