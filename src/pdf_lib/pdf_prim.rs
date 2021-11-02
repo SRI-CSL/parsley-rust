@@ -856,7 +856,10 @@ impl ParsleyParser for StreamContentP {
         // go past the endstream token
         if buf.exact(b"endstream").is_err() {
             let end = buf.get_cursor();
-            let msg = format!("invalid endstream: {}", buf.peek().unwrap());
+            let msg = match buf.peek() {
+                Some(s) => format!("invalid endstream: {}", s),
+                None => format!("invalid endstream: end-of-buffer"),
+            };
             let err = ErrorKind::GuardError(msg);
             buf.set_cursor_unsafe(start);
             return Err(locate_value(err, start, end))
