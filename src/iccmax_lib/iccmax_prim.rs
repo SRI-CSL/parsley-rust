@@ -194,12 +194,14 @@ pub fn compute_operations(
         },
         "flip" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let _t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
 
             if (stack.len() as u16) < s + 1 {
                 return Err(String::from("Not enough stack elements to pop"))
             }
-            // TODO: t shall be 0
+            if t != 0 {
+                return Err(String::from("t must be 0 for flip"))
+            }
             let mut tmp: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
                 tmp.insert(0, stack.pop().unwrap());
@@ -210,10 +212,12 @@ pub fn compute_operations(
         },
         "pop " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let _t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
-            // TODO: t shall be 0
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if (stack.len() as u16) < s + 1 {
                 return Err(String::from("Not enough stack elements to pop"))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for pop"))
             }
             for _i in 0 .. s + 1 {
                 stack.pop();
@@ -226,13 +230,15 @@ pub fn compute_operations(
         // TODO: Table 100 seems to use top S+2 values instead of the conventional S+1
         "sum " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let _t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
 
             if s + 2 > stack.len() as u16 {
                 return Err(String::from("Stack underflow on sum"))
             }
+            if t != 0 {
+                return Err(String::from("t must be 0 for sum"))
+            }
 
-            // t must be 0
             let mut sum = 0.0;
             for _i in 0 .. s + 2 {
                 sum += stack.pop().unwrap();
@@ -241,11 +247,13 @@ pub fn compute_operations(
         },
         "prod" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let _t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
-            // t must be 0
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
 
             if s + 2 > stack.len() as u16 {
                 return Err(String::from("Stack underflow on prod"))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for prod"))
             }
 
             let mut sum = 1.0;
@@ -256,11 +264,13 @@ pub fn compute_operations(
         },
         "min " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let _t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
-            // t must be 0
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
 
             if s + 2 > stack.len() as u16 {
                 return Err(String::from("Stack underflow on min"))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for min"))
             }
 
             let mut m = f32::MAX;
@@ -274,11 +284,13 @@ pub fn compute_operations(
         },
         "max " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let _t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
-            // t must be 0
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
 
             if s + 2 > stack.len() as u16 {
                 return Err(String::from("Stack underflow on max"))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for max"))
             }
 
             let mut m = f32::MIN;
@@ -292,11 +304,13 @@ pub fn compute_operations(
         },
         "and " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let _t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
-            // TODO t must be 0
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
 
             if s + 2 > stack.len() as u16 {
                 return Err(String::from("Stack underflow on and"))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for and"))
             }
 
             let mut sum = 1.0;
@@ -310,11 +324,13 @@ pub fn compute_operations(
         },
         "or  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let _t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
-            // TODO t must be 0
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
 
             if s + 2 > stack.len() as u16 {
                 return Err(String::from("Stack underflow on or"))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for or"))
             }
 
             let mut sum = 0.0;
@@ -347,10 +363,14 @@ pub fn compute_operations(
         },
         "add " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for add",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for add"))
             }
             let mut arr_x: Vec<f32> = vec![];
             let mut arr_y: Vec<f32> = vec![];
@@ -366,10 +386,14 @@ pub fn compute_operations(
         },
         "sub " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for sub",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for sub"))
             }
             let mut arr_x: Vec<f32> = vec![];
             let mut arr_y: Vec<f32> = vec![];
@@ -385,10 +409,14 @@ pub fn compute_operations(
         },
         "mul " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for mul",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for mul"))
             }
             let mut arr_x: Vec<f32> = vec![];
             let mut arr_y: Vec<f32> = vec![];
@@ -404,10 +432,14 @@ pub fn compute_operations(
         },
         "div " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for div",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for div"))
             }
             let mut arr_x: Vec<f32> = vec![];
             let mut arr_y: Vec<f32> = vec![];
@@ -423,19 +455,27 @@ pub fn compute_operations(
         },
         "mod " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             // TODO
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for mod",
                 ))
             }
+            if t != 0 {
+                return Err(String::from("t must be 0 for mod"))
+            }
         },
         "pow " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for pow",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for pow"))
             }
             let mut arr_x: Vec<f32> = vec![];
             let mut arr_y: Vec<f32> = vec![];
@@ -451,10 +491,14 @@ pub fn compute_operations(
         },
         "gama" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
-                    "Stack underflow, not enough arguments for pow",
+                    "Stack underflow, not enough arguments for gama",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for gama"))
             }
             let y = stack.pop().unwrap();
             let mut arr_x: Vec<f32> = vec![];
@@ -467,10 +511,14 @@ pub fn compute_operations(
         },
         "sadd" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
-                    "Stack underflow, not enough arguments for pow",
+                    "Stack underflow, not enough arguments for sadd",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for sadd"))
             }
             let y = stack.pop().unwrap();
             let mut arr_x: Vec<f32> = vec![];
@@ -483,10 +531,14 @@ pub fn compute_operations(
         },
         "ssub" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
-                    "Stack underflow, not enough arguments for pow",
+                    "Stack underflow, not enough arguments for ssub",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for ssub"))
             }
             let y = stack.pop().unwrap();
             let mut arr_x: Vec<f32> = vec![];
@@ -499,10 +551,14 @@ pub fn compute_operations(
         },
         "smul" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for smul",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for smul"))
             }
             let y = stack.pop().unwrap();
             let mut arr_x: Vec<f32> = vec![];
@@ -515,10 +571,14 @@ pub fn compute_operations(
         },
         "sdiv" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for sdiv",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for sdiv"))
             }
             let y = stack.pop().unwrap();
             let mut arr_x: Vec<f32> = vec![];
@@ -531,8 +591,12 @@ pub fn compute_operations(
         },
         "sq  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from("Stack underflow, not enough arguments for sq"))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for sq"))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -545,10 +609,14 @@ pub fn compute_operations(
         },
         "sqrt" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for sqrt",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for sqrt"))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -561,8 +629,12 @@ pub fn compute_operations(
         },
         "cb  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from("Stack underflow, not enough arguments for cb"))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for cb"))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -575,10 +647,14 @@ pub fn compute_operations(
         },
         "cbrt" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for sqrt",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for sqrt"))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -591,10 +667,14 @@ pub fn compute_operations(
         },
         "abs " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for abs",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for abs"))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -611,10 +691,14 @@ pub fn compute_operations(
         },
         "neg " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for neg",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for neg"))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -631,10 +715,14 @@ pub fn compute_operations(
         },
         "flor" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for flor",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for flor"))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -647,10 +735,14 @@ pub fn compute_operations(
         },
         "ceil" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for ceil",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for ceil"))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -663,10 +755,14 @@ pub fn compute_operations(
         },
         "trnc" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for trunc",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for trunc"))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -679,10 +775,14 @@ pub fn compute_operations(
         },
         "sign" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for sign",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for sign"))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -701,10 +801,14 @@ pub fn compute_operations(
         },
         "exp " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
-                    "Stack underflow, not enough arguments for sign",
+                    "Stack underflow, not enough arguments for exp",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for exp"))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -717,10 +821,14 @@ pub fn compute_operations(
         },
         "log " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
-                    "Stack underflow, not enough arguments for sign",
+                    "Stack underflow, not enough arguments for log",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for log"))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -733,10 +841,12 @@ pub fn compute_operations(
         },
         "ln  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
-                return Err(String::from(
-                    "Stack underflow, not enough arguments for sign",
-                ))
+                return Err(String::from("Stack underflow, not enough arguments for ln"))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for ln"))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -749,10 +859,14 @@ pub fn compute_operations(
         },
         "sin " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for sin",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for sin"))
             }
 
             let mut arr_x: Vec<f32> = vec![];
@@ -768,10 +882,14 @@ pub fn compute_operations(
         },
         "cos " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for cos",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for cos"))
             }
 
             let mut arr_x: Vec<f32> = vec![];
@@ -787,10 +905,14 @@ pub fn compute_operations(
         },
         "tan " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for tan",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for tan"))
             }
 
             let mut arr_x: Vec<f32> = vec![];
@@ -806,10 +928,14 @@ pub fn compute_operations(
         },
         "asin" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for asin",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for asin"))
             }
 
             let mut arr_x: Vec<f32> = vec![];
@@ -825,10 +951,14 @@ pub fn compute_operations(
         },
         "acos" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for acos",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for acos"))
             }
 
             let mut arr_x: Vec<f32> = vec![];
@@ -844,10 +974,14 @@ pub fn compute_operations(
         },
         "atan" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for atan",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for atan"))
             }
 
             let mut arr_x: Vec<f32> = vec![];
@@ -863,10 +997,14 @@ pub fn compute_operations(
         },
         "atn2" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
-                    "Stack underflow, not enough arguments for atan",
+                    "Stack underflow, not enough arguments for atn2",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for atn2"))
             }
 
             let mut arr_y: Vec<f32> = vec![];
@@ -896,8 +1034,12 @@ pub fn compute_operations(
         },
         "lt  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from("Stack underflow, not enough arguments for lt"))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for lt"))
             }
             let mut arr_y: Vec<f32> = vec![];
             let mut arr_x: Vec<f32> = vec![];
@@ -918,8 +1060,12 @@ pub fn compute_operations(
         },
         "le  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from("Stack underflow, not enough arguments for le"))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for le"))
             }
             let mut arr_y: Vec<f32> = vec![];
             let mut arr_x: Vec<f32> = vec![];
@@ -940,8 +1086,12 @@ pub fn compute_operations(
         },
         "eq  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
-                return Err(String::from("Stack underflow, not enough arguments for le"))
+                return Err(String::from("Stack underflow, not enough arguments for eq"))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for eq"))
             }
             let mut arr_y: Vec<f32> = vec![];
             let mut arr_x: Vec<f32> = vec![];
@@ -966,8 +1116,12 @@ pub fn compute_operations(
         },
         "ge  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
-                return Err(String::from("Stack underflow, not enough arguments for le"))
+                return Err(String::from("Stack underflow, not enough arguments for ge"))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for ge"))
             }
             let mut arr_y: Vec<f32> = vec![];
             let mut arr_x: Vec<f32> = vec![];
@@ -988,8 +1142,12 @@ pub fn compute_operations(
         },
         "gt  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
-                return Err(String::from("Stack underflow, not enough arguments for le"))
+                return Err(String::from("Stack underflow, not enough arguments for gt"))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for gt"))
             }
             let mut arr_y: Vec<f32> = vec![];
             let mut arr_x: Vec<f32> = vec![];
@@ -1010,8 +1168,14 @@ pub fn compute_operations(
         },
         "vmin" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
-                return Err(String::from("Stack underflow, not enough arguments for le"))
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for vmin",
+                ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for vmin"))
             }
             let mut arr_y: Vec<f32> = vec![];
             let mut arr_x: Vec<f32> = vec![];
@@ -1028,8 +1192,14 @@ pub fn compute_operations(
         },
         "vmax" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
-                return Err(String::from("Stack underflow, not enough arguments for le"))
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for vmax",
+                ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for vmax"))
             }
             let mut arr_y: Vec<f32> = vec![];
             let mut arr_x: Vec<f32> = vec![];
@@ -1046,10 +1216,14 @@ pub fn compute_operations(
         },
         "vand" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for vand",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for vand"))
             }
             let mut arr_y: Vec<f32> = vec![];
             let mut arr_x: Vec<f32> = vec![];
@@ -1070,10 +1244,14 @@ pub fn compute_operations(
         },
         "vor " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for vand",
                 ))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for vor"))
             }
             let mut arr_y: Vec<f32> = vec![];
             let mut arr_x: Vec<f32> = vec![];
@@ -1118,7 +1296,6 @@ pub fn compute_operations(
         },
     }
     if stack.len() > 65535 {
-        // TODO return with error code
         return Err(String::from(format!(
             "Stack overflow: length is {:?}",
             stack.len()
@@ -1880,6 +2057,16 @@ mod test_iccmax_prim {
         assert_eq!(6, stack.len());
     }
     #[test]
+    fn test_operations_copy_err() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("copy\x05\x05\x05\x05".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        assert!(resolve_operations(r, &mut stack).is_err());
+    }
+    #[test]
     fn test_operations_posd() {
         let mut parser = DataOperationP;
         let v = Vec::from("posd\x00\x01\x00\x01".as_bytes());
@@ -2179,6 +2366,18 @@ mod test_iccmax_prim {
         assert_eq!(3.0, stack.pop().unwrap());
         assert_eq!(2.0, stack.pop().unwrap());
     }
+
+    #[test]
+    fn test_operations_flip_err() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("flip\x05\x05\x00\x00".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        assert!(resolve_operations(r, &mut stack).is_err());
+    }
+
     #[test]
     fn test_operations_vector_lt() {
         let mut parser = DataOperationP;
@@ -2583,6 +2782,17 @@ mod test_iccmax_prim {
     }
 
     #[test]
+    fn test_operations_rotate_left_err() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("rotl\x05\x05\x05\x05".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        assert!(resolve_operations(r, &mut stack).is_err());
+    }
+
+    #[test]
     fn test_operations_vector_rotate_right() {
         let mut parser = DataOperationP;
         let v = Vec::from("rotr\x00\x02\x00\x00".as_bytes());
@@ -2597,6 +2807,17 @@ mod test_iccmax_prim {
         assert_eq!(2.0, stack.pop().unwrap());
         assert_eq!(3.0, stack.pop().unwrap());
         assert_eq!(1.0, stack.pop().unwrap());
+    }
+
+    #[test]
+    fn test_operations_rotate_right_err() {
+        let mut parser = DataOperationP;
+        let v = Vec::from("rotr\x05\x05\x05\x05".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        assert!(resolve_operations(r, &mut stack).is_err());
     }
 
     #[test]
