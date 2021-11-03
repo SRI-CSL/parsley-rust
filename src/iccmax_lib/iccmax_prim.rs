@@ -346,19 +346,51 @@ pub fn compute_operations(
         // S is u16
         // T is 0
         "pi  " => {
-            // s must be 0
+            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+
+            if s != 0 {
+                return Err(String::from("s must be 0 for pi"))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for pi"))
+            }
             stack.push(3.14)
         },
         "+INF" => {
-            // s must be 0
+            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+
+            if s != 0 {
+                return Err(String::from("s must be 0 for +INF"))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for +INF"))
+            }
             stack.push(f32::INFINITY);
         },
         "-INF" => {
-            // s must be 0
+            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+
+            if s != 0 {
+                return Err(String::from("s must be 0 for -INF"))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for -INF"))
+            }
             stack.push(f32::NEG_INFINITY);
         },
         "NaN " => {
-            // s must be 0
+            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+
+            if s != 0 {
+                return Err(String::from("s must be 0 for NaN"))
+            }
+            if t != 0 {
+                return Err(String::from("t must be 0 for NaN"))
+            }
             stack.push(f32::NAN);
         },
         "add " => {
