@@ -24,7 +24,8 @@ use std::process;
 macro_rules! exit_log {
     ($pos: expr) => {{
         log!(Level::Error, "at {:?}", $pos);
-        process::exit(1)
+        // TODO: This exit needs to happen elsewhere
+        //process::exit(1)
     }};
 }
 
@@ -179,6 +180,11 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
             let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             // Find the value at the sth position of the stack (0 is top),
             // push that value t+1 times to the top of the stack
+
+            if stack.len() < (s as usize) + 1 {
+                exit_log!("Stack underflowed on rotr operation");
+            }
+
             let mut value: f32 = 0.0;
             let mut flag = false;
             for counter in (0 .. s + 1).rev() {
@@ -226,7 +232,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "solv" => {},
         "tran" => {},
         // Sequence Functional Operations
-        // TODO: Table 100 seems to use top S+2 values instead of the conventional S+1
+        // Table 100 seems to use top S+2 values instead of the conventional S+1
         "sum " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             let _t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
