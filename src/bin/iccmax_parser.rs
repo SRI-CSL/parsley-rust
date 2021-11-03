@@ -43,15 +43,6 @@ use parsley_rust::pcore::prim_combinators::{Alt, Alternate};
 use std::fs::File;
 use std::io::Read;
 
-// use this macro to log messages with position argument:
-
-macro_rules! exit_log {
-    ($pos:expr, $($arg:tt)+) => ({
-        log!(Level::Error, "at {:>10} ({:#x}) - {}", $pos, $pos, format_args!($($arg)+));
-        process::exit(1)
-    })
-}
-
 fn read_file(file_name: &str) -> Vec<u8> {
     let mut file = File::open(file_name).unwrap();
 

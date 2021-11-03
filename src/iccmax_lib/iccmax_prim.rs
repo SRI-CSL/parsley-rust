@@ -19,7 +19,7 @@
 extern crate env_logger;
 extern crate log;
 extern crate log_panics;
-use log::{debug, error, log, Level, LevelFilter};
+use log::{log, Level};
 use std::process;
 macro_rules! exit_log {
     ($pos: expr) => {{
@@ -78,28 +78,28 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         },
 
         "in  " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             for _i in 0 .. t + 1 {
                 stack.push(0.0);
             }
         },
         "out " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             for _i in 0 .. t + 1 {
                 stack.pop();
             }
         },
         "tget" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             for _i in 0 .. t + 1 {
                 stack.push(0.0);
             }
         },
         "tput" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             for _i in 0 .. t + 1 {
                 stack.pop();
@@ -201,7 +201,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         },
         "flip" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let _t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
 
             if (stack.len() as u16) < s + 1 {
                 exit_log!("Not enough stack elements to pop");
@@ -217,7 +217,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         },
         "pop " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let _t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             // TODO: t shall be 0
             if (stack.len() as u16) < s + 1 {
                 exit_log!("Not enough stack elements to pop");
@@ -233,7 +233,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         // TODO: Table 100 seems to use top S+2 values instead of the conventional S+1
         "sum " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let _t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
 
             if s + 2 > stack.len() as u16 {
                 exit_log!("Stack underflow on sum");
@@ -248,7 +248,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         },
         "prod" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let _t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             // t must be 0
 
             if s + 2 > stack.len() as u16 {
@@ -263,7 +263,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         },
         "min " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let _t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             // t must be 0
 
             if s + 2 > stack.len() as u16 {
@@ -281,7 +281,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         },
         "max " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let _t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             // t must be 0
 
             if s + 2 > stack.len() as u16 {
@@ -299,8 +299,8 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         },
         "and " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
-            // t must be 0
+            let _t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            // TODO t must be 0
 
             if s + 2 > stack.len() as u16 {
                 exit_log!("Stack underflow on and");
@@ -317,8 +317,8 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         },
         "or  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
-            // t must be 0
+            let _t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            // TODO t must be 0
 
             if s + 2 > stack.len() as u16 {
                 exit_log!("Stack underflow on or");
@@ -603,7 +603,8 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
             }
         },
         "rond" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            //TODO
         },
         "flor" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
@@ -834,13 +835,13 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
             }
         },
         "ctop" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
         },
         "ptoc" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
         },
         "rnum" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
         },
         "lt  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
@@ -865,7 +866,6 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
             }
         },
         "le  " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 exit_log!("Stack underflow, not enough arguments for le");
@@ -910,7 +910,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
             }
         },
         "near" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             // TODO
         },
         "ge  " => {
@@ -1038,24 +1038,24 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
             }
         },
         "tLab" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
         },
         "tXYZ" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
         },
 
         // anomalous
         "fJab" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
         },
         "tJab" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
         },
         "fLab" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
         },
         "not " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
         },
 
         _ => {
@@ -1295,7 +1295,7 @@ impl ParsleyParser for CalculatorElementP {
 
             let seek_position = position_result_unwrapped.position();
             let seek_size = position_result_unwrapped.size();
-            let mut subelement_buf =
+            let _subelement_buf =
                 ParseBuffer::new_view_cut(buf, seek_position as usize, seek_size as usize);
             //println!();
             //ParseBuffer::buf_to_string(&mut subelement_buf);
