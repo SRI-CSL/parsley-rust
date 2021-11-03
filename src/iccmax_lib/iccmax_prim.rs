@@ -179,18 +179,14 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
             let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             // Find the value at the sth position of the stack (0 is top),
             // push that value t+1 times to the top of the stack
-            let mut counter = stack.len() - 1;
-            let mut c = 0;
             let mut value: f32 = 0.0;
             let mut flag = false;
-            while counter >= 0 {
-                if c == s {
+            for counter in (0 .. s + 1).rev() {
+                if counter == 0 {
                     value = stack[counter as usize];
                     flag = true;
                     break
                 }
-                counter = counter - 1;
-                c += 1;
             }
             if !flag {
                 exit_log!("Stack underflowed on posd operation");
@@ -1763,7 +1759,7 @@ impl ParsleyParser for HeaderP {
 #[cfg(test)]
 mod test_iccmax_prim {
     use super::{resolve_operations, DataOperationP};
-    use crate::pcore::parsebuffer::{ParseBuffer, ParseResult, ParsleyParser};
+    use crate::pcore::parsebuffer::{ParseBuffer, ParsleyParser};
     #[test]
     fn test_position_number() {
         assert_eq!(0, 0);
