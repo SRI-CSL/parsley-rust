@@ -1064,7 +1064,10 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
             println!("{:?}", operation);
         },
     }
-    println!("{:?}", stack.len());
+    if stack.len() > 65535 {
+        // TODO return with error code
+        println!("{:?}", stack.len());
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -1672,7 +1675,7 @@ impl ParsleyParser for CalcFunctionP {
 
         let mut counter = 0;
 
-        let mut stack: Vec<f32> = vec![];
+        let mut stack: Vec<f32> = Vec::with_capacity(65535);
         while counter < number_of_operations.unwrap() {
             // This can be an If condition, a Case, or Data Operation.
             let mut data_parser = OperationsP;
@@ -1766,6 +1769,7 @@ impl ParsleyParser for HeaderP {
 mod test_iccmax_prim {
     use super::{resolve_operations, DataOperationP};
     use crate::pcore::parsebuffer::{ParseBuffer, ParsleyParser};
+
     #[test]
     fn test_position_number() {
         assert_eq!(0, 0);
