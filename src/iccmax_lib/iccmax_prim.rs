@@ -185,7 +185,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
             let mut flag = false;
             while counter >= 0 {
                 if c == s {
-                    value = stack[counter];
+                    value = stack[counter as usize];
                     flag = true;
                     break
                 }
@@ -1820,8 +1820,11 @@ mod test_iccmax_prim {
         let mut stack: Vec<f32> = vec![];
         stack.push(1.0);
         stack.push(2.0);
+        assert_eq!(2.0, stack[stack.len() - 1]);
         resolve_operations(r, &mut stack);
         assert_eq!(4, stack.len());
+        assert_eq!(1.0, stack.pop().unwrap());
+        assert_eq!(1.0, stack.pop().unwrap());
     }
     #[test]
     fn test_operations_sequential_functions_sum() {
