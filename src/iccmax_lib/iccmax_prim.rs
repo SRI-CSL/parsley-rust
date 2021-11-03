@@ -16,26 +16,16 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-extern crate env_logger;
-extern crate log;
-extern crate log_panics;
-use log::{log, Level};
-use std::process;
-macro_rules! exit_log {
-    ($pos: expr) => {{
-        log!(Level::Error, "at {:?}", $pos);
-        // TODO: This exit needs to happen elsewhere
-        //process::exit(1)
-    }};
-}
-
 use crate::pcore::parsebuffer::{
-    LocatedVal, ParseBuffer, ParseBufferT, ParseResult, ParsleyParser,
+    ErrorKind, LocatedVal, ParseBuffer, ParseBufferT, ParseResult, ParsleyParser,
 };
 use crate::pcore::prim_binary::{BinaryMatcher, Endian, UInt16P, UInt32P, UInt8P};
 use crate::pcore::prim_combinators::{Alt, Alternate, Star};
 
-pub fn resolve_operations(operation: Operations, mut stack: &mut Vec<f32>) {
+type IccError = String;
+type IccResult<T> = std::result::Result<T, IccError>;
+
+pub fn resolve_operations(operation: Operations, mut stack: &mut Vec<f32>) -> IccResult<()> {
     let signature = operation.clone().data().signature();
     let data = operation.clone().data().data();
     let data_list = operation.clone().data().data_list();
@@ -47,7 +37,7 @@ pub fn resolve_operations(operation: Operations, mut stack: &mut Vec<f32>) {
                     let function_1 = function.clone();
                     let function_2 = function.clone();
                     if function.signature() == "if" || function_1.signature() == "sel" {
-                        resolve_operations(function_2, &mut stack);
+                        resolve_operations(function_2, &mut stack)?;
                     }
                     //println!("{:?}", function_2.signature());
                 }
@@ -59,20 +49,23 @@ pub fn resolve_operations(operation: Operations, mut stack: &mut Vec<f32>) {
                     let function_1 = function.clone();
                     let function_2 = function.clone();
                     if function.signature() == "if" || function_1.signature() == "sel" {
-                        resolve_operations(function_2, &mut stack);
+                        resolve_operations(function_2, &mut stack)?;
                     }
                     //println!("{:?}", function_2.signature());
                 }
             }
         },
         _ => {
-            compute_operations(&signature, data, data_list, &mut stack);
+            compute_operations(&signature, data, data_list, &mut stack)?;
             //println!("{:?}", stack.len());
         },
-    }
+    };
+    return Ok(())
 }
 
-pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut Vec<f32>) {
+pub fn compute_operations(
+    operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut Vec<f32>,
+) -> IccResult<()> {
     match operation {
         "data" => {
             stack.push(arg1);
@@ -124,7 +117,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
             let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             let mut tmp: Vec<f32> = vec![];
             if stack.len() < (s as usize) + 1 {
-                exit_log!("Stack underflowed on copy operation");
+                return Err(String::from("Stack underflowed on copy operation"))
             }
             for _i in 0 .. s + 1 {
                 tmp.insert(0, stack.pop().unwrap());
@@ -140,7 +133,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
             let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
 
             if (stack.len() as u16) < s + 1 {
-                exit_log!("Not enough stack elements to rtol");
+                return Err(String::from("Not enough stack elements to rtol"))
             }
 
             // rotate left top S+1 elements T+1 positions on stack
@@ -160,7 +153,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
             let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
 
             if stack.len() < (s as usize) + 1 {
-                exit_log!("Stack underflowed on rotr operation");
+                return Err(String::from("Stack underflowed on rotr operation"))
             }
             // rotate right top S+1 elements T+1 positions on stack
             let mut tmp: Vec<f32> = vec![];
@@ -180,11 +173,6 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
             let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             // Find the value at the sth position of the stack (0 is top),
             // push that value t+1 times to the top of the stack
-
-            if stack.len() < (s as usize) + 1 {
-                exit_log!("Stack underflowed on rotr operation");
-            }
-
             let mut value: f32 = 0.0;
             let mut flag = false;
             for counter in (0 .. s + 1).rev() {
@@ -195,7 +183,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
                 }
             }
             if !flag {
-                exit_log!("Stack underflowed on posd operation");
+                return Err(String::from("Stack underflowed on posd operation"))
             }
             for _i in 0 .. t + 1 {
                 stack.push(value);
@@ -206,7 +194,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
             let _t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
 
             if (stack.len() as u16) < s + 1 {
-                exit_log!("Not enough stack elements to pop");
+                return Err(String::from("Not enough stack elements to pop"))
             }
             // TODO: t shall be 0
             let mut tmp: Vec<f32> = vec![];
@@ -222,7 +210,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
             let _t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             // TODO: t shall be 0
             if (stack.len() as u16) < s + 1 {
-                exit_log!("Not enough stack elements to pop");
+                return Err(String::from("Not enough stack elements to pop"))
             }
             for _i in 0 .. s + 1 {
                 stack.pop();
@@ -232,13 +220,13 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "solv" => {},
         "tran" => {},
         // Sequence Functional Operations
-        // Table 100 seems to use top S+2 values instead of the conventional S+1
+        // TODO: Table 100 seems to use top S+2 values instead of the conventional S+1
         "sum " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             let _t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
 
             if s + 2 > stack.len() as u16 {
-                exit_log!("Stack underflow on sum");
+                return Err(String::from("Stack underflow on sum"))
             }
 
             // t must be 0
@@ -254,7 +242,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
             // t must be 0
 
             if s + 2 > stack.len() as u16 {
-                exit_log!("Stack underflow on prod");
+                return Err(String::from("Stack underflow on prod"))
             }
 
             let mut sum = 1.0;
@@ -269,7 +257,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
             // t must be 0
 
             if s + 2 > stack.len() as u16 {
-                exit_log!("Stack underflow on min");
+                return Err(String::from("Stack underflow on min"))
             }
 
             let mut m = f32::MAX;
@@ -287,7 +275,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
             // t must be 0
 
             if s + 2 > stack.len() as u16 {
-                exit_log!("Stack underflow on max");
+                return Err(String::from("Stack underflow on max"))
             }
 
             let mut m = f32::MIN;
@@ -305,7 +293,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
             // TODO t must be 0
 
             if s + 2 > stack.len() as u16 {
-                exit_log!("Stack underflow on and");
+                return Err(String::from("Stack underflow on and"))
             }
 
             let mut sum = 1.0;
@@ -323,7 +311,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
             // TODO t must be 0
 
             if s + 2 > stack.len() as u16 {
-                exit_log!("Stack underflow on or");
+                return Err(String::from("Stack underflow on or"))
             }
 
             let mut sum = 0.0;
@@ -357,7 +345,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "add " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (2 * (s + 1)).into() {
-                exit_log!("Stack underflow, not enough arguments for add");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for add",
+                ))
             }
             let mut arr_x: Vec<f32> = vec![];
             let mut arr_y: Vec<f32> = vec![];
@@ -374,7 +364,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "sub " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (2 * (s + 1)).into() {
-                exit_log!("Stack underflow, not enough arguments for sub");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for sub",
+                ))
             }
             let mut arr_x: Vec<f32> = vec![];
             let mut arr_y: Vec<f32> = vec![];
@@ -391,7 +383,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "mul " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (2 * (s + 1)).into() {
-                exit_log!("Stack underflow, not enough arguments for mul");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for mul",
+                ))
             }
             let mut arr_x: Vec<f32> = vec![];
             let mut arr_y: Vec<f32> = vec![];
@@ -408,7 +402,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "div " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (2 * (s + 1)).into() {
-                exit_log!("Stack underflow, not enough arguments for div");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for div",
+                ))
             }
             let mut arr_x: Vec<f32> = vec![];
             let mut arr_y: Vec<f32> = vec![];
@@ -426,13 +422,17 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             // TODO
             if stack.len() < (2 * (s + 1)).into() {
-                exit_log!("Stack underflow, not enough arguments for mod");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for mod",
+                ))
             }
         },
         "pow " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (2 * (s + 1)).into() {
-                exit_log!("Stack underflow, not enough arguments for pow");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for pow",
+                ))
             }
             let mut arr_x: Vec<f32> = vec![];
             let mut arr_y: Vec<f32> = vec![];
@@ -449,7 +449,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "gama" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for pow");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for pow",
+                ))
             }
             let y = stack.pop().unwrap();
             let mut arr_x: Vec<f32> = vec![];
@@ -463,7 +465,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "sadd" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for pow");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for pow",
+                ))
             }
             let y = stack.pop().unwrap();
             let mut arr_x: Vec<f32> = vec![];
@@ -477,7 +481,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "ssub" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for pow");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for pow",
+                ))
             }
             let y = stack.pop().unwrap();
             let mut arr_x: Vec<f32> = vec![];
@@ -491,7 +497,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "smul" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for smul");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for smul",
+                ))
             }
             let y = stack.pop().unwrap();
             let mut arr_x: Vec<f32> = vec![];
@@ -505,7 +513,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "sdiv" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for sdiv");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for sdiv",
+                ))
             }
             let y = stack.pop().unwrap();
             let mut arr_x: Vec<f32> = vec![];
@@ -519,7 +529,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "sq  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for sq");
+                return Err(String::from("Stack underflow, not enough arguments for sq"))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -533,7 +543,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "sqrt" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for sqrt");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for sqrt",
+                ))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -547,7 +559,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "cb  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for cb");
+                return Err(String::from("Stack underflow, not enough arguments for cb"))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -561,7 +573,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "cbrt" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for sqrt");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for sqrt",
+                ))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -575,7 +589,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "abs " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for abs");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for abs",
+                ))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -593,7 +609,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "neg " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for neg");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for neg",
+                ))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -611,7 +629,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "flor" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for flor");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for flor",
+                ))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -625,7 +645,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "ceil" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for ceil");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for ceil",
+                ))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -639,7 +661,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "trnc" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for trunc");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for trunc",
+                ))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -653,7 +677,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "sign" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for sign");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for sign",
+                ))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -673,7 +699,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "exp " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for sign");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for sign",
+                ))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -687,7 +715,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "log " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for sign");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for sign",
+                ))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -701,7 +731,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "ln  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for sign");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for sign",
+                ))
             }
             let mut arr_x: Vec<f32> = vec![];
             for _i in 0 .. s + 1 {
@@ -715,7 +747,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "sin " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for sin");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for sin",
+                ))
             }
 
             let mut arr_x: Vec<f32> = vec![];
@@ -732,7 +766,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "cos " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for cos");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for cos",
+                ))
             }
 
             let mut arr_x: Vec<f32> = vec![];
@@ -749,7 +785,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "tan " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for tan");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for tan",
+                ))
             }
 
             let mut arr_x: Vec<f32> = vec![];
@@ -766,7 +804,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "asin" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for asin");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for asin",
+                ))
             }
 
             let mut arr_x: Vec<f32> = vec![];
@@ -783,7 +823,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "acos" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for acos");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for acos",
+                ))
             }
 
             let mut arr_x: Vec<f32> = vec![];
@@ -800,7 +842,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "atan" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for atan");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for atan",
+                ))
             }
 
             let mut arr_x: Vec<f32> = vec![];
@@ -817,7 +861,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "atn2" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (s + 1).into() {
-                exit_log!("Stack underflow, not enough arguments for atan");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for atan",
+                ))
             }
 
             let mut arr_y: Vec<f32> = vec![];
@@ -848,7 +894,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "lt  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (2 * (s + 1)).into() {
-                exit_log!("Stack underflow, not enough arguments for lt");
+                return Err(String::from("Stack underflow, not enough arguments for lt"))
             }
             let mut arr_y: Vec<f32> = vec![];
             let mut arr_x: Vec<f32> = vec![];
@@ -870,7 +916,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "le  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (2 * (s + 1)).into() {
-                exit_log!("Stack underflow, not enough arguments for le");
+                return Err(String::from("Stack underflow, not enough arguments for le"))
             }
             let mut arr_y: Vec<f32> = vec![];
             let mut arr_x: Vec<f32> = vec![];
@@ -892,7 +938,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "eq  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (2 * (s + 1)).into() {
-                exit_log!("Stack underflow, not enough arguments for le");
+                return Err(String::from("Stack underflow, not enough arguments for le"))
             }
             let mut arr_y: Vec<f32> = vec![];
             let mut arr_x: Vec<f32> = vec![];
@@ -918,7 +964,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "ge  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (2 * (s + 1)).into() {
-                exit_log!("Stack underflow, not enough arguments for le");
+                return Err(String::from("Stack underflow, not enough arguments for le"))
             }
             let mut arr_y: Vec<f32> = vec![];
             let mut arr_x: Vec<f32> = vec![];
@@ -940,7 +986,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "gt  " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (2 * (s + 1)).into() {
-                exit_log!("Stack underflow, not enough arguments for le");
+                return Err(String::from("Stack underflow, not enough arguments for le"))
             }
             let mut arr_y: Vec<f32> = vec![];
             let mut arr_x: Vec<f32> = vec![];
@@ -962,7 +1008,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "vmin" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (2 * (s + 1)).into() {
-                exit_log!("Stack underflow, not enough arguments for le");
+                return Err(String::from("Stack underflow, not enough arguments for le"))
             }
             let mut arr_y: Vec<f32> = vec![];
             let mut arr_x: Vec<f32> = vec![];
@@ -980,7 +1026,7 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "vmax" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (2 * (s + 1)).into() {
-                exit_log!("Stack underflow, not enough arguments for le");
+                return Err(String::from("Stack underflow, not enough arguments for le"))
             }
             let mut arr_y: Vec<f32> = vec![];
             let mut arr_x: Vec<f32> = vec![];
@@ -998,7 +1044,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "vand" => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (2 * (s + 1)).into() {
-                exit_log!("Stack underflow, not enough arguments for vand");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for vand",
+                ))
             }
             let mut arr_y: Vec<f32> = vec![];
             let mut arr_x: Vec<f32> = vec![];
@@ -1020,7 +1068,9 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
         "vor " => {
             let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
             if stack.len() < (2 * (s + 1)).into() {
-                exit_log!("Stack underflow, not enough arguments for vand");
+                return Err(String::from(
+                    "Stack underflow, not enough arguments for vand",
+                ))
             }
             let mut arr_y: Vec<f32> = vec![];
             let mut arr_x: Vec<f32> = vec![];
@@ -1066,8 +1116,13 @@ pub fn compute_operations(operation: &str, arg1: f32, arg2: Vec<u8>, stack: &mut
     }
     if stack.len() > 65535 {
         // TODO return with error code
-        println!("{:?}", stack.len());
+        return Err(String::from(format!(
+            "Stack overflow: length is {:?}",
+            stack.len()
+        )))
     }
+    println!("{:?}", stack.len());
+    return Ok(())
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -1155,7 +1210,7 @@ impl ParsleyParser for MPetElementP {
 
         // 8N times 64 UInt
         let mut counter = 0;
-        let mut proc_table: Vec<PositionNumber> = vec![];
+        let mut proc_table: Vec<PositionNumber> = Vec::with_capacity(65535);
         while counter < *number_of_elements.val() {
             let mut parser = PositionNumberP;
             let proc = parser.parse(buf)?;
@@ -1675,15 +1730,21 @@ impl ParsleyParser for CalcFunctionP {
 
         let mut counter = 0;
 
-        let mut stack: Vec<f32> = Vec::with_capacity(65535);
+        let mut stack: Vec<f32> = vec![];
         while counter < number_of_operations.unwrap() {
             // This can be an If condition, a Case, or Data Operation.
             let mut data_parser = OperationsP;
+            let start = buf.get_cursor();
             let data_result = data_parser.parse(buf)?;
             let data_result_clone = data_result.clone().unwrap();
             let count = data_result.clone().unwrap().number_of_operations();
 
-            resolve_operations(data_result_clone, &mut stack);
+            let ret = resolve_operations(data_result_clone, &mut stack);
+            if let Err(s) = &ret {
+                let err = ErrorKind::GuardError(s.clone());
+                let err = LocatedVal::new(err, start, buf.get_cursor());
+                return Err(err)
+            }
             //println!("{:?} {:?}", data_result_clone, count);
             counter = counter + count;
         }
@@ -1769,7 +1830,6 @@ impl ParsleyParser for HeaderP {
 mod test_iccmax_prim {
     use super::{resolve_operations, DataOperationP};
     use crate::pcore::parsebuffer::{ParseBuffer, ParsleyParser};
-
     #[test]
     fn test_position_number() {
         assert_eq!(0, 0);
@@ -1813,7 +1873,7 @@ mod test_iccmax_prim {
         let mut stack: Vec<f32> = vec![];
         stack.push(1.0);
         stack.push(2.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(6, stack.len());
     }
     #[test]
@@ -1827,18 +1887,20 @@ mod test_iccmax_prim {
         stack.push(1.0);
         stack.push(2.0);
         assert_eq!(2.0, stack[stack.len() - 1]);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(4, stack.len());
         assert_eq!(1.0, stack.pop().unwrap());
         assert_eq!(1.0, stack.pop().unwrap());
-
+    }
+    #[test]
+    fn test_operations_posd_err() {
+        let mut parser = DataOperationP;
         let v = Vec::from("posd\x05\x05\x05\x05".as_bytes());
         let mut parsebuffer = ParseBuffer::new(v);
         let result = parser.parse(&mut parsebuffer);
         let r = result.unwrap().unwrap();
         let mut stack: Vec<f32> = vec![];
-        resolve_operations(r, &mut stack);
-        /* what should we assert here to ensure correctness? */
+        assert!(resolve_operations(r, &mut stack).is_err());
     }
     #[test]
     fn test_operations_sequential_functions_sum() {
@@ -1851,7 +1913,7 @@ mod test_iccmax_prim {
         stack.push(1.0);
         stack.push(2.0);
         stack.push(2.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(5.0, stack.pop().unwrap());
     }
     #[test]
@@ -1865,7 +1927,7 @@ mod test_iccmax_prim {
         stack.push(1.0);
         stack.push(2.0);
         stack.push(2.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(4.0, stack.pop().unwrap());
     }
     #[test]
@@ -1879,7 +1941,7 @@ mod test_iccmax_prim {
         stack.push(1.0);
         stack.push(2.0);
         stack.push(3.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(1.0, stack.pop().unwrap());
     }
     #[test]
@@ -1893,7 +1955,7 @@ mod test_iccmax_prim {
         stack.push(1.0);
         stack.push(2.0);
         stack.push(3.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(3.0, stack.pop().unwrap());
     }
     #[test]
@@ -1908,13 +1970,13 @@ mod test_iccmax_prim {
         stack.push(1.0);
         stack.push(2.0);
         stack.push(3.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(1.0, stack.pop().unwrap());
         let mut stack_n: Vec<f32> = vec![];
         stack_n.push(1.0);
         stack_n.push(2.0);
         stack_n.push(0.0);
-        resolve_operations(r_n, &mut stack_n);
+        assert!(resolve_operations(r_n, &mut stack_n).is_ok());
         assert_eq!(0.0, stack_n.pop().unwrap());
     }
     #[test]
@@ -1929,13 +1991,13 @@ mod test_iccmax_prim {
         stack.push(0.5);
         stack.push(0.0);
         stack.push(0.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(1.0, stack.pop().unwrap());
         let mut stack_n: Vec<f32> = vec![];
         stack_n.push(0.1);
         stack_n.push(0.2);
         stack_n.push(0.3);
-        resolve_operations(r_n, &mut stack_n);
+        assert!(resolve_operations(r_n, &mut stack_n).is_ok());
         assert_eq!(0.0, stack_n.pop().unwrap());
     }
     #[test]
@@ -1950,7 +2012,7 @@ mod test_iccmax_prim {
         stack.push(1.0);
         stack.push(3.0);
         stack.push(5.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(6.0, stack.pop().unwrap());
         assert_eq!(3.5, stack.pop().unwrap());
     }
@@ -1966,7 +2028,7 @@ mod test_iccmax_prim {
         stack.push(7.0);
         stack.push(3.0);
         stack.push(5.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(2.0, stack.pop().unwrap());
         assert_eq!(4.5, stack.pop().unwrap());
     }
@@ -1982,7 +2044,7 @@ mod test_iccmax_prim {
         stack.push(1.0);
         stack.push(3.0);
         stack.push(5.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(5.0, stack.pop().unwrap());
         assert_eq!(1.5, stack.pop().unwrap());
     }
@@ -1998,7 +2060,7 @@ mod test_iccmax_prim {
         stack.push(1.0);
         stack.push(4.0);
         stack.push(5.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(0.2, stack.pop().unwrap());
         assert_eq!(1.0, stack.pop().unwrap());
     }
@@ -2014,7 +2076,7 @@ mod test_iccmax_prim {
         stack.push(2.0);
         stack.push(3.0);
         stack.push(5.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(32.0, stack.pop().unwrap());
         assert_eq!(8.0, stack.pop().unwrap());
     }
@@ -2029,7 +2091,7 @@ mod test_iccmax_prim {
         stack.push(2.0);
         stack.push(3.0);
         stack.push(3.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(27.0, stack.pop().unwrap());
         assert_eq!(8.0, stack.pop().unwrap());
     }
@@ -2045,7 +2107,7 @@ mod test_iccmax_prim {
         stack.push(2.0);
         stack.push(3.0);
         stack.push(5.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(8.0, stack.pop().unwrap());
         assert_eq!(7.0, stack.pop().unwrap());
     }
@@ -2061,7 +2123,7 @@ mod test_iccmax_prim {
         stack.push(2.0);
         stack.push(3.0);
         stack.push(3.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(0.0, stack.pop().unwrap());
         assert_eq!(-1.0, stack.pop().unwrap());
         assert_eq!(-2.0, stack.pop().unwrap());
@@ -2078,7 +2140,7 @@ mod test_iccmax_prim {
         stack.push(2.0);
         stack.push(3.0);
         stack.push(3.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(9.0, stack.pop().unwrap());
         assert_eq!(6.0, stack.pop().unwrap());
         assert_eq!(6.0, stack.pop().unwrap());
@@ -2095,7 +2157,7 @@ mod test_iccmax_prim {
         stack.push(2.0);
         stack.push(3.0);
         stack.push(2.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(1.5, stack.pop().unwrap());
         assert_eq!(1.0, stack.pop().unwrap());
     }
@@ -2110,7 +2172,7 @@ mod test_iccmax_prim {
         let mut stack: Vec<f32> = vec![];
         stack.push(3.0);
         stack.push(2.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(3.0, stack.pop().unwrap());
         assert_eq!(2.0, stack.pop().unwrap());
     }
@@ -2126,7 +2188,7 @@ mod test_iccmax_prim {
         stack.push(2.0);
         stack.push(3.0);
         stack.push(1.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(0.0, stack.pop().unwrap());
         assert_eq!(1.0, stack.pop().unwrap());
     }
@@ -2144,7 +2206,7 @@ mod test_iccmax_prim {
         stack.push(2.0);
         stack.push(3.0);
         stack.push(3.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(1.0, stack.pop().unwrap());
         assert_eq!(1.0, stack.pop().unwrap());
         assert_eq!(0.0, stack.pop().unwrap());
@@ -2161,7 +2223,7 @@ mod test_iccmax_prim {
         stack.push(3.0);
         stack.push(3.0);
         stack.push(2.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(0.0, stack.pop().unwrap());
         assert_eq!(1.0, stack.pop().unwrap());
     }
@@ -2177,7 +2239,7 @@ mod test_iccmax_prim {
         stack.push(2.0);
         stack.push(2.0);
         stack.push(3.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(0.0, stack.pop().unwrap());
         assert_eq!(1.0, stack.pop().unwrap());
     }
@@ -2195,7 +2257,7 @@ mod test_iccmax_prim {
         stack.push(2.0);
         stack.push(3.0);
         stack.push(2.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(1.0, stack.pop().unwrap());
         assert_eq!(0.0, stack.pop().unwrap());
         assert_eq!(1.0, stack.pop().unwrap());
@@ -2214,7 +2276,7 @@ mod test_iccmax_prim {
         stack.push(4.0);
         stack.push(1.0);
         stack.push(3.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(2.0, stack.pop().unwrap());
         assert_eq!(1.0, stack.pop().unwrap());
         assert_eq!(3.0, stack.pop().unwrap());
@@ -2233,7 +2295,7 @@ mod test_iccmax_prim {
         stack.push(4.0);
         stack.push(1.0);
         stack.push(3.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(3.0, stack.pop().unwrap());
         assert_eq!(2.0, stack.pop().unwrap());
         assert_eq!(4.0, stack.pop().unwrap());
@@ -2253,7 +2315,7 @@ mod test_iccmax_prim {
         stack.push(4.0);
         stack.push(0.5);
         stack.push(3.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(1.0, stack.pop().unwrap());
         assert_eq!(1.0, stack.pop().unwrap());
         assert_eq!(0.0, stack.pop().unwrap());
@@ -2273,7 +2335,7 @@ mod test_iccmax_prim {
         stack.push(0.0);
         stack.push(0.5);
         stack.push(3.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(1.0, stack.pop().unwrap());
         assert_eq!(1.0, stack.pop().unwrap());
         assert_eq!(0.0, stack.pop().unwrap());
@@ -2290,7 +2352,7 @@ mod test_iccmax_prim {
         stack.push(3.0);
         stack.push(4.0);
         stack.push(2.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(4.0, stack.pop().unwrap());
         assert_eq!(16.0, stack.pop().unwrap());
         assert_eq!(9.0, stack.pop().unwrap());
@@ -2307,7 +2369,7 @@ mod test_iccmax_prim {
         stack.push(3.0);
         stack.push(-4.0);
         stack.push(-2.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(2.0, stack.pop().unwrap());
         assert_eq!(4.0, stack.pop().unwrap());
         assert_eq!(3.0, stack.pop().unwrap());
@@ -2324,7 +2386,7 @@ mod test_iccmax_prim {
         stack.push(3.0);
         stack.push(-4.0);
         stack.push(2.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(-2.0, stack.pop().unwrap());
         assert_eq!(4.0, stack.pop().unwrap());
         assert_eq!(-3.0, stack.pop().unwrap());
@@ -2341,7 +2403,7 @@ mod test_iccmax_prim {
         stack.push(9.0);
         stack.push(4.0);
         stack.push(1.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(1.0, stack.pop().unwrap());
         assert_eq!(2.0, stack.pop().unwrap());
         assert_eq!(3.0, stack.pop().unwrap());
@@ -2358,7 +2420,7 @@ mod test_iccmax_prim {
         stack.push(27.0);
         stack.push(8.0);
         stack.push(1.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(1.0, stack.pop().unwrap());
         assert_eq!(2.0, stack.pop().unwrap());
         assert_eq!(3.0, stack.pop().unwrap());
@@ -2375,7 +2437,7 @@ mod test_iccmax_prim {
         stack.push(27.6);
         stack.push(8.9);
         stack.push(1.1);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(1.0, stack.pop().unwrap());
         assert_eq!(8.0, stack.pop().unwrap());
         assert_eq!(27.0, stack.pop().unwrap());
@@ -2392,7 +2454,7 @@ mod test_iccmax_prim {
         stack.push(27.6);
         stack.push(8.9);
         stack.push(1.1);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(2.0, stack.pop().unwrap());
         assert_eq!(9.0, stack.pop().unwrap());
         assert_eq!(28.0, stack.pop().unwrap());
@@ -2409,7 +2471,7 @@ mod test_iccmax_prim {
         stack.push(27.6);
         stack.push(8.9);
         stack.push(1.1);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(1.0, stack.pop().unwrap());
         assert_eq!(8.0, stack.pop().unwrap());
         assert_eq!(27.0, stack.pop().unwrap());
@@ -2426,7 +2488,7 @@ mod test_iccmax_prim {
         stack.push(27.6);
         stack.push(8.9);
         stack.push(1.1);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(1.1_f32.exp(), stack.pop().unwrap());
         assert_eq!(8.9_f32.exp(), stack.pop().unwrap());
         assert_eq!(27.6_f32.exp(), stack.pop().unwrap());
@@ -2443,7 +2505,7 @@ mod test_iccmax_prim {
         stack.push(27.6);
         stack.push(8.9);
         stack.push(1.1);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(1.1_f32.log10(), stack.pop().unwrap());
         assert_eq!(8.9_f32.log10(), stack.pop().unwrap());
         assert_eq!(27.6_f32.log10(), stack.pop().unwrap());
@@ -2460,7 +2522,7 @@ mod test_iccmax_prim {
         stack.push(27.6);
         stack.push(8.9);
         stack.push(1.1);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(1.1_f32.ln(), stack.pop().unwrap());
         assert_eq!(8.9_f32.ln(), stack.pop().unwrap());
         assert_eq!(27.6_f32.ln(), stack.pop().unwrap());
@@ -2477,7 +2539,7 @@ mod test_iccmax_prim {
         stack.push(27.6);
         stack.push(-8.9);
         stack.push(0.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(0.0, stack.pop().unwrap());
         assert_eq!(-1.0, stack.pop().unwrap());
         assert_eq!(1.0, stack.pop().unwrap());
@@ -2494,7 +2556,7 @@ mod test_iccmax_prim {
         stack.push(3.0);
         stack.push(4.0);
         stack.push(2.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(8.0, stack.pop().unwrap());
         assert_eq!(64.0, stack.pop().unwrap());
         assert_eq!(27.0, stack.pop().unwrap());
@@ -2511,7 +2573,7 @@ mod test_iccmax_prim {
         stack.push(3.0);
         stack.push(2.0);
         stack.push(1.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(3.0, stack.pop().unwrap());
         assert_eq!(1.0, stack.pop().unwrap());
         assert_eq!(2.0, stack.pop().unwrap());
@@ -2528,7 +2590,7 @@ mod test_iccmax_prim {
         stack.push(3.0);
         stack.push(2.0);
         stack.push(1.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(2.0, stack.pop().unwrap());
         assert_eq!(3.0, stack.pop().unwrap());
         assert_eq!(1.0, stack.pop().unwrap());
@@ -2545,7 +2607,7 @@ mod test_iccmax_prim {
         stack.push(45.0);
         stack.push(70.0);
         stack.push(120.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(f32::sin(120.0), stack.pop().unwrap());
         assert_eq!(f32::sin(70.0), stack.pop().unwrap());
         assert_eq!(f32::sin(45.0), stack.pop().unwrap());
@@ -2562,7 +2624,7 @@ mod test_iccmax_prim {
         stack.push(45.0);
         stack.push(70.0);
         stack.push(120.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(f32::cos(120.0), stack.pop().unwrap());
         assert_eq!(f32::cos(70.0), stack.pop().unwrap());
         assert_eq!(f32::cos(45.0), stack.pop().unwrap());
@@ -2579,7 +2641,7 @@ mod test_iccmax_prim {
         stack.push(45.0);
         stack.push(70.0);
         stack.push(120.0);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(f32::tan(120.0), stack.pop().unwrap());
         assert_eq!(f32::tan(70.0), stack.pop().unwrap());
         assert_eq!(f32::tan(45.0), stack.pop().unwrap());
@@ -2596,7 +2658,7 @@ mod test_iccmax_prim {
         stack.push(0.4);
         stack.push(0.5);
         stack.push(0.27);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(f32::asin(0.27), stack.pop().unwrap());
         assert_eq!(f32::asin(0.5), stack.pop().unwrap());
         assert_eq!(f32::asin(0.4), stack.pop().unwrap());
@@ -2613,7 +2675,7 @@ mod test_iccmax_prim {
         stack.push(0.28);
         stack.push(0.78);
         stack.push(0.4);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(f32::acos(0.4), stack.pop().unwrap());
         assert_eq!(f32::acos(0.78), stack.pop().unwrap());
         assert_eq!(f32::acos(0.28), stack.pop().unwrap());
@@ -2630,7 +2692,7 @@ mod test_iccmax_prim {
         stack.push(0.5);
         stack.push(0.3);
         stack.push(0.78);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         assert_eq!(f32::atan(0.78), stack.pop().unwrap());
         assert_eq!(f32::atan(0.3), stack.pop().unwrap());
         assert_eq!(f32::atan(0.5), stack.pop().unwrap());
@@ -2650,7 +2712,7 @@ mod test_iccmax_prim {
         stack.push(0.5);
         stack.push(0.5);
         stack.push(0.5);
-        resolve_operations(r, &mut stack);
+        assert!(resolve_operations(r, &mut stack).is_ok());
         let y = 0.5f32;
         assert_eq!(y.atan2(0.78), stack.pop().unwrap());
         assert_eq!(y.atan2(0.3), stack.pop().unwrap());
