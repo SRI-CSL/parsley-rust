@@ -173,6 +173,9 @@ pub fn compute_operations(
             let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
             // Find the value at the sth position of the stack (0 is top),
             // push that value t+1 times to the top of the stack
+            if stack.len() < (s as usize) + 1 {
+                return Err(String::from("Stack underflowed on rotr operation"))
+            }
             let mut value: f32 = 0.0;
             let mut flag = false;
             for counter in (0 .. s + 1).rev() {
