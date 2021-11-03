@@ -1821,6 +1821,14 @@ mod test_iccmax_prim {
         assert_eq!(4, stack.len());
         assert_eq!(1.0, stack.pop().unwrap());
         assert_eq!(1.0, stack.pop().unwrap());
+
+        let v = Vec::from("posd\x05\x05\x05\x05".as_bytes());
+        let mut parsebuffer = ParseBuffer::new(v);
+        let result = parser.parse(&mut parsebuffer);
+        let r = result.unwrap().unwrap();
+        let mut stack: Vec<f32> = vec![];
+        resolve_operations(r, &mut stack);
+        /* what should we assert here to ensure correctness? */
     }
     #[test]
     fn test_operations_sequential_functions_sum() {
