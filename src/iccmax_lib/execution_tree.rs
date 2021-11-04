@@ -108,7 +108,7 @@ impl ExecutionTree {
             "out " => {
                 let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
                 let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
-                if self.stack >= t + 1 {
+                if self.stack < t + 1 {
                     return Err(String::from("Stack underflowed on out operation"))
                 }
 
@@ -139,12 +139,24 @@ impl ExecutionTree {
 
             "env " => {},
             //
-            "curv" => {},
-            "mtx " => {},
-            "clut" => {},
-            "calc" => {},
-            "tint" => {},
-            "elem" => {},
+            "curv" => {
+                println!("{:?} {:?}", operation, arg2);
+            },
+            "mtx " => {
+                println!("{:?} {:?}", operation, arg2);
+            },
+            "clut" => {
+                println!("{:?} {:?}", operation, arg2);
+            },
+            "calc" => {
+                println!("{:?} {:?}", operation, arg2);
+            },
+            "tint" => {
+                println!("{:?} {:?}", operation, arg2);
+            },
+            "elem" => {
+                println!("{:?} {:?}", operation, arg2);
+            },
             // Stack Operations
             "copy" => {
                 let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
