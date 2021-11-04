@@ -16,6 +16,7 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::iccmax_lib::execution_tree::ExecutionTree;
 use crate::pcore::parsebuffer::{
     ErrorKind, LocatedVal, ParseBuffer, ParseBufferT, ParseResult, ParsleyParser,
 };
@@ -1968,13 +1969,16 @@ impl ParsleyParser for CalcFunctionP {
         let mut counter = 0;
 
         let mut stack: Vec<f32> = vec![];
+        let mut instructions: Vec<Operations> = vec![];
         while counter < number_of_operations.unwrap() {
             // This can be an If condition, a Case, or Data Operation.
             let mut data_parser = OperationsP;
             let start = buf.get_cursor();
             let data_result = data_parser.parse(buf)?;
             let data_result_clone = data_result.clone().unwrap();
+            let data_result_clone2 = data_result.clone().unwrap();
             let count = data_result.clone().unwrap().number_of_operations();
+            instructions.push(data_result_clone2);
 
             let ret = resolve_operations(data_result_clone, &mut stack);
             if let Err(s) = &ret {
@@ -1985,6 +1989,8 @@ impl ParsleyParser for CalcFunctionP {
             //println!("{:?} {:?}", data_result_clone, count);
             counter = counter + count;
         }
+        let exec = ExecutionTree::new(0, 0, None, instructions, false);
+        println!("{:?}", exec);
 
         let g = CalcFunction::new(
             *signature.val(),

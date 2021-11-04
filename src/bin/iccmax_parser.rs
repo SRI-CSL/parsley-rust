@@ -16,7 +16,6 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-/// A very basic PDF parser.
 extern crate clap;
 extern crate env_logger;
 extern crate log;
