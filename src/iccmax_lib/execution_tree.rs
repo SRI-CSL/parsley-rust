@@ -44,7 +44,7 @@ impl ExecutionTree {
         }
     }
 
-    pub fn execute() {
+    pub fn execute(&mut self) -> IccResult<()> {
         /*
          * 1. For every instruction, call compute_stack_effects()
          *      a. If conditions and Sel statements lead to branches
@@ -52,6 +52,44 @@ impl ExecutionTree {
          * the correct branches      c. Call function recursively on
          * each path 2. Set completed to true
          */
+        let mut counter = 0;
+        while counter < self.instructions.len() {
+            let signature = self.instructions[counter].clone().signature();
+            let function_operations = self.instructions[counter].clone().function_operations();
+            let data_list = self.instructions[counter].clone().data().data_list();
+            match signature.as_str() {
+                "if" | "sel" => {
+                    let mut paths: Vec<ExecutionTree> = vec![];
+                    for c in 0 .. function_operations.len() {
+                        let mut part: Vec<Operations> = self.instructions[counter + 1 ..].to_vec();
+                        let mut tmp_func = function_operations[c].clone();
+                        tmp_func.append(&mut part);
+                        let e =
+                            ExecutionTree::new(self.stack, self.max_stack, None, tmp_func, false);
+                        paths.push(e);
+                    }
+                    self.instructions = vec![];
+                    self.paths = Some(paths);
+                    break
+                },
+                _ => {
+                    self.compute_stack_effects(signature.as_str(), data_list)?;
+                },
+            }
+            counter += 1;
+        }
+        match &self.paths {
+            Some(p) => {
+                for mut path in p.to_vec() {
+                    path.execute()?;
+                }
+            },
+            None => {
+                self.instructions = vec![];
+            },
+        }
+        self.completed = true;
+        Ok(())
     }
 
     pub fn compute_stack_effects(&mut self, operation: &str, arg2: Vec<u8>) -> IccResult<()> {
@@ -88,7 +126,7 @@ impl ExecutionTree {
             "tput" => {
                 let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
                 let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
-                if self.stack >= t + 1 {
+                if self.stack < t + 1 {
                     return Err(String::from("Stack underflowed on tput operation"))
                 }
                 for _i in 0 .. t + 1 {

@@ -1662,17 +1662,9 @@ impl ParsleyParser for DataOperationP {
         let f32_data = f32::from_be_bytes(data_copy);
 
         let func_operations: Vec<Vec<Operations>> = vec![];
-        let t_operators: Vec<Operations> = vec![];
         let signature_result_copy = signature_result.clone();
         let g = DataOperation::new(signature_result, f32_data, data.to_vec());
-        let g1 = Operations::new(
-            signature_result_copy,
-            [].to_vec(),
-            func_operations,
-            0,
-            t_operators,
-            g,
-        );
+        let g1 = Operations::new(signature_result_copy, [].to_vec(), func_operations, g);
         Ok(LocatedVal::new(g1, start, buf.get_cursor()))
     }
 }
@@ -1681,14 +1673,12 @@ pub struct Operations {
     signature:            String,
     number_of_operations: Vec<u32>,
     function_operations:  Vec<Vec<Operations>>,
-    t_value:              u32,
-    t_operators:          Vec<Operations>,
     data:                 DataOperation,
 }
 impl Operations {
     pub fn new(
         signature: String, number_of_operations: Vec<u32>,
-        function_operations: Vec<Vec<Operations>>, t_value: u32, t_operators: Vec<Operations>,
+        function_operations: Vec<Vec<Operations>>,
         data: DataOperation,
         /*
          * These types need to change from DataOperation to Operations
@@ -1698,14 +1688,10 @@ impl Operations {
             signature,
             number_of_operations,
             function_operations,
-            t_value,
-            t_operators,
             data,
         }
     }
     pub fn function_operations(self) -> Vec<Vec<Operations>> { self.function_operations }
-    pub fn t_operators(self) -> Vec<Operations> { self.t_operators }
-    pub fn t_value(self) -> u32 { self.t_value }
     pub fn data(self) -> DataOperation { self.data }
 
     pub fn signature(self) -> String { self.signature }
@@ -1726,9 +1712,6 @@ impl Operations {
                 // dft t
                 let mut num: u32;
                 num = 1 + self.number_of_operations.len() as u32;
-                if self.t_value > 0 {
-                    num += 1 + self.t_value;
-                }
                 for n in self.number_of_operations {
                     num += n;
                 }
@@ -1820,12 +1803,12 @@ impl ParsleyParser for SelectP {
                     let data_result = data_parser.parse(buf)?;
                     t_operators.push(data_result.unwrap());
                 }
+                number_of_operations.push(t_value);
+                function_operations.push(t_operators);
                 let g = Operations::new(
                     "sel".to_string(),
                     number_of_operations,
                     function_operations,
-                    t_value,
-                    t_operators,
                     DataOperation::new("sel".to_string(), 0.0, [].to_vec()),
                 );
                 Ok(LocatedVal::new(g, start, buf.get_cursor()))
@@ -1915,13 +1898,10 @@ impl ParsleyParser for IfElseP {
                 number_of_operations.push(u_value);
                 function_operations.push(if_operations);
                 function_operations.push(else_operations);
-                let t_operators_empty: Vec<Operations> = vec![];
                 let g = Operations::new(
                     "if".to_string(),
                     number_of_operations,
                     function_operations,
-                    0,
-                    t_operators_empty,
                     DataOperation::new("if".to_string(), 0.0, [].to_vec()),
                 );
                 //let g = IfElse::new(true, t_value, u_value, if_operations, else_operations);
@@ -1980,17 +1960,23 @@ impl ParsleyParser for CalcFunctionP {
             let count = data_result.clone().unwrap().number_of_operations();
             instructions.push(data_result_clone2);
 
-            let ret = resolve_operations(data_result_clone, &mut stack);
-            if let Err(s) = &ret {
-                let err = ErrorKind::GuardError(s.clone());
-                let err = LocatedVal::new(err, start, buf.get_cursor());
-                return Err(err)
-            }
+            //let ret = resolve_operations(data_result_clone, &mut stack);
+            //if let Err(s) = &ret {
+            //let err = ErrorKind::GuardError(s.clone());
+            //let err = LocatedVal::new(err, start, buf.get_cursor());
+            //return Err(err)
+            //}
             //println!("{:?} {:?}", data_result_clone, count);
             counter = counter + count;
         }
-        let exec = ExecutionTree::new(0, 0, None, instructions, false);
-        println!("{:?}", exec);
+        let mut exec = ExecutionTree::new(0, 0, None, instructions, false);
+        let ret = exec.execute();
+        if let Err(s) = &ret {
+            let err = ErrorKind::GuardError(s.clone());
+            let err = LocatedVal::new(err, start, buf.get_cursor());
+            println!("{:?}", err);
+            return Err(err)
+        }
 
         let g = CalcFunction::new(
             *signature.val(),
