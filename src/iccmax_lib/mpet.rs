@@ -144,6 +144,24 @@ impl Operation {
             opstreams: Some(streams),
         }
     }
+    // This representation bunches together multiple associated
+    // branching operations into a single Operation for implementation
+    // simplicity of resource bound computation.  However, the count
+    // of operations within a stream counts the individual components
+    // separately; this function returns that count.
+    pub fn num_ops(&self) -> usize {
+        match &self.typ {
+            OpType::Normal => 1,
+            OpType::If(_) => 1,
+            OpType::IfElse(_, _) => 2,
+            OpType::SelCases(cs) =>
+            /* sel + (cases + dflt) */
+            {
+                1 + cs.len()
+            },
+            OpType::Unknown => 1,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -238,10 +256,20 @@ impl ParsleyParser for OpStreamP {
         let start = buf.get_cursor();
         let mut p = OperationP::new(self.in_channels, self.out_channels);
         let mut stream = Vec::<Operation>::new();
-        for _ in 0 .. self.num_ops {
+        let mut num_ops = 0;
+        while num_ops < self.num_ops {
             let op = p.parse(buf)?;
             let op = op.unwrap();
+            num_ops += op.num_ops();
             stream.push(op)
+        }
+        if num_ops > self.num_ops {
+            let msg = format!(
+                "found {} operations in stream, expected {}",
+                num_ops, self.num_ops
+            );
+            let err = ErrorKind::GuardError(msg);
+            return Err(LocatedVal::new(err, start, buf.get_cursor()))
         }
         let stream = OpStream::new(stream);
         return Ok(LocatedVal::new(stream, start, buf.get_cursor()))
