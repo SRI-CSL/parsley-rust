@@ -23,7 +23,7 @@ use crate::pcore::prim_binary::{Endian, UInt16P, UInt32P, UInt8P};
 const MAX_CHANNELS: usize = 65535;
 //const MAX_STACK: usize = 65535;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum SubElemType {
     Calc,
     CurveSet,
@@ -43,7 +43,7 @@ pub enum SubElemType {
     Future,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum SubElemKind {
     Calc,
     CurveSet,
@@ -51,6 +51,7 @@ pub enum SubElemKind {
     Matrix,
     Tint,
     Elem,
+    Exact(SubElemType),
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -439,6 +440,25 @@ fn opinfo_from_sig(
             let produce = StkResource::sub_elem(SubElemKind::Elem, *s as usize);
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
+        // undocumented ops
+        "fJab" => {
+            let mut p = UInt32P::new(Endian::Big);
+            let s = p.parse(buf)?;
+            let s = s.val();
+            let k = SubElemKind::Exact(SubElemType::JabToXYZ);
+            let consume = StkResource::sub_elem(k, *s as usize);
+            let produce = StkResource::sub_elem(k, *s as usize);
+            Ok((OpType::Normal, OpResource::new(consume, produce)))
+        },
+        "tJab" => {
+            let mut p = UInt32P::new(Endian::Big);
+            let s = p.parse(buf)?;
+            let s = s.val();
+            let k = SubElemKind::Exact(SubElemType::XYZToJab);
+            let consume = StkResource::sub_elem(k, *s as usize);
+            let produce = StkResource::sub_elem(k, *s as usize);
+            Ok((OpType::Normal, OpResource::new(consume, produce)))
+        },
         // Table 96: stack operations
         "copy" => {
             let mut p = UInt16P::new(Endian::Big);
@@ -474,8 +494,8 @@ fn opinfo_from_sig(
             let s = p.parse(buf)?;
             let s = s.val();
             let _ = p.parse(buf)?; // should be zero
-            let consume = StkResource::stk(usize::from(s + 1)); // FIXME: typo in spec?
-            let produce = StkResource::stk(usize::from(s + 1));
+            let consume = StkResource::stk(usize::from(s + 2));
+            let produce = StkResource::stk(usize::from(s + 2));
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "pop " => {
@@ -575,7 +595,7 @@ fn opinfo_from_sig(
             let produce = StkResource::stk(2 * usize::from(s + 1));
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
-        "tLab" | "tXYZ" => {
+        "tLab" | "tXYZ" | "fLab" => {
             let mut p = UInt16P::new(Endian::Big);
             let s = p.parse(buf)?;
             let s = s.val();
