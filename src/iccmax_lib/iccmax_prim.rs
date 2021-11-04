@@ -26,6 +26,7 @@ type IccError = String;
 type IccResult<T> = std::result::Result<T, IccError>;
 
 pub fn resolve_operations(operation: Operations, mut stack: &mut Vec<f32>) -> IccResult<()> {
+    let before_stack = stack.clone();
     let signature = operation.clone().data().signature();
     let data = operation.clone().data().data();
     let data_list = operation.clone().data().data_list();
@@ -33,33 +34,55 @@ pub fn resolve_operations(operation: Operations, mut stack: &mut Vec<f32>) -> Ic
     match operation.signature().as_str() {
         "if" => {
             for option in function_operations {
+                let mut tmp_stack = stack.clone();
                 for function in option {
                     let function_1 = function.clone();
                     let function_2 = function.clone();
-                    if function.signature() == "if" || function_1.signature() == "sel" {
-                        resolve_operations(function_2, &mut stack)?;
+                    let function_data = function.clone().data().data();
+                    let function_data_list = function.clone().data().data_list();
+                    if function.signature() == "if" {
+                        resolve_operations(function_2, &mut tmp_stack)?;
+                    } else if function_1.signature() == "sel" {
+                        resolve_operations(function_2, &mut tmp_stack)?;
+                    } else {
+                        compute_operations(
+                            &function_2.signature(),
+                            function_data,
+                            function_data_list,
+                            &mut tmp_stack,
+                        )?;
                     }
-                    //println!("{:?}", function_2.signature());
                 }
             }
         },
         "sel" => {
             for option in function_operations {
+                let mut tmp_stack = stack.clone();
                 for function in option {
                     let function_1 = function.clone();
                     let function_2 = function.clone();
-                    if function.signature() == "if" || function_1.signature() == "sel" {
-                        resolve_operations(function_2, &mut stack)?;
+                    let function_data = function.clone().data().data();
+                    let function_data_list = function.clone().data().data_list();
+                    if function.signature() == "if" {
+                        resolve_operations(function_2, &mut tmp_stack)?;
+                    } else if function_1.signature() == "sel" {
+                        resolve_operations(function_2, &mut tmp_stack)?;
+                    } else {
+                        compute_operations(
+                            &function_2.signature(),
+                            function_data,
+                            function_data_list,
+                            &mut tmp_stack,
+                        )?;
                     }
-                    //println!("{:?}", function_2.signature());
                 }
             }
         },
         _ => {
             compute_operations(&signature, data, data_list, &mut stack)?;
-            //println!("{:?}", stack.len());
         },
     };
+    println!("{:?}     {:?}    {:?}", signature, before_stack, stack);
     return Ok(())
 }
 
@@ -1324,7 +1347,10 @@ pub fn compute_operations(
         },
 
         _ => {
-            println!("{:?}", operation);
+            return Err(String::from(format!(
+                "Unknown operator found {:?}",
+                operation
+            )))
         },
     }
     if stack.len() > 65535 {
@@ -1333,7 +1359,6 @@ pub fn compute_operations(
             stack.len()
         )))
     }
-    println!("{:?}", stack.len());
     return Ok(())
 }
 
