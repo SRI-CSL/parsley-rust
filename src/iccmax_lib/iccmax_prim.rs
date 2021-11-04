@@ -1392,6 +1392,17 @@ impl ParsleyParser for PositionNumberP {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+pub struct MPetOptions {
+    calc: Option<CalculatorElement>,
+    gen:  Option<GeneralElement>,
+}
+impl MPetOptions {
+    pub fn new(calc: Option<CalculatorElement>, gen: Option<GeneralElement>) -> Self {
+        Self { calc, gen }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MPetElement {
     signature:          bool,
     input_channels:     u16,
@@ -1478,19 +1489,19 @@ impl ParsleyParser for MPetElementP {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct GeneralElement {
-    signature:       u32,
+    signature:       String,
     input_channels:  u16,
     output_channels: u16,
 }
 impl GeneralElement {
-    pub fn new(signature: u32, input_channels: u16, output_channels: u16) -> Self {
+    pub fn new(signature: String, input_channels: u16, output_channels: u16) -> Self {
         Self {
             signature,
             input_channels,
             output_channels,
         }
     }
-    pub fn signature(self) -> u32 { self.signature }
+    pub fn signature(self) -> String { self.signature }
     pub fn input_channels(self) -> u16 { self.input_channels }
     pub fn output_channels(self) -> u16 { self.output_channels }
 }
@@ -1500,20 +1511,30 @@ impl ParsleyParser for GeneralElementP {
 
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let mut g1 = UInt32P::new(Endian::Big);
-
         let start = buf.get_cursor();
-        let signature = g1.parse(buf)?;
+        let mut g = UInt8P;
+        let g1_result = g.parse(buf)?;
+        let g2_result = g.parse(buf)?;
+        let g3_result = g.parse(buf)?;
+        let g4_result = g.parse(buf)?;
+
+        //let signature = g1.parse(buf)?;
+
+        let mut signature_result = (*g1_result.val() as char).to_string();
+        signature_result = signature_result + &(*g2_result.val() as char).to_string();
+        signature_result = signature_result + &(*g3_result.val() as char).to_string();
+        signature_result = signature_result + &(*g4_result.val() as char).to_string();
 
         let reserved = g1.parse(buf)?;
         // This field must be 0
-        assert_eq!(reserved.unwrap(), 0);
+        //assert_eq!(reserved.unwrap(), 0);
 
         let mut g3 = UInt16P::new(Endian::Big);
         let input_channels = g3.parse(buf)?;
         let output_channels = g3.parse(buf)?;
 
         let g = GeneralElement::new(
-            *signature.val(),
+            signature_result,
             *input_channels.val(),
             *output_channels.val(),
         );
@@ -1549,10 +1570,14 @@ impl CalculatorElement {
     pub fn signature(self) -> bool { self.signature }
     pub fn input_channels(self) -> u16 { self.input_channels }
     pub fn output_channels(self) -> u16 { self.output_channels }
+    pub fn subelement_positions(self) -> Vec<PositionNumber> { self.subelement_positions }
+    pub fn main_function_size(self) -> u32 { self.main_function_size }
+    pub fn main_function_position(self) -> u32 { self.main_function_position }
 }
 pub struct CalculatorElementP;
 impl ParsleyParser for CalculatorElementP {
     type T = LocatedVal<CalculatorElement>;
+
 
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let mut g1 = BinaryMatcher::new(b"calc");
@@ -1579,29 +1604,33 @@ impl ParsleyParser for CalculatorElementP {
             main_function_position.unwrap() as usize,
             main_function_size.unwrap() as usize,
         );
-        let mut func_parser = CalcFunctionP;
-        let _func_result = func_parser.parse(&mut main_buf)?;
 
         let mut subelement_positions: Vec<PositionNumber> = vec![];
 
         let mut counter = 0;
         while counter < number_of_subelements.unwrap() {
-            // TODO: Seek to every subelement
+        //// TODO: Seek to every subelement
             let mut position_number_parser = PositionNumberP;
             let p = position_number_parser.parse(buf)?;
             let position_result_unwrapped = p.unwrap();
 
             let seek_position = position_result_unwrapped.position();
             let seek_size = position_result_unwrapped.size();
-            let _subelement_buf =
-                ParseBuffer::new_view_cut(buf, seek_position as usize, seek_size as usize);
-            //println!();
-            //ParseBuffer::buf_to_string(&mut subelement_buf);
-            //let subelement_result = func_parser.parse(&mut subelement_buf)?;
+        //let mut subelement_buf =
+        //ParseBuffer::new_view_cut(buf, seek_position as usize, seek_size as usize);
+        //let mut calc_parser = CalculatorElementP;
+        //let mut general_parser = GeneralElementP;
+        //let mut sub_parser = Alternate::new(&mut calc_parser, &mut general_parser);
+        ////println!();
+        ////ParseBuffer::buf_to_string(&mut subelement_buf);
+        //let subelement_result = sub_parser.parse(&mut subelement_buf)?;
+        ////println!("{:?}", subelement_result);
 
             subelement_positions.push(p.unwrap());
             counter = counter + 1;
         }
+        //let mut func_parser = CalcFunctionP;
+        //let _func_result = func_parser.parse(&mut main_buf)?;
 
         let g = CalculatorElement::new(
             *signature.val(),
@@ -1818,34 +1847,6 @@ impl ParsleyParser for SelectP {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub struct IfElse {
-    signature:                bool,
-    t_value:                  u32,
-    u_value:                  u32,
-    function_operations_if:   Vec<DataOperation>,
-    function_operations_else: Vec<DataOperation>,
-}
-impl IfElse {
-    pub fn new(
-        signature: bool, t_value: u32, u_value: u32, function_operations_if: Vec<DataOperation>,
-        function_operations_else: Vec<DataOperation>,
-    ) -> Self {
-        Self {
-            signature,
-            t_value,
-            u_value,
-            function_operations_if,
-            function_operations_else,
-        }
-    }
-    pub fn number_of_operations(self) -> u32 { self.t_value + self.u_value + 2 }
-    pub fn t_value(self) -> u32 { self.t_value }
-    pub fn u_value(self) -> u32 { self.u_value }
-    pub fn function_operations_if(self) -> Vec<DataOperation> { self.function_operations_if }
-    pub fn function_operations_else(self) -> Vec<DataOperation> { self.function_operations_else }
-}
-
 pub struct IfElseP;
 impl ParsleyParser for IfElseP {
     type T = LocatedVal<Operations>;
@@ -1916,15 +1917,18 @@ pub struct CalcFunction {
     signature:            bool,
     reserved:             u32,
     number_of_operations: u32,
+    instructions: Vec<Operations>,
 }
 impl CalcFunction {
-    pub fn new(signature: bool, reserved: u32, number_of_operations: u32) -> Self {
+    pub fn new(signature: bool, reserved: u32, number_of_operations: u32, instructions: Vec<Operations>) -> Self {
         Self {
             signature,
             reserved,
             number_of_operations,
+            instructions,
         }
     }
+    pub fn instructions(self) -> Vec<Operations> { self.instructions }
 }
 
 pub struct CalcFunctionP;
@@ -1948,7 +1952,6 @@ impl ParsleyParser for CalcFunctionP {
 
         let mut counter = 0;
 
-        let mut stack: Vec<f32> = vec![];
         let mut instructions: Vec<Operations> = vec![];
         while counter < number_of_operations.unwrap() {
             // This can be an If condition, a Case, or Data Operation.
@@ -1969,19 +1972,12 @@ impl ParsleyParser for CalcFunctionP {
             //println!("{:?} {:?}", data_result_clone, count);
             counter = counter + count;
         }
-        let mut exec = ExecutionTree::new(0, 0, None, instructions, false);
-        let ret = exec.execute();
-        if let Err(s) = &ret {
-            let err = ErrorKind::GuardError(s.clone());
-            let err = LocatedVal::new(err, start, buf.get_cursor());
-            println!("{:?}", err);
-            return Err(err)
-        }
 
         let g = CalcFunction::new(
             *signature.val(),
             *reserved.val(),
             *number_of_operations.val(),
+            instructions,
         );
         Ok(LocatedVal::new(g, start, buf.get_cursor()))
     }

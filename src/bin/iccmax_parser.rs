@@ -31,16 +31,20 @@ use log::{Level, LevelFilter};
 
 use clap::{App, Arg};
 
+use parsley_rust::iccmax_lib::execution_tree::ExecutionTree;
 use parsley_rust::iccmax_lib::iccmax_prim::{
-    CalculatorElementP, GeneralElementP, HeaderP, MPetElementP, TaggedElementP,
+    CalculatorElementP, GeneralElementP, HeaderP, MPetElementP, TaggedElementP, CalcFunctionP, MPetOptions
 };
-use parsley_rust::pcore::parsebuffer::{ParseBuffer, ParsleyParser};
+use parsley_rust::pcore::parsebuffer::{ErrorKind, LocatedVal, ParseBuffer, ParsleyParser};
 
 use parsley_rust::pcore::prim_binary::{Endian, UInt32P};
 use parsley_rust::pcore::prim_combinators::{Alt, Alternate};
 
 use std::fs::File;
 use std::io::Read;
+
+type IccError = String;
+type IccResult<T> = std::result::Result<T, IccError>;
 
 fn read_file(file_name: &str) -> Vec<u8> {
     let mut file = File::open(file_name).unwrap();
@@ -51,7 +55,7 @@ fn read_file(file_name: &str) -> Vec<u8> {
     return data
 }
 
-fn parse_iccmax(data: Vec<u8>) {
+fn parse_iccmax(data: Vec<u8>) -> IccResult<IccError> {
     let mut pb = ParseBuffer::new(data);
     // Header consumes 128 bytes
     let mut parser = HeaderP;
@@ -107,6 +111,65 @@ fn parse_iccmax(data: Vec<u8>) {
                             Ok(v) => {
                                 // Uncomment to debug
                                 //println!("{:?}", v);
+
+                                /*
+                                 * 1. Extract subelements and parse them
+                                 * 2. Parse the main function and parse it
+                                 */
+                                //----------------------
+                                let v_cloned = v.clone();
+                                match v_cloned.unwrap() {
+                                    Alt::Left(t) => {
+                                        let main_function_position =
+                                            t.clone().unwrap().main_function_position();
+                                        let main_function_size =
+                                            t.clone().unwrap().main_function_size();
+                                        let mut main_buf = ParseBuffer::new_view(
+                                            &mut calc_buffer,
+                                            main_function_position as usize,
+                                            main_function_size as usize,
+                                        );
+                                        //ParseBuffer::buf_to_string(&mut calc_buffer);
+                                        //ParseBuffer::buf_to_string(&mut main_buf);
+
+                                        let positions_list = t.unwrap().subelement_positions();
+                                        let mut pos_array: Vec<MPetOptions> = vec![];
+                                        for position in positions_list {
+                                            let mut subelement_buf = ParseBuffer::new_view(
+                                                &mut calc_buffer,
+                                                position.position() as usize,
+                                                position.size() as usize,
+                                            );
+                                            let result = parser.parse(&mut subelement_buf);
+                                            match result.unwrap().unwrap() {
+                                                Alt::Left(v) => {
+                                                    let s = MPetOptions::new(Some(v.unwrap()), None);
+                                                    pos_array.push(s);
+                                                },
+                                                Alt::Right(v) => {
+                                                    let s = MPetOptions::new(None, Some(v.unwrap()));
+                                                    pos_array.push(s);
+                                                }
+                                            }
+                                        }
+                                        println!("{:?}", pos_array);
+
+                                        let mut func_parser = CalcFunctionP;
+                                        let func_result = func_parser.parse(&mut main_buf);
+                                        let mut exec = ExecutionTree::new(0, 0, None, func_result.unwrap().unwrap().instructions(), false);
+                                        let ret = exec.execute()?;
+                                        //println!("{:?}", ret);
+                                        //if let Err(s) = &ret {
+                                            //let err = ErrorKind::GuardError(s.clone());
+                                            //let err = LocatedVal::new(err, start, buf.get_cursor());
+                                            //println!("{:?}", err);
+                                            //return Err(err)
+                                        //}
+                                    },
+                                    Alt::Right(_) => {},
+                                }
+
+                                //----------------------
 
                                 // We need to make copies because Alt struct does not implement the
                                 // Copy trait
@@ -225,6 +288,7 @@ fn parse_iccmax(data: Vec<u8>) {
         }
         counter = counter + 1;
     }
+    Ok("".to_string())
 }
 
 fn main() {
@@ -274,5 +338,6 @@ fn main() {
 
     println!("{:?}", matches.value_of("icc_file").unwrap());
     let buffer = read_file(matches.value_of("icc_file").unwrap());
-    parse_iccmax(buffer);
+    let r = parse_iccmax(buffer);
+    println!("{:?}", r);
 }

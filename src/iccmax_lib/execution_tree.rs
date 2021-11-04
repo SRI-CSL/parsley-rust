@@ -221,7 +221,7 @@ impl ExecutionTree {
                 let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
 
                 // matrix is s+1 * t+1, y is s+1, resulting is X is t + 1 + 1.
-                let substract_val = (((s+1) * (t+1)) + (s+1) - (t+1 + 1));
+                let substract_val = (((s + 1) * (t + 1)) + (s + 1) - (t + 1 + 1));
                 if (self.stack as u16) < substract_val {
                     return Err(String::from("Not enough stack elements to pop"))
                 }
