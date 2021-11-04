@@ -108,7 +108,7 @@ impl ExecutionTree {
             "out " => {
                 let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
                 let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
-                if self.stack >= t + 1 {
+                if self.stack < t + 1 {
                     return Err(String::from("Stack underflowed on out operation"))
                 }
 
@@ -204,8 +204,21 @@ impl ExecutionTree {
                 self.stack -= s + 1;
             },
             // Matrix Operations
-            "solv" => {},
-            "tran" => {},
+            "solv" => {
+                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+
+                // matrix is s+1 * t+1, y is s+1, resulting is X is t + 1 + 1.
+                let substract_val = (((s+1) * (t+1)) + (s+1) - (t+1 + 1));
+                if (self.stack as u16) < substract_val {
+                    return Err(String::from("Not enough stack elements to pop"))
+                }
+
+                self.stack -= substract_val;
+            },
+            "tran" => {
+                // num elements remain same.
+            },
             // Sequence Functional Operations
             // TODO: Table 100 seems to use top S+2 values instead of the conventional S+1
             "sum " => {
