@@ -33,7 +33,8 @@ use clap::{App, Arg};
 
 use parsley_rust::iccmax_lib::execution_tree::ExecutionTree;
 use parsley_rust::iccmax_lib::iccmax_prim::{
-    CalculatorElementP, GeneralElementP, HeaderP, MPetElementP, TaggedElementP, CalcFunctionP, MPetOptions
+    CalcFunctionP, CalculatorElementP, GeneralElementP, HeaderP, MPetElementP, MPetOptions,
+    TaggedElementP,
 };
 use parsley_rust::pcore::parsebuffer::{ErrorKind, LocatedVal, ParseBuffer, ParsleyParser};
 
@@ -143,27 +144,37 @@ fn parse_iccmax(data: Vec<u8>) -> IccResult<IccError> {
                                             let result = parser.parse(&mut subelement_buf);
                                             match result.unwrap().unwrap() {
                                                 Alt::Left(v) => {
-                                                    let s = MPetOptions::new(Some(v.unwrap()), None);
+                                                    let s =
+                                                        MPetOptions::new(Some(v.unwrap()), None);
                                                     pos_array.push(s);
                                                 },
                                                 Alt::Right(v) => {
-                                                    let s = MPetOptions::new(None, Some(v.unwrap()));
+                                                    let s =
+                                                        MPetOptions::new(None, Some(v.unwrap()));
                                                     pos_array.push(s);
-                                                }
+                                                },
                                             }
                                         }
                                         println!("{:?}", pos_array);
 
                                         let mut func_parser = CalcFunctionP;
                                         let func_result = func_parser.parse(&mut main_buf);
-                                        let mut exec = ExecutionTree::new(0, 0, None, func_result.unwrap().unwrap().instructions(), false);
+                                        let mut exec = ExecutionTree::new(
+                                            0,
+                                            0,
+                                            None,
+                                            func_result.unwrap().unwrap().instructions(),
+                                            false,
+                                        );
                                         let ret = exec.execute()?;
                                         //println!("{:?}", ret);
                                         //if let Err(s) = &ret {
-                                            //let err = ErrorKind::GuardError(s.clone());
-                                            //let err = LocatedVal::new(err, start, buf.get_cursor());
-                                            //println!("{:?}", err);
-                                            //return Err(err)
+                                        //let err = ErrorKind::GuardError(s.
+                                        // clone());
+                                        // let err = LocatedVal::new(err, start,
+                                        // buf.get_cursor());
+                                        // println!("{:?}", err);
+                                        //return Err(err)
                                         //}
                                     },
                                     Alt::Right(_) => {},

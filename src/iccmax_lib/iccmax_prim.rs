@@ -1578,7 +1578,6 @@ pub struct CalculatorElementP;
 impl ParsleyParser for CalculatorElementP {
     type T = LocatedVal<CalculatorElement>;
 
-
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let mut g1 = BinaryMatcher::new(b"calc");
 
@@ -1609,22 +1608,22 @@ impl ParsleyParser for CalculatorElementP {
 
         let mut counter = 0;
         while counter < number_of_subelements.unwrap() {
-        //// TODO: Seek to every subelement
+            //// TODO: Seek to every subelement
             let mut position_number_parser = PositionNumberP;
             let p = position_number_parser.parse(buf)?;
             let position_result_unwrapped = p.unwrap();
 
             let seek_position = position_result_unwrapped.position();
             let seek_size = position_result_unwrapped.size();
-        //let mut subelement_buf =
-        //ParseBuffer::new_view_cut(buf, seek_position as usize, seek_size as usize);
-        //let mut calc_parser = CalculatorElementP;
-        //let mut general_parser = GeneralElementP;
-        //let mut sub_parser = Alternate::new(&mut calc_parser, &mut general_parser);
-        ////println!();
-        ////ParseBuffer::buf_to_string(&mut subelement_buf);
-        //let subelement_result = sub_parser.parse(&mut subelement_buf)?;
-        ////println!("{:?}", subelement_result);
+            //let mut subelement_buf =
+            //ParseBuffer::new_view_cut(buf, seek_position as usize, seek_size as usize);
+            //let mut calc_parser = CalculatorElementP;
+            //let mut general_parser = GeneralElementP;
+            //let mut sub_parser = Alternate::new(&mut calc_parser, &mut general_parser);
+            ////println!();
+            ////ParseBuffer::buf_to_string(&mut subelement_buf);
+            //let subelement_result = sub_parser.parse(&mut subelement_buf)?;
+            ////println!("{:?}", subelement_result);
 
             subelement_positions.push(p.unwrap());
             counter = counter + 1;
@@ -1917,10 +1916,12 @@ pub struct CalcFunction {
     signature:            bool,
     reserved:             u32,
     number_of_operations: u32,
-    instructions: Vec<Operations>,
+    instructions:         Vec<Operations>,
 }
 impl CalcFunction {
-    pub fn new(signature: bool, reserved: u32, number_of_operations: u32, instructions: Vec<Operations>) -> Self {
+    pub fn new(
+        signature: bool, reserved: u32, number_of_operations: u32, instructions: Vec<Operations>,
+    ) -> Self {
         Self {
             signature,
             reserved,
