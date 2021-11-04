@@ -326,7 +326,7 @@ fn opinfo_from_sig(
             let produce = StkResource::no_stack();
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
-        "tget " => {
+        "tget" => {
             let mut p = UInt16P::new(Endian::Big);
             let s = p.parse(buf)?;
             let s = s.val();
@@ -345,7 +345,7 @@ fn opinfo_from_sig(
             let produce = StkResource::stk(usize::from(t + 1));
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
-        "tput " => {
+        "tput" => {
             let mut p = UInt16P::new(Endian::Big);
             let s = p.parse(buf)?;
             let s = s.val();
@@ -364,7 +364,7 @@ fn opinfo_from_sig(
             let produce = StkResource::no_stack();
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
-        "tsav " => {
+        "tsav" => {
             let mut p = UInt16P::new(Endian::Big);
             let s = p.parse(buf)?;
             let s = s.val();
