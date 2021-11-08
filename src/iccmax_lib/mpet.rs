@@ -19,6 +19,7 @@
 use super::base::PositionNumber;
 use crate::pcore::parsebuffer::{ErrorKind, LocatedVal, ParseBufferT, ParseResult, ParsleyParser};
 use crate::pcore::prim_binary::{Endian, UInt16P, UInt32P, UInt8P};
+use std::collections::BTreeMap;
 
 const MAX_CHANNELS: usize = 65535;
 //const MAX_STACK: usize = 65535;
@@ -54,8 +55,8 @@ pub enum SubElemKind {
     Exact(SubElemType),
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct SubElem {
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub struct SubElemInfo {
     typ:             SubElemType,
     input_channels:  usize,
     output_channels: usize,
@@ -64,12 +65,10 @@ pub struct SubElem {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum StkResource {
     Stk(usize),
-    SubElem(SubElemKind, usize),
 }
 impl StkResource {
     pub fn no_stack() -> Self { StkResource::Stk(0) }
     pub fn stk(s: usize) -> Self { StkResource::Stk(s) }
-    pub fn sub_elem(k: SubElemKind, e: usize) -> Self { StkResource::SubElem(k, e) }
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -174,13 +173,17 @@ impl OpStream {
 }
 
 pub struct OperationP {
+    subelem_map:  BTreeMap<usize, SubElemInfo>,
     in_channels:  usize,
     out_channels: usize,
 }
 
 impl OperationP {
-    pub fn new(in_channels: usize, out_channels: usize) -> Self {
+    pub fn new(
+        subelem_map: BTreeMap<usize, SubElemInfo>, in_channels: usize, out_channels: usize,
+    ) -> Self {
         Self {
+            subelem_map,
             in_channels,
             out_channels,
         }
@@ -204,17 +207,32 @@ impl ParsleyParser for OperationP {
             OpType::Normal | OpType::Unknown => Operation::new(typ, resource),
             OpType::If(t) => {
                 // collect the stream
-                let mut p = OpStreamP::new(t, self.in_channels, self.out_channels);
+                let mut p = OpStreamP::new(
+                    self.subelem_map.clone(),
+                    self.in_channels,
+                    self.out_channels,
+                    t,
+                );
                 let stream = p.parse(buf)?;
                 let stream = stream.unwrap();
                 Operation::new_with_streams(typ, resource, vec![stream])
             },
             OpType::IfElse(t, u) => {
                 // collect the two streams
-                let mut p = OpStreamP::new(t, self.in_channels, self.out_channels);
+                let mut p = OpStreamP::new(
+                    self.subelem_map.clone(),
+                    self.in_channels,
+                    self.out_channels,
+                    t,
+                );
                 let ifstm = p.parse(buf)?;
                 let ifstm = ifstm.unwrap();
-                let mut p = OpStreamP::new(u, self.in_channels, self.out_channels);
+                let mut p = OpStreamP::new(
+                    self.subelem_map.clone(),
+                    self.in_channels,
+                    self.out_channels,
+                    u,
+                );
                 let elsestm = p.parse(buf)?;
                 let elsestm = elsestm.unwrap();
                 Operation::new_with_streams(typ, resource, vec![ifstm, elsestm])
@@ -222,7 +240,12 @@ impl ParsleyParser for OperationP {
             OpType::SelCases(ref cs) => {
                 let mut streams = Vec::<OpStream>::new();
                 for c in cs {
-                    let mut p = OpStreamP::new(*c, self.in_channels, self.out_channels);
+                    let mut p = OpStreamP::new(
+                        self.subelem_map.clone(),
+                        self.in_channels,
+                        self.out_channels,
+                        *c,
+                    );
                     let s = p.parse(buf)?;
                     let s = s.unwrap();
                     streams.push(s)
@@ -235,14 +258,19 @@ impl ParsleyParser for OperationP {
 }
 
 pub struct OpStreamP {
+    subelem_map:  BTreeMap<usize, SubElemInfo>,
     in_channels:  usize,
     out_channels: usize,
     num_ops:      usize,
 }
 
 impl OpStreamP {
-    pub fn new(in_channels: usize, out_channels: usize, num_ops: usize) -> Self {
+    pub fn new(
+        subelem_map: BTreeMap<usize, SubElemInfo>, in_channels: usize, out_channels: usize,
+        num_ops: usize,
+    ) -> Self {
         Self {
+            subelem_map,
             in_channels,
             out_channels,
             num_ops,
@@ -255,7 +283,11 @@ impl ParsleyParser for OpStreamP {
 
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
-        let mut p = OperationP::new(self.in_channels, self.out_channels);
+        let mut p = OperationP::new(
+            self.subelem_map.clone(),
+            self.in_channels,
+            self.out_channels,
+        );
         let mut stream = Vec::<Operation>::new();
         let mut num_ops = 0;
         while num_ops < self.num_ops {
@@ -275,6 +307,13 @@ impl ParsleyParser for OpStreamP {
         let stream = OpStream::new(stream);
         return Ok(LocatedVal::new(stream, start, buf.get_cursor()))
     }
+}
+
+// various helpers used from above parsers.
+
+fn subelem_type_check(_se_kind: SubElemKind, _se_typ: SubElemType) -> bool {
+    // type-check logic.  not interesting.
+    true
 }
 
 fn opinfo_from_sig(
@@ -396,58 +435,145 @@ fn opinfo_from_sig(
             let mut p = UInt32P::new(Endian::Big);
             let s = p.parse(buf)?;
             let s = s.val();
-            let consume = StkResource::sub_elem(SubElemKind::CurveSet, *s as usize);
-            let produce = StkResource::sub_elem(SubElemKind::CurveSet, *s as usize);
+            let se = match op.subelem_map.get(&(*s as usize)) {
+                None => {
+                    let msg = format!("Invalid sub-elem {}", *s);
+                    let err = ErrorKind::GuardError(msg);
+                    return Err(LocatedVal::new(err, start, buf.get_cursor()))
+                },
+                Some(se) => se,
+            };
+            if !subelem_type_check(SubElemKind::CurveSet, se.typ) {
+                let msg = format!("Invalid sub-elem type {:?} for curv", se.typ);
+                let err = ErrorKind::GuardError(msg);
+                return Err(LocatedVal::new(err, start, buf.get_cursor()))
+            }
+            let consume = StkResource::stk(se.input_channels);
+            let produce = StkResource::stk(se.output_channels);
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "mtx " => {
             let mut p = UInt32P::new(Endian::Big);
             let s = p.parse(buf)?;
             let s = s.val();
-            let consume = StkResource::sub_elem(SubElemKind::Matrix, *s as usize);
-            let produce = StkResource::sub_elem(SubElemKind::Matrix, *s as usize);
+            let se = match op.subelem_map.get(&(*s as usize)) {
+                None => {
+                    let msg = format!("Invalid sub-elem {}", *s);
+                    let err = ErrorKind::GuardError(msg);
+                    return Err(LocatedVal::new(err, start, buf.get_cursor()))
+                },
+                Some(se) => se,
+            };
+            if !subelem_type_check(SubElemKind::Matrix, se.typ) {
+                let msg = format!("Invalid sub-elem type {:?} for mtx", se.typ);
+                let err = ErrorKind::GuardError(msg);
+                return Err(LocatedVal::new(err, start, buf.get_cursor()))
+            }
+            let consume = StkResource::stk(se.input_channels);
+            let produce = StkResource::stk(se.output_channels);
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "clut" => {
             let mut p = UInt32P::new(Endian::Big);
             let s = p.parse(buf)?;
             let s = s.val();
-            let consume = StkResource::sub_elem(SubElemKind::CLUT, *s as usize);
-            let produce = StkResource::sub_elem(SubElemKind::CLUT, *s as usize);
+            let se = match op.subelem_map.get(&(*s as usize)) {
+                None => {
+                    let msg = format!("Invalid sub-elem {}", *s);
+                    let err = ErrorKind::GuardError(msg);
+                    return Err(LocatedVal::new(err, start, buf.get_cursor()))
+                },
+                Some(se) => se,
+            };
+            if !subelem_type_check(SubElemKind::CLUT, se.typ) {
+                let msg = format!("Invalid sub-elem type {:?} for clut", se.typ);
+                let err = ErrorKind::GuardError(msg);
+                return Err(LocatedVal::new(err, start, buf.get_cursor()))
+            }
+            let consume = StkResource::stk(se.input_channels);
+            let produce = StkResource::stk(se.output_channels);
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "calc" => {
             let mut p = UInt32P::new(Endian::Big);
             let s = p.parse(buf)?;
             let s = s.val();
-            let consume = StkResource::sub_elem(SubElemKind::Calc, *s as usize);
-            let produce = StkResource::sub_elem(SubElemKind::Calc, *s as usize);
+            let se = match op.subelem_map.get(&(*s as usize)) {
+                None => {
+                    let msg = format!("Invalid sub-elem {}", *s);
+                    let err = ErrorKind::GuardError(msg);
+                    return Err(LocatedVal::new(err, start, buf.get_cursor()))
+                },
+                Some(se) => se,
+            };
+            if !subelem_type_check(SubElemKind::Calc, se.typ) {
+                let msg = format!("Invalid sub-elem type {:?} for calc", se.typ);
+                let err = ErrorKind::GuardError(msg);
+                return Err(LocatedVal::new(err, start, buf.get_cursor()))
+            }
+            let consume = StkResource::stk(se.input_channels);
+            let produce = StkResource::stk(se.output_channels);
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "tint" => {
             let mut p = UInt32P::new(Endian::Big);
             let s = p.parse(buf)?;
             let s = s.val();
-            let consume = StkResource::sub_elem(SubElemKind::Tint, *s as usize);
-            let produce = StkResource::sub_elem(SubElemKind::Tint, *s as usize);
+            let se = match op.subelem_map.get(&(*s as usize)) {
+                None => {
+                    let msg = format!("Invalid sub-elem {}", *s);
+                    let err = ErrorKind::GuardError(msg);
+                    return Err(LocatedVal::new(err, start, buf.get_cursor()))
+                },
+                Some(se) => se,
+            };
+            if !subelem_type_check(SubElemKind::Tint, se.typ) {
+                let msg = format!("Invalid sub-elem type {:?} for tint", se.typ);
+                let err = ErrorKind::GuardError(msg);
+                return Err(LocatedVal::new(err, start, buf.get_cursor()))
+            }
+            let consume = StkResource::stk(se.input_channels);
+            let produce = StkResource::stk(se.output_channels);
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "elem" => {
             let mut p = UInt32P::new(Endian::Big);
             let s = p.parse(buf)?;
             let s = s.val();
-            let consume = StkResource::sub_elem(SubElemKind::Elem, *s as usize);
-            let produce = StkResource::sub_elem(SubElemKind::Elem, *s as usize);
+            let se = match op.subelem_map.get(&(*s as usize)) {
+                None => {
+                    let msg = format!("Invalid sub-elem {}", *s);
+                    let err = ErrorKind::GuardError(msg);
+                    return Err(LocatedVal::new(err, start, buf.get_cursor()))
+                },
+                Some(se) => se,
+            };
+            // No type check for `elem` sub-elements.
+            let consume = StkResource::stk(se.input_channels);
+            let produce = StkResource::stk(se.output_channels);
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
-        // undocumented ops
+        // undocumented ops.
         "fJab" => {
             let mut p = UInt32P::new(Endian::Big);
             let s = p.parse(buf)?;
             let s = s.val();
             let k = SubElemKind::Exact(SubElemType::JabToXYZ);
-            let consume = StkResource::sub_elem(k, *s as usize);
-            let produce = StkResource::sub_elem(k, *s as usize);
+            let se = match op.subelem_map.get(&(*s as usize)) {
+                None => {
+                    let msg = format!("Invalid sub-elem {}", *s);
+                    let err = ErrorKind::GuardError(msg);
+                    return Err(LocatedVal::new(err, start, buf.get_cursor()))
+                },
+                Some(se) => se,
+            };
+            if !subelem_type_check(k, se.typ) {
+                let msg = format!("Invalid sub-elem type {:?} for fJab", se.typ);
+                let err = ErrorKind::GuardError(msg);
+                return Err(LocatedVal::new(err, start, buf.get_cursor()))
+            }
+            let consume = StkResource::stk(se.input_channels);
+            let produce = StkResource::stk(se.output_channels);
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "tJab" => {
@@ -455,8 +581,21 @@ fn opinfo_from_sig(
             let s = p.parse(buf)?;
             let s = s.val();
             let k = SubElemKind::Exact(SubElemType::XYZToJab);
-            let consume = StkResource::sub_elem(k, *s as usize);
-            let produce = StkResource::sub_elem(k, *s as usize);
+            let se = match op.subelem_map.get(&(*s as usize)) {
+                None => {
+                    let msg = format!("Invalid sub-elem {}", *s);
+                    let err = ErrorKind::GuardError(msg);
+                    return Err(LocatedVal::new(err, start, buf.get_cursor()))
+                },
+                Some(se) => se,
+            };
+            if !subelem_type_check(k, se.typ) {
+                let msg = format!("Invalid sub-elem type {:?} for tJab", se.typ);
+                let err = ErrorKind::GuardError(msg);
+                return Err(LocatedVal::new(err, start, buf.get_cursor()))
+            }
+            let consume = StkResource::stk(se.input_channels);
+            let produce = StkResource::stk(se.output_channels);
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         // Table 96: stack operations
