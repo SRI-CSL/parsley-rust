@@ -382,7 +382,11 @@ fn opinfo_from_sig(
             }
             let consume = StkResource::no_stack();
             let produce = StkResource::stk(usize::from(t + 1));
-            Ok((OpType::Normal, OpResource::new(consume, produce)))
+            let tmps = (usize::from(*s), usize::from(*t));
+            Ok((
+                OpType::Normal,
+                OpResource::new_with_temps(consume, produce, tmps),
+            ))
         },
         "tput" => {
             let mut p = UInt16P::new(Endian::Big);
@@ -401,7 +405,11 @@ fn opinfo_from_sig(
             }
             let consume = StkResource::stk(usize::from(t + 1));
             let produce = StkResource::no_stack();
-            Ok((OpType::Normal, OpResource::new(consume, produce)))
+            let tmps = (usize::from(*s), usize::from(*t));
+            Ok((
+                OpType::Normal,
+                OpResource::new_with_temps(consume, produce, tmps),
+            ))
         },
         "tsav" => {
             let mut p = UInt16P::new(Endian::Big);
@@ -420,7 +428,11 @@ fn opinfo_from_sig(
             }
             let consume = StkResource::stk(usize::from(t + 1));
             let produce = StkResource::stk(usize::from(t + 1));
-            Ok((OpType::Normal, OpResource::new(consume, produce)))
+            let tmps = (usize::from(*s), usize::from(*t));
+            Ok((
+                OpType::Normal,
+                OpResource::new_with_temps(consume, produce, tmps),
+            ))
         },
         // Table 91: environment variable operations
         "env " => {
