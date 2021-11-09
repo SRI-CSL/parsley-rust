@@ -22,7 +22,7 @@ use crate::pcore::prim_binary::{Endian, UInt16P, UInt32P, UInt8P};
 use std::collections::BTreeMap;
 
 const MAX_CHANNELS: usize = 65535;
-//const MAX_STACK: usize = 65535;
+const MAX_STACK: usize = 65535;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum SubElemType {
@@ -62,16 +62,21 @@ pub struct SubElemInfo {
     output_channels: usize,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum StkResource {
     Stk(usize),
 }
 impl StkResource {
     pub fn no_stack() -> Self { StkResource::Stk(0) }
     pub fn stk(s: usize) -> Self { StkResource::Stk(s) }
+    pub fn hgt(&self) -> usize {
+        match &self {
+            StkResource::Stk(h) => *h,
+        }
+    }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct OpResource {
     consume:      StkResource,
     produce:      StkResource,
@@ -123,7 +128,7 @@ impl OpType {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct Operation {
     typ:       OpType,
     resource:  OpResource,
@@ -164,7 +169,7 @@ impl Operation {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct OpStream {
     stream: Vec<Operation>,
 }
@@ -832,6 +837,82 @@ fn opinfo_from_sig(
             Ok((OpType::Unknown, OpResource::no_resource()))
         },
     }
+}
+
+// resource bound estimation
+
+#[derive(Debug, Clone, Copy)]
+pub struct StkUsage {
+    min: usize,
+    max: usize,
+}
+impl StkUsage {
+    fn new() -> Self { Self { min: 0, max: 0 } }
+    fn bounds() -> Self {
+        Self {
+            min: usize::MAX,
+            max: 0,
+        }
+    }
+}
+#[derive(Debug, Clone, Copy)]
+pub enum StkBoundError {
+    Overflow(usize),
+    Underflow(usize),
+}
+
+// recursive function to accumulate resource bounds across a stream
+pub fn compute_usage_bounds(os: &OpStream, bnd: StkUsage) -> Result<StkUsage, StkBoundError> {
+    assert!(bnd.min <= bnd.max);
+    let mut usg = bnd;
+    for op in os.stream.iter() {
+        let c = op.resource.consume.hgt();
+        if c > usg.min {
+            return Err(StkBoundError::Underflow(c - usg.min))
+        }
+        let p = op.resource.produce.hgt();
+        // these are unsigneds, so be careful not to wrap.
+        if p + usg.max >= MAX_STACK + c {
+            return Err(StkBoundError::Overflow(p + usg.max - MAX_STACK - c))
+        }
+        if c < p {
+            usg.min += p - c;
+            usg.max += p - c;
+        } else {
+            usg.min -= c - p;
+            usg.max -= c - p;
+        }
+        // handle any branching from this operation
+        if let Some(branches) = &op.opstreams {
+            let mut bnds = StkUsage::bounds();
+            for os in branches.iter() {
+                // todo: a version without this recursion
+                let bu = compute_usage_bounds(os, usg)?;
+                // accumulate the minimum min and the maximum max
+                if bu.min < bnds.min {
+                    bnds.min = bu.min
+                }
+                if bu.max > bnds.max {
+                    bnds.max = bu.max
+                }
+            }
+            // update usg for the next iteration
+            usg = bnds;
+        }
+    }
+    assert!(usg.min <= usg.max);
+    Ok(usg)
+}
+
+// Resource validation logic: this takes the stream representing the
+// main function and returns whether stack usage is always within
+// bounds.  It currently ignores temp channel info, and assumes the
+// minumum max for stack size.
+// TODO: track location information for better diagnostics.
+pub fn validate_stack_usage(os: &OpStream) -> Result<(), StkBoundError> {
+    let usg = StkUsage::new();
+    let _ = compute_usage_bounds(os, usg)?;
+    Ok(())
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
