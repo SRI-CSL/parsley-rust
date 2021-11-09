@@ -16,7 +16,7 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::iccmax_lib::iccmax_prim::Operations;
+use crate::iccmax_lib::iccmax_prim::{MPetOptions, Operations};
 
 type IccError = String;
 type IccResult<T> = std::result::Result<T, IccError>;
@@ -28,12 +28,13 @@ pub struct ExecutionTree {
     paths:        Option<Vec<ExecutionTree>>,
     instructions: Vec<Operations>,
     completed:    bool,
+    pos_array:    Vec<MPetOptions>,
 }
 
 impl ExecutionTree {
     pub fn new(
         stack: u16, max_stack: u16, paths: Option<Vec<ExecutionTree>>,
-        instructions: Vec<Operations>, completed: bool,
+        instructions: Vec<Operations>, completed: bool, pos_array: Vec<MPetOptions>,
     ) -> Self {
         Self {
             stack,
@@ -41,6 +42,7 @@ impl ExecutionTree {
             paths,
             instructions,
             completed,
+            pos_array,
         }
     }
 
@@ -64,8 +66,15 @@ impl ExecutionTree {
                         let mut part: Vec<Operations> = self.instructions[counter + 1 ..].to_vec();
                         let mut tmp_func = function_operations[c].clone();
                         tmp_func.append(&mut part);
-                        let e =
-                            ExecutionTree::new(self.stack, self.max_stack, None, tmp_func, false);
+                        let pos_array_copy = self.pos_array.clone();
+                        let e = ExecutionTree::new(
+                            self.stack,
+                            self.max_stack,
+                            None,
+                            tmp_func,
+                            false,
+                            pos_array_copy,
+                        );
                         paths.push(e);
                     }
                     self.instructions = vec![];
@@ -99,15 +108,15 @@ impl ExecutionTree {
             },
 
             "in  " => {
-                let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let _s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 for _i in 0 .. t + 1 {
                     self.stack += 1;
                 }
             },
             "out " => {
-                let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let _s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < t + 1 {
                     return Err(String::from("Stack underflowed on out operation"))
                 }
@@ -117,15 +126,15 @@ impl ExecutionTree {
                 }
             },
             "tget" => {
-                let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let _s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 for _i in 0 .. t + 1 {
                     self.stack += 1;
                 }
             },
             "tput" => {
-                let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let _s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < t + 1 {
                     return Err(String::from("Stack underflowed on tput operation"))
                 }
@@ -137,37 +146,124 @@ impl ExecutionTree {
                 // Does not impact stack
             },
 
-            "env " => {},
+            "env " => {
+                self.stack += 1;
+            },
             //
             "curv" => {
-                println!("{:?} {:?}", operation, arg2);
+                // Must be cvst
+                let s = ((arg2[0] as u32) << 24)
+                    + ((arg2[1] as u32) << 16)
+                    + ((arg2[2] as u32) << 8)
+                    + (arg2[3] as u32);
+                if s >= self.pos_array.len() as u32 {
+                    return Err(String::from("Not enough subelements in MPET"))
+                }
+                let gen = self.pos_array[s as usize].clone().gen();
+                match gen {
+                    Some(v) => {
+                        if v.signature() != "cvst".to_string() {
+                            return Err(String::from("Expected a cvst subelement"))
+                        }
+                    },
+                    None => return Err(String::from("Expected a cvst subelement")),
+                }
             },
             "mtx " => {
-                println!("{:?} {:?}", operation, arg2);
+                // Must be a matf
+                let s = ((arg2[0] as u32) << 24)
+                    + ((arg2[1] as u32) << 16)
+                    + ((arg2[2] as u32) << 8)
+                    + (arg2[3] as u32);
+                if s >= self.pos_array.len() as u32 {
+                    return Err(String::from("Not enough subelements in MPET"))
+                }
+                let gen = self.pos_array[s as usize].clone().gen();
+                match gen {
+                    Some(v) => {
+                        if v.signature() != "matf".to_string() {
+                            return Err(String::from("Expected a matf subelement"))
+                        }
+                    },
+                    None => return Err(String::from("Expected a matf subelement")),
+                }
             },
             "clut" => {
-                println!("{:?} {:?}", operation, arg2);
+                // Must be clut
+                let s = ((arg2[0] as u32) << 24)
+                    + ((arg2[1] as u32) << 16)
+                    + ((arg2[2] as u32) << 8)
+                    + (arg2[3] as u32);
+                if s >= self.pos_array.len() as u32 {
+                    return Err(String::from("Not enough subelements in MPET"))
+                }
+                let gen = self.pos_array[s as usize].clone().gen();
+                match gen {
+                    Some(v) => {
+                        if v.signature() != "clut".to_string() {
+                            return Err(String::from("Expected a clut subelement"))
+                        }
+                    },
+                    None => return Err(String::from("Expected a clut subelement")),
+                }
             },
             "calc" => {
-                println!("{:?} {:?}", operation, arg2);
+                let s = ((arg2[0] as u32) << 24)
+                    + ((arg2[1] as u32) << 16)
+                    + ((arg2[2] as u32) << 8)
+                    + (arg2[3] as u32);
+                if s >= self.pos_array.len() as u32 {
+                    return Err(String::from("Not enough subelements in MPET"))
+                }
+                let calc = self.pos_array[s as usize].clone().calc();
+                match calc {
+                    Some(v) => {
+                        if v.signature() != true {
+                            return Err(String::from("Expected a calc subelement"))
+                        }
+                    },
+                    None => return Err(String::from("Expected a calc subelement")),
+                }
             },
             "tint" => {
-                println!("{:?} {:?}", operation, arg2);
+                let s = ((arg2[0] as u32) << 24)
+                    + ((arg2[1] as u32) << 16)
+                    + ((arg2[2] as u32) << 8)
+                    + (arg2[3] as u32);
+                if s >= self.pos_array.len() as u32 {
+                    return Err(String::from("Not enough subelements in MPET"))
+                }
+                let gen = self.pos_array[s as usize].clone().gen();
+                match gen {
+                    Some(v) => {},
+                    None => return Err(String::from("Did not expect a calc subelement")),
+                }
             },
             "elem" => {
-                println!("{:?} {:?}", operation, arg2);
+                let s = ((arg2[0] as u32) << 24)
+                    + ((arg2[1] as u32) << 16)
+                    + ((arg2[2] as u32) << 8)
+                    + (arg2[3] as u32);
+                if s >= self.pos_array.len() as u32 {
+                    return Err(String::from("Not enough subelements in MPET"))
+                }
+                let gen = self.pos_array[s as usize].clone().gen();
+                match gen {
+                    Some(v) => {},
+                    None => return Err(String::from("Did not expect a calc subelement")),
+                }
             },
             // Stack Operations
             "copy" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < s + 1 {
                     return Err(String::from("Stack underflowed on copy operation"))
                 }
                 self.stack += (s + 1) * (t + 1);
             },
             "rotl" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
 
                 if (self.stack as u16) < s + 1 {
                     return Err(String::from("Stack underflowed on rotl operation"))
@@ -175,7 +271,7 @@ impl ExecutionTree {
                 // Size of stack doesn't change
             },
             "rotr" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
 
                 if self.stack < s + 1 {
                     return Err(String::from("Stack underflowed on rotr operation"))
@@ -183,8 +279,8 @@ impl ExecutionTree {
                 // Size of stack doesn't change
             },
             "posd" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 // Find the value at the sth position of the stack (0 is top),
                 // push that value t+1 times to the top of the stack
                 if self.stack < s + 1 {
@@ -193,8 +289,8 @@ impl ExecutionTree {
                 self.stack += t + 1;
             },
             "flip" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
                 if (self.stack as u16) < s + 1 {
                     return Err(String::from("Not enough stack elements to pop"))
@@ -205,8 +301,8 @@ impl ExecutionTree {
                 // Size of stack doesn't change
             },
             "pop " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if (self.stack as u16) < s + 1 {
                     return Err(String::from("Not enough stack elements to pop"))
                 }
@@ -217,8 +313,8 @@ impl ExecutionTree {
             },
             // Matrix Operations
             "solv" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
                 // matrix is s+1 * t+1, y is s+1, resulting is X is t + 1 + 1.
                 let substract_val = (((s + 1) * (t + 1)) + (s + 1) - (t + 1 + 1));
@@ -234,8 +330,8 @@ impl ExecutionTree {
             // Sequence Functional Operations
             // TODO: Table 100 seems to use top S+2 values instead of the conventional S+1
             "sum " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
                 if s + 2 > self.stack as u16 {
                     return Err(String::from("Stack underflow on sum"))
@@ -247,8 +343,8 @@ impl ExecutionTree {
                 self.stack -= s + 1;
             },
             "prod" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
                 if s + 2 > self.stack as u16 {
                     return Err(String::from("Stack underflow on prod"))
@@ -259,8 +355,8 @@ impl ExecutionTree {
                 self.stack -= s + 1;
             },
             "min " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
                 if s + 2 > self.stack as u16 {
                     return Err(String::from("Stack underflow on min"))
@@ -271,8 +367,8 @@ impl ExecutionTree {
                 self.stack -= s + 1;
             },
             "max " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
                 if s + 2 > self.stack as u16 {
                     return Err(String::from("Stack underflow on max"))
@@ -283,8 +379,8 @@ impl ExecutionTree {
                 self.stack -= s + 1;
             },
             "and " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
                 if s + 2 > self.stack as u16 {
                     return Err(String::from("Stack underflow on and"))
@@ -295,8 +391,8 @@ impl ExecutionTree {
                 self.stack -= s + 1;
             },
             "or  " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
                 if s + 2 > self.stack as u16 {
                     return Err(String::from("Stack underflow on or"))
@@ -310,8 +406,8 @@ impl ExecutionTree {
             // S is u16
             // T is 0
             "pi  " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
                 if s != 0 {
                     return Err(String::from("s must be 0 for pi"))
@@ -322,8 +418,8 @@ impl ExecutionTree {
                 self.stack += 1;
             },
             "+INF" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
                 if s != 0 {
                     return Err(String::from("s must be 0 for +INF"))
@@ -334,8 +430,8 @@ impl ExecutionTree {
                 self.stack += 1;
             },
             "-INF" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
                 if s != 0 {
                     return Err(String::from("s must be 0 for -INF"))
@@ -346,8 +442,8 @@ impl ExecutionTree {
                 self.stack += 1;
             },
             "NaN " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
                 if s != 0 {
                     return Err(String::from("s must be 0 for NaN"))
@@ -358,8 +454,8 @@ impl ExecutionTree {
                 self.stack += 1;
             },
             "add " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (2 * (s + 1)).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for add",
@@ -371,8 +467,8 @@ impl ExecutionTree {
                 self.stack -= s + 1;
             },
             "sub " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (2 * (s + 1)).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for sub",
@@ -384,8 +480,8 @@ impl ExecutionTree {
                 self.stack -= s + 1;
             },
             "mul " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (2 * (s + 1)).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for mul",
@@ -397,8 +493,8 @@ impl ExecutionTree {
                 self.stack -= s + 1;
             },
             "div " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (2 * (s + 1)).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for div",
@@ -410,8 +506,8 @@ impl ExecutionTree {
                 self.stack -= s + 1;
             },
             "mod " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (2 * (s + 1)).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for mod",
@@ -423,8 +519,8 @@ impl ExecutionTree {
                 self.stack -= s + 1;
             },
             "pow " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (2 * (s + 1)).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for pow",
@@ -436,8 +532,8 @@ impl ExecutionTree {
                 self.stack -= s + 1;
             },
             "gama" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for gama",
@@ -449,8 +545,8 @@ impl ExecutionTree {
                 self.stack -= 1;
             },
             "sadd" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for sadd",
@@ -462,8 +558,8 @@ impl ExecutionTree {
                 self.stack -= 1;
             },
             "ssub" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for ssub",
@@ -475,8 +571,8 @@ impl ExecutionTree {
                 self.stack -= 1;
             },
             "smul" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for smul",
@@ -488,8 +584,8 @@ impl ExecutionTree {
                 self.stack -= 1;
             },
             "sdiv" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for sdiv",
@@ -501,8 +597,8 @@ impl ExecutionTree {
                 self.stack -= 1;
             },
             "sq  " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from("Stack underflow, not enough arguments for sq"))
                 }
@@ -511,8 +607,8 @@ impl ExecutionTree {
                 }
             },
             "sqrt" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for sqrt",
@@ -523,8 +619,8 @@ impl ExecutionTree {
                 }
             },
             "cb  " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from("Stack underflow, not enough arguments for cb"))
                 }
@@ -533,8 +629,8 @@ impl ExecutionTree {
                 }
             },
             "cbrt" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for sqrt",
@@ -545,8 +641,8 @@ impl ExecutionTree {
                 }
             },
             "abs " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for abs",
@@ -557,8 +653,8 @@ impl ExecutionTree {
                 }
             },
             "neg " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for neg",
@@ -569,8 +665,8 @@ impl ExecutionTree {
                 }
             },
             "rond" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for rond",
@@ -581,8 +677,8 @@ impl ExecutionTree {
                 }
             },
             "flor" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for flor",
@@ -593,8 +689,8 @@ impl ExecutionTree {
                 }
             },
             "ceil" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for ceil",
@@ -605,8 +701,8 @@ impl ExecutionTree {
                 }
             },
             "trnc" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for trunc",
@@ -617,8 +713,8 @@ impl ExecutionTree {
                 }
             },
             "sign" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for sign",
@@ -629,8 +725,8 @@ impl ExecutionTree {
                 }
             },
             "exp " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for exp",
@@ -641,8 +737,8 @@ impl ExecutionTree {
                 }
             },
             "log " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for log",
@@ -653,8 +749,8 @@ impl ExecutionTree {
                 }
             },
             "ln  " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from("Stack underflow, not enough arguments for ln"))
                 }
@@ -663,8 +759,8 @@ impl ExecutionTree {
                 }
             },
             "sin " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for sin",
@@ -675,8 +771,8 @@ impl ExecutionTree {
                 }
             },
             "cos " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for cos",
@@ -687,8 +783,8 @@ impl ExecutionTree {
                 }
             },
             "tan " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for tan",
@@ -699,8 +795,8 @@ impl ExecutionTree {
                 }
             },
             "asin" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for asin",
@@ -711,8 +807,8 @@ impl ExecutionTree {
                 }
             },
             "acos" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for acos",
@@ -723,8 +819,8 @@ impl ExecutionTree {
                 }
             },
             "atan" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for atan",
@@ -735,8 +831,8 @@ impl ExecutionTree {
                 }
             },
             "atn2" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (2 * (s + 1)).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for atn2",
@@ -748,8 +844,8 @@ impl ExecutionTree {
                 self.stack -= s + 1;
             },
             "ctop" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (2 * (s + 1)).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for ctop",
@@ -760,8 +856,8 @@ impl ExecutionTree {
                 }
             },
             "ptoc" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (2 * (s + 1)).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for ptoc",
@@ -772,8 +868,8 @@ impl ExecutionTree {
                 }
             },
             "rnum" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (s + 1).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for rnum",
@@ -784,8 +880,8 @@ impl ExecutionTree {
                 }
             },
             "lt  " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (2 * (s + 1)).into() {
                     return Err(String::from("Stack underflow, not enough arguments for lt"))
                 }
@@ -795,8 +891,8 @@ impl ExecutionTree {
                 self.stack = self.stack - (s + 1);
             },
             "le  " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (2 * (s + 1)).into() {
                     return Err(String::from("Stack underflow, not enough arguments for le"))
                 }
@@ -806,8 +902,8 @@ impl ExecutionTree {
                 self.stack = self.stack - (s + 1);
             },
             "eq  " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (2 * (s + 1)).into() {
                     return Err(String::from("Stack underflow, not enough arguments for eq"))
                 }
@@ -817,8 +913,8 @@ impl ExecutionTree {
                 self.stack = self.stack - (s + 1);
             },
             "near" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (2 * (s + 1)).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for near",
@@ -830,8 +926,8 @@ impl ExecutionTree {
                 self.stack = self.stack - (s + 1);
             },
             "ge  " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (2 * (s + 1)).into() {
                     return Err(String::from("Stack underflow, not enough arguments for ge"))
                 }
@@ -841,8 +937,8 @@ impl ExecutionTree {
                 self.stack = self.stack - (s + 1);
             },
             "gt  " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (2 * (s + 1)).into() {
                     return Err(String::from("Stack underflow, not enough arguments for gt"))
                 }
@@ -852,8 +948,8 @@ impl ExecutionTree {
                 self.stack = self.stack - (s + 1);
             },
             "vmin" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (2 * (s + 1)).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for vmin",
@@ -865,8 +961,8 @@ impl ExecutionTree {
                 self.stack = self.stack - (s + 1);
             },
             "vmax" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (2 * (s + 1)).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for vmax",
@@ -878,8 +974,8 @@ impl ExecutionTree {
                 self.stack = self.stack - (s + 1);
             },
             "vand" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (2 * (s + 1)).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for vand",
@@ -891,8 +987,8 @@ impl ExecutionTree {
                 self.stack = self.stack - (s + 1);
             },
             "vor " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (2 * (s + 1)).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for vor",
@@ -904,8 +1000,8 @@ impl ExecutionTree {
                 self.stack = self.stack - (s + 1);
             },
             "tLab" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (3 * (s + 1)).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for tLab",
@@ -916,8 +1012,8 @@ impl ExecutionTree {
                 }
             },
             "tXYZ" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (3 * (s + 1)).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for tXYZ",
@@ -934,8 +1030,8 @@ impl ExecutionTree {
             The tJab operator invokes an indexed XYZToJabElmeent which takes 3 input arguments and result in 3 output arguments.
             */
             "fJab" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (3 * (s + 1)).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for fJab",
@@ -946,8 +1042,8 @@ impl ExecutionTree {
                 }
             },
             "tJab" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (3 * (s + 1)).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for tJab",
@@ -960,8 +1056,8 @@ impl ExecutionTree {
             "fLab" => {
                 // Identical to tXYZ
                 // No effect on stack size
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (3 * (s + 1)).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for fLab",
@@ -974,8 +1070,8 @@ impl ExecutionTree {
             "not " => {
                 // Identical to vnot
                 // No stack operations
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (3 * (s + 1)).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for not",
@@ -986,8 +1082,8 @@ impl ExecutionTree {
                 }
             },
             "ne  " => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (3 * (s + 1)).into() {
                     return Err(String::from("Stack underflow, not enough arguments for ne"))
                 }
@@ -997,8 +1093,8 @@ impl ExecutionTree {
                 self.stack -= s + 1;
             },
             "vxor" => {
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (3 * (s + 1)).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for vxor",
@@ -1012,8 +1108,8 @@ impl ExecutionTree {
             "vnot" => {
                 // Identical to not
                 // No stack operations
-                let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-                let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+                let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+                let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
                 if self.stack < (3 * (s + 1)).into() {
                     return Err(String::from(
                         "Stack underflow, not enough arguments for vnot",

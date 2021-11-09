@@ -155,9 +155,10 @@ fn parse_iccmax(data: Vec<u8>) -> IccResult<IccError> {
                                                 },
                                             }
                                         }
-                                        println!("{:?}", pos_array);
+                                        //println!("{:?}", pos_array);
+                                        let pos_array_clone = pos_array.clone();
 
-                                        let mut func_parser = CalcFunctionP;
+                                        let mut func_parser = CalcFunctionP::new(pos_array);
                                         let func_result = func_parser.parse(&mut main_buf);
                                         let mut exec = ExecutionTree::new(
                                             0,
@@ -165,6 +166,7 @@ fn parse_iccmax(data: Vec<u8>) -> IccResult<IccError> {
                                             None,
                                             func_result.unwrap().unwrap().instructions(),
                                             false,
+                                            pos_array_clone,
                                         );
                                         let ret = exec.execute()?;
                                         //println!("{:?}", ret);

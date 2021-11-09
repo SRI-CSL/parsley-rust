@@ -96,29 +96,29 @@ pub fn compute_operations(
         },
 
         "in  " => {
-            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let _s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             for _i in 0 .. t + 1 {
                 stack.push(0.0);
             }
         },
         "out " => {
-            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let _s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             for _i in 0 .. t + 1 {
                 stack.pop();
             }
         },
         "tget" => {
-            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let _s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             for _i in 0 .. t + 1 {
                 stack.push(0.0);
             }
         },
         "tput" => {
-            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let _s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             for _i in 0 .. t + 1 {
                 stack.pop();
             }
@@ -137,8 +137,8 @@ pub fn compute_operations(
         "elem" => {},
         // Stack Operations
         "copy" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             let mut tmp: Vec<f32> = vec![];
             if stack.len() < (s as usize) + 1 {
                 return Err(String::from("Stack underflowed on copy operation"))
@@ -153,8 +153,8 @@ pub fn compute_operations(
             }
         },
         "rotl" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
             if (stack.len() as u16) < s + 1 {
                 return Err(String::from("Not enough stack elements to rtol"))
@@ -173,8 +173,8 @@ pub fn compute_operations(
             }
         },
         "rotr" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
             if stack.len() < (s as usize) + 1 {
                 return Err(String::from("Stack underflowed on rotr operation"))
@@ -193,8 +193,8 @@ pub fn compute_operations(
             }
         },
         "posd" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             // Find the value at the sth position of the stack (0 is top),
             // push that value t+1 times to the top of the stack
             if stack.len() < (s as usize) + 1 {
@@ -217,8 +217,8 @@ pub fn compute_operations(
             }
         },
         "flip" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
             if (stack.len() as u16) < s + 1 {
                 return Err(String::from("Not enough stack elements to pop"))
@@ -235,8 +235,8 @@ pub fn compute_operations(
             }
         },
         "pop " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if (stack.len() as u16) < s + 1 {
                 return Err(String::from("Not enough stack elements to pop"))
             }
@@ -253,8 +253,8 @@ pub fn compute_operations(
         // Sequence Functional Operations
         // TODO: Table 100 seems to use top S+2 values instead of the conventional S+1
         "sum " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
             if s + 2 > stack.len() as u16 {
                 return Err(String::from("Stack underflow on sum"))
@@ -270,8 +270,8 @@ pub fn compute_operations(
             stack.push(sum);
         },
         "prod" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
             if s + 2 > stack.len() as u16 {
                 return Err(String::from("Stack underflow on prod"))
@@ -287,8 +287,8 @@ pub fn compute_operations(
             stack.push(sum);
         },
         "min " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
             if s + 2 > stack.len() as u16 {
                 return Err(String::from("Stack underflow on min"))
@@ -307,8 +307,8 @@ pub fn compute_operations(
             stack.push(m);
         },
         "max " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
             if s + 2 > stack.len() as u16 {
                 return Err(String::from("Stack underflow on max"))
@@ -327,8 +327,8 @@ pub fn compute_operations(
             stack.push(m);
         },
         "and " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
             if s + 2 > stack.len() as u16 {
                 return Err(String::from("Stack underflow on and"))
@@ -347,8 +347,8 @@ pub fn compute_operations(
             stack.push(sum);
         },
         "or  " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
             if s + 2 > stack.len() as u16 {
                 return Err(String::from("Stack underflow on or"))
@@ -370,8 +370,8 @@ pub fn compute_operations(
         // S is u16
         // T is 0
         "pi  " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
             if s != 0 {
                 return Err(String::from("s must be 0 for pi"))
@@ -382,8 +382,8 @@ pub fn compute_operations(
             stack.push(3.14)
         },
         "+INF" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
             if s != 0 {
                 return Err(String::from("s must be 0 for +INF"))
@@ -394,8 +394,8 @@ pub fn compute_operations(
             stack.push(f32::INFINITY);
         },
         "-INF" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
             if s != 0 {
                 return Err(String::from("s must be 0 for -INF"))
@@ -406,8 +406,8 @@ pub fn compute_operations(
             stack.push(f32::NEG_INFINITY);
         },
         "NaN " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
 
             if s != 0 {
                 return Err(String::from("s must be 0 for NaN"))
@@ -418,8 +418,8 @@ pub fn compute_operations(
             stack.push(f32::NAN);
         },
         "add " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for add",
@@ -441,8 +441,8 @@ pub fn compute_operations(
             }
         },
         "sub " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for sub",
@@ -464,8 +464,8 @@ pub fn compute_operations(
             }
         },
         "mul " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for mul",
@@ -487,8 +487,8 @@ pub fn compute_operations(
             }
         },
         "div " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for div",
@@ -510,8 +510,8 @@ pub fn compute_operations(
             }
         },
         "mod " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             // TODO
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from(
@@ -523,8 +523,8 @@ pub fn compute_operations(
             }
         },
         "pow " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for pow",
@@ -546,8 +546,8 @@ pub fn compute_operations(
             }
         },
         "gama" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for gama",
@@ -566,8 +566,8 @@ pub fn compute_operations(
             }
         },
         "sadd" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for sadd",
@@ -586,8 +586,8 @@ pub fn compute_operations(
             }
         },
         "ssub" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for ssub",
@@ -606,8 +606,8 @@ pub fn compute_operations(
             }
         },
         "smul" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for smul",
@@ -626,8 +626,8 @@ pub fn compute_operations(
             }
         },
         "sdiv" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for sdiv",
@@ -646,8 +646,8 @@ pub fn compute_operations(
             }
         },
         "sq  " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from("Stack underflow, not enough arguments for sq"))
             }
@@ -664,8 +664,8 @@ pub fn compute_operations(
             }
         },
         "sqrt" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for sqrt",
@@ -684,8 +684,8 @@ pub fn compute_operations(
             }
         },
         "cb  " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from("Stack underflow, not enough arguments for cb"))
             }
@@ -702,8 +702,8 @@ pub fn compute_operations(
             }
         },
         "cbrt" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for sqrt",
@@ -722,8 +722,8 @@ pub fn compute_operations(
             }
         },
         "abs " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for abs",
@@ -746,8 +746,8 @@ pub fn compute_operations(
             }
         },
         "neg " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for neg",
@@ -766,12 +766,12 @@ pub fn compute_operations(
             }
         },
         "rond" => {
-            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
             //TODO
         },
         "flor" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for flor",
@@ -790,8 +790,8 @@ pub fn compute_operations(
             }
         },
         "ceil" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for ceil",
@@ -810,8 +810,8 @@ pub fn compute_operations(
             }
         },
         "trnc" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for trunc",
@@ -830,8 +830,8 @@ pub fn compute_operations(
             }
         },
         "sign" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for sign",
@@ -856,8 +856,8 @@ pub fn compute_operations(
             }
         },
         "exp " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for exp",
@@ -876,8 +876,8 @@ pub fn compute_operations(
             }
         },
         "log " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for log",
@@ -896,8 +896,8 @@ pub fn compute_operations(
             }
         },
         "ln  " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from("Stack underflow, not enough arguments for ln"))
             }
@@ -914,8 +914,8 @@ pub fn compute_operations(
             }
         },
         "sin " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for sin",
@@ -937,8 +937,8 @@ pub fn compute_operations(
             }
         },
         "cos " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for cos",
@@ -960,8 +960,8 @@ pub fn compute_operations(
             }
         },
         "tan " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for tan",
@@ -983,8 +983,8 @@ pub fn compute_operations(
             }
         },
         "asin" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for asin",
@@ -1006,8 +1006,8 @@ pub fn compute_operations(
             }
         },
         "acos" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for acos",
@@ -1029,8 +1029,8 @@ pub fn compute_operations(
             }
         },
         "atan" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for atan",
@@ -1052,8 +1052,8 @@ pub fn compute_operations(
             }
         },
         "atn2" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (s + 1).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for atn2",
@@ -1080,17 +1080,17 @@ pub fn compute_operations(
             }
         },
         "ctop" => {
-            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
         },
         "ptoc" => {
-            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
         },
         "rnum" => {
-            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
         },
         "lt  " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from("Stack underflow, not enough arguments for lt"))
             }
@@ -1115,8 +1115,8 @@ pub fn compute_operations(
             }
         },
         "le  " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from("Stack underflow, not enough arguments for le"))
             }
@@ -1141,8 +1141,8 @@ pub fn compute_operations(
             }
         },
         "eq  " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from("Stack underflow, not enough arguments for eq"))
             }
@@ -1167,12 +1167,12 @@ pub fn compute_operations(
             }
         },
         "near" => {
-            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
             // TODO
         },
         "ge  " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from("Stack underflow, not enough arguments for ge"))
             }
@@ -1197,8 +1197,8 @@ pub fn compute_operations(
             }
         },
         "gt  " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from("Stack underflow, not enough arguments for gt"))
             }
@@ -1223,8 +1223,8 @@ pub fn compute_operations(
             }
         },
         "vmin" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for vmin",
@@ -1247,8 +1247,8 @@ pub fn compute_operations(
             }
         },
         "vmax" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for vmax",
@@ -1271,8 +1271,8 @@ pub fn compute_operations(
             }
         },
         "vand" => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for vand",
@@ -1299,8 +1299,8 @@ pub fn compute_operations(
             }
         },
         "vor " => {
-            let s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
-            let t = ((arg2[2] as u16) >> 8) + (arg2[3] as u16);
+            let s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
+            let t = ((arg2[2] as u16) << 8) + (arg2[3] as u16);
             if stack.len() < (2 * (s + 1)).into() {
                 return Err(String::from(
                     "Stack underflow, not enough arguments for vand",
@@ -1327,24 +1327,24 @@ pub fn compute_operations(
             }
         },
         "tLab" => {
-            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
         },
         "tXYZ" => {
-            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
         },
 
         // anomalous
         "fJab" => {
-            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
         },
         "tJab" => {
-            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
         },
         "fLab" => {
-            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
         },
         "not " => {
-            let _s = ((arg2[0] as u16) >> 8) + (arg2[1] as u16);
+            let _s = ((arg2[0] as u16) << 8) + (arg2[1] as u16);
         },
 
         _ => {
@@ -1400,6 +1400,8 @@ impl MPetOptions {
     pub fn new(calc: Option<CalculatorElement>, gen: Option<GeneralElement>) -> Self {
         Self { calc, gen }
     }
+    pub fn calc(self) -> Option<CalculatorElement> { self.calc }
+    pub fn gen(self) -> Option<GeneralElement> { self.gen }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -1932,7 +1934,14 @@ impl CalcFunction {
     pub fn instructions(self) -> Vec<Operations> { self.instructions }
 }
 
-pub struct CalcFunctionP;
+pub struct CalcFunctionP {
+    pos_array: Vec<MPetOptions>,
+}
+
+impl CalcFunctionP {
+    pub fn new(pos_array: Vec<MPetOptions>) -> Self { Self { pos_array } }
+}
+
 impl ParsleyParser for CalcFunctionP {
     type T = LocatedVal<CalcFunction>;
 
