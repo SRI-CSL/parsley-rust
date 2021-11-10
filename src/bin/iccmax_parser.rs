@@ -36,7 +36,7 @@ use parsley_rust::iccmax_lib::iccmax_prim::{
     CalcFunctionP, CalculatorElementP, GeneralElementP, HeaderP, MPetElementP, MPetOptions,
     TaggedElementP,
 };
-use parsley_rust::pcore::parsebuffer::{ErrorKind, LocatedVal, ParseBuffer, ParsleyParser};
+use parsley_rust::pcore::parsebuffer::{ParseBuffer, ParsleyParser};
 
 use parsley_rust::pcore::prim_binary::{Endian, UInt32P};
 use parsley_rust::pcore::prim_combinators::{Alt, Alternate};
@@ -121,6 +121,8 @@ fn parse_iccmax(data: Vec<u8>) -> IccResult<IccError> {
                                 let v_cloned = v.clone();
                                 match v_cloned.unwrap() {
                                     Alt::Left(t) => {
+                                        let input_channels = t.clone().unwrap().input_channels();
+                                        let output_channels = t.clone().unwrap().output_channels();
                                         let main_function_position =
                                             t.clone().unwrap().main_function_position();
                                         let main_function_size =
@@ -156,9 +158,8 @@ fn parse_iccmax(data: Vec<u8>) -> IccResult<IccError> {
                                             }
                                         }
                                         //println!("{:?}", pos_array);
-                                        let pos_array_clone = pos_array.clone();
 
-                                        let mut func_parser = CalcFunctionP::new(pos_array);
+                                        let mut func_parser = CalcFunctionP;
                                         let func_result = func_parser.parse(&mut main_buf);
                                         let mut exec = ExecutionTree::new(
                                             0,
@@ -166,9 +167,11 @@ fn parse_iccmax(data: Vec<u8>) -> IccResult<IccError> {
                                             None,
                                             func_result.unwrap().unwrap().instructions(),
                                             false,
-                                            pos_array_clone,
+                                            pos_array,
+                                            input_channels,
+                                            output_channels,
                                         );
-                                        let ret = exec.execute()?;
+                                        let _ret = exec.execute()?;
                                         //println!("{:?}", ret);
                                         //if let Err(s) = &ret {
                                         //let err = ErrorKind::GuardError(s.

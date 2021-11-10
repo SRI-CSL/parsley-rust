@@ -16,10 +16,7 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::iccmax_lib::execution_tree::ExecutionTree;
-use crate::pcore::parsebuffer::{
-    ErrorKind, LocatedVal, ParseBuffer, ParseBufferT, ParseResult, ParsleyParser,
-};
+use crate::pcore::parsebuffer::{LocatedVal, ParseBufferT, ParseResult, ParsleyParser};
 use crate::pcore::prim_binary::{BinaryMatcher, Endian, UInt16P, UInt32P, UInt8P};
 use crate::pcore::prim_combinators::{Alt, Alternate, Star};
 
@@ -1529,7 +1526,7 @@ impl ParsleyParser for GeneralElementP {
 
         let reserved = g1.parse(buf)?;
         // This field must be 0
-        //assert_eq!(reserved.unwrap(), 0);
+        assert_eq!(reserved.unwrap(), 0);
 
         let mut g3 = UInt16P::new(Endian::Big);
         let input_channels = g3.parse(buf)?;
@@ -1600,12 +1597,6 @@ impl ParsleyParser for CalculatorElementP {
         let main_function_position = g4.parse(buf)?;
         let main_function_size = g4.parse(buf)?;
 
-        let mut main_buf = ParseBuffer::new_view(
-            buf,
-            main_function_position.unwrap() as usize,
-            main_function_size.unwrap() as usize,
-        );
-
         let mut subelement_positions: Vec<PositionNumber> = vec![];
 
         let mut counter = 0;
@@ -1613,10 +1604,9 @@ impl ParsleyParser for CalculatorElementP {
             //// TODO: Seek to every subelement
             let mut position_number_parser = PositionNumberP;
             let p = position_number_parser.parse(buf)?;
-            let position_result_unwrapped = p.unwrap();
-
-            let seek_position = position_result_unwrapped.position();
-            let seek_size = position_result_unwrapped.size();
+            // let position_result_unwrapped = p.unwrap();
+            //let seek_position = position_result_unwrapped.position();
+            //let seek_size = position_result_unwrapped.size();
             //let mut subelement_buf =
             //ParseBuffer::new_view_cut(buf, seek_position as usize, seek_size as usize);
             //let mut calc_parser = CalculatorElementP;
@@ -1934,13 +1924,7 @@ impl CalcFunction {
     pub fn instructions(self) -> Vec<Operations> { self.instructions }
 }
 
-pub struct CalcFunctionP {
-    pos_array: Vec<MPetOptions>,
-}
-
-impl CalcFunctionP {
-    pub fn new(pos_array: Vec<MPetOptions>) -> Self { Self { pos_array } }
-}
+pub struct CalcFunctionP;
 
 impl ParsleyParser for CalcFunctionP {
     type T = LocatedVal<CalcFunction>;
@@ -1966,9 +1950,7 @@ impl ParsleyParser for CalcFunctionP {
         while counter < number_of_operations.unwrap() {
             // This can be an If condition, a Case, or Data Operation.
             let mut data_parser = OperationsP;
-            let start = buf.get_cursor();
             let data_result = data_parser.parse(buf)?;
-            let data_result_clone = data_result.clone().unwrap();
             let data_result_clone2 = data_result.clone().unwrap();
             let count = data_result.clone().unwrap().number_of_operations();
             instructions.push(data_result_clone2);
