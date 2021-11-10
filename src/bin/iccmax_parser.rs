@@ -163,10 +163,8 @@ fn parse_iccmax(data: Vec<u8>) -> IccResult<IccError> {
                                         let func_result = func_parser.parse(&mut main_buf);
                                         let mut exec = ExecutionTree::new(
                                             0,
-                                            0,
-                                            None,
+                                            [0].to_vec(),
                                             func_result.unwrap().unwrap().instructions(),
-                                            false,
                                             pos_array,
                                             input_channels,
                                             output_channels,
