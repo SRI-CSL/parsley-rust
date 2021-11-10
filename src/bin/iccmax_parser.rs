@@ -36,7 +36,7 @@ use parsley_rust::iccmax_lib::iccmax_prim::{
     CalcFunctionP, CalculatorElementP, GeneralElementP, HeaderP, MPetElementP, MPetOptions,
     TaggedElementP,
 };
-use parsley_rust::pcore::parsebuffer::{ParseBuffer, ParsleyParser};
+use parsley_rust::pcore::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyParser};
 
 use parsley_rust::pcore::prim_binary::{Endian, UInt32P};
 use parsley_rust::pcore::prim_combinators::{Alt, Alternate};
@@ -59,6 +59,9 @@ fn read_file(file_name: &str) -> Vec<u8> {
 fn parse_iccmax(data: Vec<u8>) -> IccResult<IccError> {
     let mut pb = ParseBuffer::new(data);
     // Header consumes 128 bytes
+    if pb.size() < 132 {
+        return Err(String::from("ICC Buffer must be at least 132 bytes"))
+    }
     let mut parser = HeaderP;
     parser.parse(&mut pb).ok();
     // Consume the next 4 bytes to get the count: number of Tags
@@ -76,6 +79,12 @@ fn parse_iccmax(data: Vec<u8>) -> IccResult<IccError> {
         let tag = tag_e.val();
         // With the tag now we need to seek to those locations and check
         // if it is a calculator element
+
+        if tag.offset() as usize >= pb.size()
+            || tag.offset() as usize + tag.size() as usize > pb.size()
+        {
+            return Err(String::from("Buffer size invalid for tag"))
+        }
         let mut window = ParseBuffer::new_view(&mut pb, tag.offset() as usize, tag.size() as usize);
         let mut mpet_parser = MPetElementP;
         let mpet_e = mpet_parser.parse(&mut window);
@@ -100,6 +109,12 @@ fn parse_iccmax(data: Vec<u8>) -> IccResult<IccError> {
                     for position in &position_list {
                         // Create a view, run the Calculator parser
                         // or the GeneralElement parser
+                        if position.position() as usize >= window.size()
+                            || position.position() as usize + position.size() as usize
+                                > window.size()
+                        {
+                            return Err(String::from("Buffer size invalid for MPET element"))
+                        }
                         let mut calc_buffer = ParseBuffer::new_view(
                             &mut window,
                             position.position() as usize,
@@ -127,6 +142,17 @@ fn parse_iccmax(data: Vec<u8>) -> IccResult<IccError> {
                                             t.clone().unwrap().main_function_position();
                                         let main_function_size =
                                             t.clone().unwrap().main_function_size();
+
+                                        if main_function_position as usize >= calc_buffer.size()
+                                            || main_function_position as usize
+                                                + main_function_size as usize
+                                                > calc_buffer.size()
+                                        {
+                                            return Err(String::from(
+                                                "Buffer size invalid for Calc function",
+                                            ))
+                                        }
+
                                         let mut main_buf = ParseBuffer::new_view(
                                             &mut calc_buffer,
                                             main_function_position as usize,
@@ -300,6 +326,7 @@ fn parse_iccmax(data: Vec<u8>) -> IccResult<IccError> {
             },
             Err(_) => {},
         }
+        println!("4 {:?}", pb.size());
         counter = counter + 1;
     }
     Ok("".to_string())

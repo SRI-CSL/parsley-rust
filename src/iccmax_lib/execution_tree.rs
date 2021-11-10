@@ -100,32 +100,6 @@ impl ExecutionTree {
                     } else {
                         self.paths = [*new_stack.iter().min().unwrap()].to_vec();
                     }
-                    //     let mut part: Vec<Operations> =
-                    // self.instructions[counter + 1 ..].to_vec();
-                    //     let mut tmp_func = function_operations[c].clone();
-                    //     tmp_func.append(&mut part);
-                    //     if signature_copy == "sel" {
-                    //         if *stack == 0 {
-                    //             return Err(String::from("Stack underflow on
-                    // sel operation"))         }
-                    //         *stack -= 1;
-                    //     }
-                    //     let pos_array_copy = self.pos_array.clone();
-                    //     let e = ExecutionTree::new(
-                    //         self.stack,
-                    //         self.max_stack,
-                    //         None,
-                    //         tmp_func,
-                    //         false,
-                    //         pos_array_copy,
-                    //         self.input_channels,
-                    //         self.output_channels,
-                    //     );
-                    //     paths.push(e);
-                    // }
-                    // self.instructions = vec![];
-                    // self.paths = Some(paths);
-                    // break
                 },
                 _ => {
                     for path in 0 .. self.paths.len() {
@@ -140,17 +114,6 @@ impl ExecutionTree {
             // println!("{:?} {:?}", self.max_stack, self.paths);
             counter += 1;
         }
-        // match &self.paths {
-        //     Some(p) => {
-        //         for mut path in p.to_vec() {
-        //             path.execute()?;
-        //         }
-        //     },
-        //     None => {
-        //         self.instructions = vec![];
-        //     },
-        // }
-        // self.completed = true;
         Ok(())
     }
 
