@@ -51,7 +51,7 @@ impl ExecutionTree {
     pub fn paths(&mut self) -> Vec<u32> { self.paths.clone() }
 
     pub fn execute(&mut self) -> IccResult<()> {
-        println!("{:?}", self);
+        // println!("{:?}", self);
         /*
          * 1. For every instruction, call compute_stack_effects()
          *      a. If conditions and Sel statements lead to branches
@@ -137,7 +137,7 @@ impl ExecutionTree {
             if *self.paths.iter().max().unwrap() > self.max_stack {
                 self.max_stack = *self.paths.iter().max().unwrap();
             }
-            println!("{:?} {:?}", self.max_stack, self.paths);
+            // println!("{:?} {:?}", self.max_stack, self.paths);
             counter += 1;
         }
         // match &self.paths {
