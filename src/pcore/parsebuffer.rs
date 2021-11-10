@@ -343,7 +343,7 @@ impl ParseBuffer {
     }
 
     // Creates a subset view.
-    pub fn new_view(buf: &dyn ParseBufferT, start: usize, size: usize) -> ParseBuffer {
+    pub(crate) fn new_view(buf: &dyn ParseBufferT, start: usize, size: usize) -> ParseBuffer {
         assert!(start + size <= buf.size());
         ParseBuffer {
             buf: buf.rc_buf(),
