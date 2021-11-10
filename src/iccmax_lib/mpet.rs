@@ -63,43 +63,27 @@ pub struct SubElemInfo {
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub enum StkResource {
-    Stk(usize),
-}
-impl StkResource {
-    pub fn no_stack() -> Self { StkResource::Stk(0) }
-    pub fn stk(s: usize) -> Self { StkResource::Stk(s) }
-    pub fn hgt(&self) -> usize {
-        match &self {
-            StkResource::Stk(h) => *h,
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct OpResource {
-    consume:      StkResource,
-    produce:      StkResource,
+    consume:      usize,
+    produce:      usize,
     tmp_channels: Option<(usize, usize)>, // (start, count)
 }
 impl OpResource {
     pub fn no_resource() -> Self {
         Self {
-            consume:      StkResource::no_stack(),
-            produce:      StkResource::no_stack(),
+            consume:      0,
+            produce:      0,
             tmp_channels: None,
         }
     }
-    pub fn new(consume: StkResource, produce: StkResource) -> Self {
+    pub fn new(consume: usize, produce: usize) -> Self {
         Self {
             consume,
             produce,
             tmp_channels: None,
         }
     }
-    pub fn new_with_temps(
-        consume: StkResource, produce: StkResource, tmps: (usize, usize),
-    ) -> Self {
+    pub fn new_with_temps(consume: usize, produce: usize, tmps: (usize, usize)) -> Self {
         Self {
             consume,
             produce,
@@ -347,8 +331,8 @@ fn opinfo_from_sig(
                 let err = ErrorKind::GuardError(msg);
                 return Err(LocatedVal::new(err, start, buf.get_cursor()))
             }
-            let consume = StkResource::no_stack();
-            let produce = StkResource::stk(usize::from(t + 1));
+            let consume = 0;
+            let produce = usize::from(t + 1);
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "out " => {
@@ -366,8 +350,8 @@ fn opinfo_from_sig(
                 let err = ErrorKind::GuardError(msg);
                 return Err(LocatedVal::new(err, start, buf.get_cursor()))
             }
-            let consume = StkResource::stk(usize::from(t + 1));
-            let produce = StkResource::no_stack();
+            let consume = usize::from(t + 1);
+            let produce = 0;
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "tget" => {
@@ -385,8 +369,8 @@ fn opinfo_from_sig(
                 let err = ErrorKind::GuardError(msg);
                 return Err(LocatedVal::new(err, start, buf.get_cursor()))
             }
-            let consume = StkResource::no_stack();
-            let produce = StkResource::stk(usize::from(t + 1));
+            let consume = 0;
+            let produce = usize::from(t + 1);
             let tmps = (usize::from(*s), usize::from(*t));
             Ok((
                 OpType::Normal,
@@ -408,8 +392,8 @@ fn opinfo_from_sig(
                 let err = ErrorKind::GuardError(msg);
                 return Err(LocatedVal::new(err, start, buf.get_cursor()))
             }
-            let consume = StkResource::stk(usize::from(t + 1));
-            let produce = StkResource::no_stack();
+            let consume = usize::from(t + 1);
+            let produce = 0;
             let tmps = (usize::from(*s), usize::from(*t));
             Ok((
                 OpType::Normal,
@@ -431,8 +415,8 @@ fn opinfo_from_sig(
                 let err = ErrorKind::GuardError(msg);
                 return Err(LocatedVal::new(err, start, buf.get_cursor()))
             }
-            let consume = StkResource::stk(usize::from(t + 1));
-            let produce = StkResource::stk(usize::from(t + 1));
+            let consume = usize::from(t + 1);
+            let produce = usize::from(t + 1);
             let tmps = (usize::from(*s), usize::from(*t));
             Ok((
                 OpType::Normal,
@@ -443,8 +427,8 @@ fn opinfo_from_sig(
         "env " => {
             let mut p = UInt32P::new(Endian::Big);
             let _ = p.parse(buf)?;
-            let consume = StkResource::no_stack();
-            let produce = StkResource::stk(2);
+            let consume = 0;
+            let produce = 2;
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         // Table 94: sub-element operations
@@ -465,8 +449,8 @@ fn opinfo_from_sig(
                 let err = ErrorKind::GuardError(msg);
                 return Err(LocatedVal::new(err, start, buf.get_cursor()))
             }
-            let consume = StkResource::stk(se.input_channels);
-            let produce = StkResource::stk(se.output_channels);
+            let consume = se.input_channels;
+            let produce = se.output_channels;
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "mtx " => {
@@ -486,8 +470,8 @@ fn opinfo_from_sig(
                 let err = ErrorKind::GuardError(msg);
                 return Err(LocatedVal::new(err, start, buf.get_cursor()))
             }
-            let consume = StkResource::stk(se.input_channels);
-            let produce = StkResource::stk(se.output_channels);
+            let consume = se.input_channels;
+            let produce = se.output_channels;
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "clut" => {
@@ -507,8 +491,8 @@ fn opinfo_from_sig(
                 let err = ErrorKind::GuardError(msg);
                 return Err(LocatedVal::new(err, start, buf.get_cursor()))
             }
-            let consume = StkResource::stk(se.input_channels);
-            let produce = StkResource::stk(se.output_channels);
+            let consume = se.input_channels;
+            let produce = se.output_channels;
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "calc" => {
@@ -528,8 +512,8 @@ fn opinfo_from_sig(
                 let err = ErrorKind::GuardError(msg);
                 return Err(LocatedVal::new(err, start, buf.get_cursor()))
             }
-            let consume = StkResource::stk(se.input_channels);
-            let produce = StkResource::stk(se.output_channels);
+            let consume = se.input_channels;
+            let produce = se.output_channels;
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "tint" => {
@@ -549,8 +533,8 @@ fn opinfo_from_sig(
                 let err = ErrorKind::GuardError(msg);
                 return Err(LocatedVal::new(err, start, buf.get_cursor()))
             }
-            let consume = StkResource::stk(se.input_channels);
-            let produce = StkResource::stk(se.output_channels);
+            let consume = se.input_channels;
+            let produce = se.output_channels;
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "elem" => {
@@ -566,8 +550,8 @@ fn opinfo_from_sig(
                 Some(se) => se,
             };
             // No type check for `elem` sub-elements.
-            let consume = StkResource::stk(se.input_channels);
-            let produce = StkResource::stk(se.output_channels);
+            let consume = se.input_channels;
+            let produce = se.output_channels;
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         // undocumented ops.
@@ -589,8 +573,8 @@ fn opinfo_from_sig(
                 let err = ErrorKind::GuardError(msg);
                 return Err(LocatedVal::new(err, start, buf.get_cursor()))
             }
-            let consume = StkResource::stk(se.input_channels);
-            let produce = StkResource::stk(se.output_channels);
+            let consume = se.input_channels;
+            let produce = se.output_channels;
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "tJab" => {
@@ -611,8 +595,8 @@ fn opinfo_from_sig(
                 let err = ErrorKind::GuardError(msg);
                 return Err(LocatedVal::new(err, start, buf.get_cursor()))
             }
-            let consume = StkResource::stk(se.input_channels);
-            let produce = StkResource::stk(se.output_channels);
+            let consume = se.input_channels;
+            let produce = se.output_channels;
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         // Table 96: stack operations
@@ -622,8 +606,8 @@ fn opinfo_from_sig(
             let s = s.val();
             let t = p.parse(buf)?;
             let t = t.val();
-            let consume = StkResource::stk(usize::from(s + 1));
-            let produce = StkResource::stk(usize::from(s + 1) * usize::from(t + 2));
+            let consume = usize::from(s + 1);
+            let produce = usize::from(s + 1) * usize::from(t + 2);
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "rotl" | "rotr" => {
@@ -631,8 +615,8 @@ fn opinfo_from_sig(
             let s = p.parse(buf)?;
             let s = s.val();
             let _ = p.parse(buf)?;
-            let consume = StkResource::stk(usize::from(s + 1));
-            let produce = StkResource::stk(usize::from(s + 1));
+            let consume = usize::from(s + 1);
+            let produce = usize::from(s + 1);
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "posd" => {
@@ -641,8 +625,8 @@ fn opinfo_from_sig(
             let s = s.val();
             let t = p.parse(buf)?;
             let t = t.val();
-            let consume = StkResource::stk(usize::from(s + 1));
-            let produce = StkResource::stk(usize::from(s + 1 + t + 1));
+            let consume = usize::from(s + 1);
+            let produce = usize::from(s + 1 + t + 1);
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "flip" => {
@@ -650,8 +634,8 @@ fn opinfo_from_sig(
             let s = p.parse(buf)?;
             let s = s.val();
             let _ = p.parse(buf)?; // should be zero
-            let consume = StkResource::stk(usize::from(s + 2));
-            let produce = StkResource::stk(usize::from(s + 2));
+            let consume = usize::from(s + 2);
+            let produce = usize::from(s + 2);
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "pop " => {
@@ -659,8 +643,8 @@ fn opinfo_from_sig(
             let s = p.parse(buf)?;
             let s = s.val();
             let _ = p.parse(buf)?; // should be zero
-            let consume = StkResource::stk(usize::from(s + 1));
-            let produce = StkResource::no_stack();
+            let consume = usize::from(s + 1);
+            let produce = 0;
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         // Table 98: matrix operations
@@ -670,8 +654,8 @@ fn opinfo_from_sig(
             let s = s.val();
             let t = p.parse(buf)?;
             let t = t.val();
-            let consume = StkResource::stk(usize::from(s + 1) * usize::from(t + 2));
-            let produce = StkResource::stk(usize::from(t + 1));
+            let consume = usize::from(s + 1) * usize::from(t + 2);
+            let produce = usize::from(t + 1);
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "tran" => {
@@ -680,8 +664,8 @@ fn opinfo_from_sig(
             let s = s.val();
             let t = p.parse(buf)?;
             let t = t.val();
-            let consume = StkResource::stk(usize::from(s + 1) * usize::from(t + 1));
-            let produce = StkResource::stk(usize::from(s + 1) * usize::from(t + 1));
+            let consume = usize::from(s + 1) * usize::from(t + 1);
+            let produce = usize::from(s + 1) * usize::from(t + 1);
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         // Table 100: variable length functional operations
@@ -690,8 +674,8 @@ fn opinfo_from_sig(
             let s = p.parse(buf)?;
             let s = s.val();
             let _ = p.parse(buf)?; // should be zero
-            let consume = StkResource::stk(usize::from(s + 1));
-            let produce = StkResource::stk(1);
+            let consume = usize::from(s + 1);
+            let produce = 1;
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         // Table 101: functional vector operation encoding
@@ -699,8 +683,8 @@ fn opinfo_from_sig(
             let mut p = UInt16P::new(Endian::Big);
             let _ = p.parse(buf)?;
             let _ = p.parse(buf)?; // should be zero
-            let consume = StkResource::no_stack();
-            let produce = StkResource::stk(1);
+            let consume = 0;
+            let produce = 1;
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "add " | "sub " | "mul " | "div " | "mod " | "pow " => {
@@ -708,8 +692,8 @@ fn opinfo_from_sig(
             let s = p.parse(buf)?;
             let s = s.val();
             let _ = p.parse(buf)?; // should be zero
-            let consume = StkResource::stk(2 * usize::from(s + 1));
-            let produce = StkResource::stk(usize::from(s + 1));
+            let consume = 2 * usize::from(s + 1);
+            let produce = usize::from(s + 1);
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "gama" | "sadd" | "ssub" | "smul" | "sdiv" => {
@@ -717,8 +701,8 @@ fn opinfo_from_sig(
             let s = p.parse(buf)?;
             let s = s.val();
             let _ = p.parse(buf)?; // should be zero
-            let consume = StkResource::stk(usize::from(s + 2));
-            let produce = StkResource::stk(usize::from(s + 1));
+            let consume = usize::from(s + 2);
+            let produce = usize::from(s + 1);
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "sq  " | "sqrt" | "cb  " | "cbrt" | "abs " | "neg " | "rond" | "flor" | "ceil" | "trnc"
@@ -728,8 +712,8 @@ fn opinfo_from_sig(
             let s = p.parse(buf)?;
             let s = s.val();
             let _ = p.parse(buf)?; // should be zero
-            let consume = StkResource::stk(usize::from(s + 1));
-            let produce = StkResource::stk(usize::from(s + 1));
+            let consume = usize::from(s + 1);
+            let produce = usize::from(s + 1);
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "atn2" | "lt  " | "le  " | "eq  " | "near" | "ge  " | "gt  " | "vmin" | "vmax" | "vand"
@@ -738,8 +722,8 @@ fn opinfo_from_sig(
             let s = p.parse(buf)?;
             let s = s.val();
             let _ = p.parse(buf)?; // should be zero
-            let consume = StkResource::stk(2 * usize::from(s + 1));
-            let produce = StkResource::stk(usize::from(s + 1));
+            let consume = 2 * usize::from(s + 1);
+            let produce = usize::from(s + 1);
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "ctop" | "ptoc" => {
@@ -747,8 +731,8 @@ fn opinfo_from_sig(
             let s = p.parse(buf)?;
             let s = s.val();
             let _ = p.parse(buf)?; // should be zero
-            let consume = StkResource::stk(2 * usize::from(s + 1));
-            let produce = StkResource::stk(2 * usize::from(s + 1));
+            let consume = 2 * usize::from(s + 1);
+            let produce = 2 * usize::from(s + 1);
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         "tLab" | "tXYZ" | "fLab" => {
@@ -756,8 +740,8 @@ fn opinfo_from_sig(
             let s = p.parse(buf)?;
             let s = s.val();
             let _ = p.parse(buf)?; // should be zero
-            let consume = StkResource::stk(3 * usize::from(s + 1));
-            let produce = StkResource::stk(3 * usize::from(s + 1));
+            let consume = 3 * usize::from(s + 1);
+            let produce = 3 * usize::from(s + 1);
             Ok((OpType::Normal, OpResource::new(consume, produce)))
         },
         // Table 103/104: conditional if and if with else
@@ -775,8 +759,8 @@ fn opinfo_from_sig(
                     Ok(r) => sig += &(*r.val() as char).to_string(),
                 }
             }
-            let consume = StkResource::stk(1);
-            let produce = StkResource::no_stack();
+            let consume = 1;
+            let produce = 0;
             if sig == "else" {
                 let u = p.parse(buf)?;
                 let u = *u.val() as usize;
@@ -820,8 +804,8 @@ fn opinfo_from_sig(
                     break
                 }
             }
-            let consume = StkResource::stk(1);
-            let produce = StkResource::no_stack();
+            let consume = 1;
+            let produce = 0;
             Ok((OpType::SelCases(cases), OpResource::new(consume, produce)))
         },
         "else" | "case" | "dflt" => {
@@ -866,11 +850,11 @@ pub fn compute_usage_bounds(os: &OpStream, bnd: StkUsage) -> Result<StkUsage, St
     assert!(bnd.min <= bnd.max);
     let mut usg = bnd;
     for op in os.stream.iter() {
-        let c = op.resource.consume.hgt();
+        let c = op.resource.consume;
         if c > usg.min {
             return Err(StkBoundError::Underflow(c - usg.min))
         }
-        let p = op.resource.produce.hgt();
+        let p = op.resource.produce;
         // these are unsigneds, so be careful not to wrap.
         if p + usg.max >= MAX_STACK + c {
             return Err(StkBoundError::Overflow(p + usg.max - MAX_STACK - c))
