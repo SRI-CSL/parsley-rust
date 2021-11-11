@@ -37,6 +37,7 @@ use parsley_rust::iccmax_lib::iccmax_prim::{
     TaggedElementP,
 };
 use parsley_rust::pcore::parsebuffer::{ParseBuffer, ParseBufferT, ParsleyParser};
+use parsley_rust::pcore::transforms::{BufferTransformT, RestrictView};
 
 use parsley_rust::pcore::prim_binary::{Endian, UInt32P};
 use parsley_rust::pcore::prim_combinators::{Alt, Alternate};
@@ -80,12 +81,20 @@ fn parse_iccmax(data: Vec<u8>) -> IccResult<IccError> {
         // With the tag now we need to seek to those locations and check
         // if it is a calculator element
 
-        if tag.offset() as usize >= pb.size()
-            || tag.offset() as usize + tag.size() as usize > pb.size()
-        {
-            return Err(String::from("Buffer size invalid for tag"))
-        }
-        let mut window = ParseBuffer::new_view(&mut pb, tag.offset() as usize, tag.size() as usize);
+        // if tag.offset() as usize >= pb.size()
+        //     || tag.offset() as usize + tag.size() as usize > pb.size()
+        // {
+        //     return Err(String::from("Buffer size invalid for tag"))
+        // }
+        let mut window_view = RestrictView::new(tag.offset() as usize, tag.size() as usize);
+        let mut window = match window_view.transform(&mut pb) {
+            Ok(v) => v,
+            Err(_) => return Err(String::from("Buffer size invalid for tag")),
+        };
+
+        // let mut window = ParseBuffer::new_view(&mut pb, tag.offset() as usize,
+        // tag.size() as usize);
+
         let mut mpet_parser = MPetElementP;
         let mpet_e = mpet_parser.parse(&mut window);
         match mpet_e {
@@ -109,17 +118,27 @@ fn parse_iccmax(data: Vec<u8>) -> IccResult<IccError> {
                     for position in &position_list {
                         // Create a view, run the Calculator parser
                         // or the GeneralElement parser
-                        if position.position() as usize >= window.size()
-                            || position.position() as usize + position.size() as usize
-                                > window.size()
-                        {
-                            return Err(String::from("Buffer size invalid for MPET element"))
-                        }
-                        let mut calc_buffer = ParseBuffer::new_view(
-                            &mut window,
+                        // if position.position() as usize >= window.size()
+                        //     || position.position() as usize + position.size() as usize
+                        //         > window.size()
+                        // {
+                        //     return Err(String::from("Buffer size invalid for MPET element"))
+                        // }
+                        // let mut calc_buffer = ParseBuffer::new_view(
+                        //     &mut window,
+                        //     position.position() as usize,
+                        //     position.size() as usize,
+                        // );
+                        let mut calc_buffer_view = RestrictView::new(
                             position.position() as usize,
                             position.size() as usize,
                         );
+                        let mut calc_buffer = match calc_buffer_view.transform(&mut window) {
+                            Ok(v) => v,
+                            Err(_) => {
+                                return Err(String::from("Buffer size invalid for MPet element"))
+                            },
+                        };
                         let mut calc_parser = CalculatorElementP;
                         let mut general_parser = GeneralElementP;
                         let mut parser = Alternate::new(&mut calc_parser, &mut general_parser);
@@ -143,32 +162,59 @@ fn parse_iccmax(data: Vec<u8>) -> IccResult<IccError> {
                                         let main_function_size =
                                             t.clone().unwrap().main_function_size();
 
-                                        if main_function_position as usize >= calc_buffer.size()
-                                            || main_function_position as usize
-                                                + main_function_size as usize
-                                                > calc_buffer.size()
-                                        {
-                                            return Err(String::from(
-                                                "Buffer size invalid for Calc function",
-                                            ))
-                                        }
-
-                                        let mut main_buf = ParseBuffer::new_view(
-                                            &mut calc_buffer,
+                                        let mut main_buf_view = RestrictView::new(
                                             main_function_position as usize,
                                             main_function_size as usize,
                                         );
+                                        let mut main_buf =
+                                            match main_buf_view.transform(&mut calc_buffer) {
+                                                Ok(v) => v,
+                                                Err(_) => {
+                                                    return Err(String::from(
+                                                        "Buffer size invalid for Calc Function",
+                                                    ))
+                                                },
+                                            };
+
+                                        // if main_function_position as usize >= calc_buffer.size()
+                                        //     || main_function_position as usize
+                                        //         + main_function_size as usize
+                                        //         > calc_buffer.size()
+                                        // {
+                                        //     return Err(String::from(
+                                        //         "Buffer size invalid for Calc function",
+                                        //     ))
+                                        // }
+                                        //
+                                        // let mut main_buf = ParseBuffer::new_view(
+                                        //     &mut calc_buffer,
+                                        //     main_function_position as usize,
+                                        //     main_function_size as usize,
+                                        // );
                                         //ParseBuffer::buf_to_string(&mut calc_buffer);
                                         //ParseBuffer::buf_to_string(&mut main_buf);
 
                                         let positions_list = t.unwrap().subelement_positions();
                                         let mut pos_array: Vec<MPetOptions> = vec![];
                                         for position in positions_list {
-                                            let mut subelement_buf = ParseBuffer::new_view(
-                                                &mut calc_buffer,
+                                            let mut subelement_buf_view = RestrictView::new(
                                                 position.position() as usize,
                                                 position.size() as usize,
                                             );
+                                            let mut subelement_buf =
+                                                match subelement_buf_view
+                                                    .transform(&mut calc_buffer)
+                                                {
+                                                    Ok(v) => v,
+                                                    Err(_) => return Err(String::from(
+                                                        "Buffer size invalid for Subelement buffer",
+                                                    )),
+                                                };
+                                            // let mut subelement_buf = ParseBuffer::new_view(
+                                            //     &mut calc_buffer,
+                                            //     position.position() as usize,
+                                            //     position.size() as usize,
+                                            // );
                                             let result = parser.parse(&mut subelement_buf);
                                             match result.unwrap().unwrap() {
                                                 Alt::Left(v) => {
@@ -326,7 +372,6 @@ fn parse_iccmax(data: Vec<u8>) -> IccResult<IccError> {
             },
             Err(_) => {},
         }
-        println!("4 {:?}", pb.size());
         counter = counter + 1;
     }
     Ok("".to_string())
