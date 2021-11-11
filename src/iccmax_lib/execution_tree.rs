@@ -62,7 +62,6 @@ impl ExecutionTree {
         let mut counter = 0;
         while counter < self.instructions.len() {
             let signature = self.instructions[counter].clone().signature();
-            let signature_copy = self.instructions[counter].clone().signature();
             let function_operations = self.instructions[counter].clone().function_operations();
             let data_list = self.instructions[counter].clone().data().data_list();
             match signature.as_str() {
