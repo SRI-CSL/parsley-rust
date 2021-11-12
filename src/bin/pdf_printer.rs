@@ -41,7 +41,7 @@ use clap::{App, Arg};
 use serde_json::Value;
 
 use parsley_rust::pcore::parsebuffer::{
-    LocatedVal, Location, ParseBuffer, ParseResult, ParsleyParser, StreamBufferT,
+    ErrorKind, LocatedVal, Location, ParseBuffer, ParseResult, ParsleyParser, StreamBufferT,
 };
 use parsley_rust::pdf_lib::catalog::catalog_type;
 use parsley_rust::pdf_lib::pdf_content_streams::{TextExtractor, TextToken};
@@ -265,7 +265,9 @@ fn file_extract_text(
 ) {
     let root_obj: &Rc<LocatedVal<PDFObjT>> = match ctxt.lookup_obj(root_id) {
         Some(obj) => obj,
-        None => exit_log!(0, "Root object {:?} not found!", root_id),
+        None => {
+            exit_log!(0, "Root object {:?} not found!", root_id)
+        },
     };
 
     let page_dom = match to_page_dom(&ctxt, &root_obj) {
@@ -273,7 +275,11 @@ fn file_extract_text(
             println!("Page DOM built with {} page nodes.", dom.pages().len());
             dom
         },
-        Err(e) => exit_log!(e.loc_start(), "Page DOM error: {:?}", e.val()),
+        Err(e) => {
+            //exit_log!(e.loc_start(), "Page DOM error: {:?}", e.val()),
+            ta3_log!(Level::Warn, e.loc_start(), "Page DOM error: {:?}", e.val());
+            process::exit(1);
+        },
     };
     // We will consider a file as having text if it has a non-symbolic
     // font that is embedded.
@@ -326,15 +332,29 @@ fn file_extract_text(
                 }
                 match extract_text(ctxt, pid, l.resources(), &mut buf, text_dump_file) {
                     Ok(_) => (),
-                    Err(e) => exit_log!(0, " error parsing content in page {:?}: {:?}", pid, e),
-                    /*
-                    ta3_log!(
-                        Level::Warn,
-                        0,
-                        " error parsing content in page {:?}: {:?}",
-                        pid,
-                        e
-                    ),*/
+                    Err(e) => match e.val() {
+                        ErrorKind::GuardError(s) => {
+                            if s.contains("EndOfBuffer") {
+                                ta3_log!(
+                                    Level::Warn,
+                                    0,
+                                    " error parsing content in page {:?}: {:?}",
+                                    pid,
+                                    e
+                                );
+                            }
+                        },
+                        _ => {
+                            exit_log!(0, " error parsing content in page {:?}: {:?}", pid, e);
+                        },
+                    }, /*
+                       ta3_log!(
+                           Level::Warn,
+                           0,
+                           " error parsing content in page {:?}: {:?}",
+                           pid,
+                           e
+                       ),*/
                 }
             },
             PageKid::Node(_n) => {

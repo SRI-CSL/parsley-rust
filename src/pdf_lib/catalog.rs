@@ -104,9 +104,15 @@ pub fn catalog_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
         chk: name_dictionary(tctx),
         opt: DictKeySpec::Optional,
     };
+    let dests_option_1 = mk_generic_dict_typchk(tctx);
+    let dests_option_2 = mk_generic_indirect_dict_typchk(tctx);
     let dests = DictEntry {
         key: Vec::from("Dests"),
-        chk: mk_generic_indirect_dict_typchk(tctx), // FIXME: indirect dict of names
+        chk: TypeCheck::new(
+            tctx,
+            "",
+            Rc::new(PDFType::Disjunct(vec![dests_option_1, dests_option_2])),
+        ),
         opt: DictKeySpec::Optional,
     };
     let viewerpreferences = DictEntry {
