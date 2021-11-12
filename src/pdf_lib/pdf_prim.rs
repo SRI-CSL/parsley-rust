@@ -20,6 +20,7 @@
 
 use std::collections::HashSet;
 use std::convert::TryFrom;
+use std::str;
 
 use super::super::pcore::parsebuffer::{
     locate_value, ErrorKind, LocatedVal, ParseBufferT, ParseResult, ParsleyParser,
@@ -455,6 +456,10 @@ impl ParsleyParser for RawLiteralString {
         let mut depth = 1;
 
         let mut v = Vec::new();
+        /*
+        \ddd - octal digits
+        If a \ appears, one of these patterns need to match
+        */
         loop {
             let bytes = buf.parse_bytes_until(b"()\\")?;
             match buf.peek() {
@@ -537,8 +542,58 @@ impl ParsleyParser for RawLiteralString {
                 },
             }
         }
+        /*
+        Scan through the vector and check if a slash appears
+        We change set to 1 when this occurs, to denote that a digit can appear after
+        If digit appears, then add it to the digit vector and set digit_started to true
+        */
+        let mut v_changed: Vec<u8> = vec![];
+        let mut digit: Vec<u8> = vec![];
+        let mut digit_started = false;
+        let mut set = 0;
+        for letter in v {
+            let mut result: f32 = 0.0;
+            let mut result_set = false;
+            match letter {
+                92 => {
+                    set = 1;
+                },
+                48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 => {
+                    if set == 1 && digit.len() < 3 {
+                        digit.push(letter);
+                        digit_started = true;
+                    } else {
+                        set = 0;
+                    }
+                },
+                _ => {
+                    set = 0;
+                },
+            }
+            if digit.len() == 3 || (digit.len() > 0 && set == 0) {
+                set = 0;
+                let mut c = 0;
+                for _i in 0 .. digit.len() {
+                    let s = digit.pop().unwrap();
+                    result += ((s - 48) as f32) * f32::powi(8.0, c);
+                    c += 1;
+                }
+                result_set = true;
+                digit_started = false;
+            }
+            if result_set {
+                // Remove the \ first since that started the escape characted for digit
+                v_changed.pop();
+                v_changed.push(result.floor() as u8);
+            } else {
+                // Do not push the digit character as its getting processed
+                if !digit_started {
+                    v_changed.push(letter);
+                }
+            }
+        }
         let end = buf.get_cursor();
-        Ok(LocatedVal::new(v, start, end))
+        Ok(LocatedVal::new(v_changed, start, end))
     }
 }
 
@@ -1399,17 +1454,17 @@ mod test_pdf_prim {
     fn raw_lit_string_escaped_escapes() {
         let mut lit = RawLiteralString;
 
-        let v = Vec::from("(1a\\\\\\(90\\\\) ".as_bytes());
+        let v = Vec::from("(\t1a\\\\\\(90\\\\) ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(
             lit.parse(&mut pb),
             Ok(LocatedVal::new(
-                Vec::from("1a\\\\\\(90\\\\".as_bytes()),
+                Vec::from("\t1a\\\\\\(90\\\\".as_bytes()),
                 0,
                 10
             ))
         );
-        assert_eq!(pb.get_cursor(), 12);
+        assert_eq!(pb.get_cursor(), 13);
 
         let v = Vec::from("(1a90\\\\) ".as_bytes());
         let mut pb = ParseBuffer::new(v);
@@ -1430,6 +1485,35 @@ mod test_pdf_prim {
             ))
         );
         assert_eq!(pb.get_cursor(), 12);
+    }
+
+    #[test]
+    fn raw_lit_string_date() {
+        let mut lit = RawLiteralString;
+
+        let v = Vec::from("(D\\07220140821101054)".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(
+            lit.parse(&mut pb),
+            Ok(LocatedVal::new(
+                Vec::from("D\\07220140821101054".as_bytes()),
+                0,
+                10
+            ))
+        );
+        assert_eq!(pb.get_cursor(), 21);
+
+        let v = Vec::from("(D\\07220141021133240\\05505\\04700\\047)".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(
+            lit.parse(&mut pb),
+            Ok(LocatedVal::new(
+                Vec::from("D\\07220141021133240\\05505\\04700\\047".as_bytes()),
+                0,
+                10
+            ))
+        );
+        assert_eq!(pb.get_cursor(), 37);
     }
 
     #[test]

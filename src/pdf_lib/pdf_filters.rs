@@ -17,9 +17,9 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use binascii::hex2bin;
-use flate2::write::ZlibDecoder;
+use libflate::zlib;
 use lzw::{Decoder, DecoderEarlyChange, LsbReader};
-use std::io::Write;
+use std::io::Read;
 use std::num::Wrapping;
 use std::panic;
 
@@ -82,35 +82,26 @@ impl BufferTransformT for FlateDecode<'_> {
             })
             .unwrap_or(1);
 
-        let mut decoder = ZlibDecoder::new(Vec::new());
+        let mut decoder = zlib::Decoder::new(buf.buf());
 
-        // PDF streams can have bytes trailing the filter content, so
-        // write_all() could cause spurious errors due to the trailing
-        // bytes not being consumed by the decoder.  Since write() has
-        // an internal consuming loop, we could rely on it to consume
-        // all relevant bytes in a single call.
-
-        if let Err(e) = decoder.write(buf.buf()) {
-            let err = ErrorKind::TransformError(format!("flatedecode write error: {}", e));
-            let loc = buf.get_location();
-            return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
-        };
-        // otherwise, all bytes were consumed.
-
-        match decoder.finish() {
+        match &mut decoder {
             Err(e) => {
                 let err = ErrorKind::TransformError(format!("flatedecode finish error: {}", e));
                 let loc = buf.get_location();
                 Err(locate_value(err, loc.loc_start(), loc.loc_end()))
             },
-            Ok(decoded) => flate_lzw_filter(
-                decoded,
-                &buf.get_location(),
-                predictor as usize,
-                colors as usize,
-                columns as usize,
-                bitspercolumn as usize,
-            ),
+            Ok(decoded) => {
+                let mut decoded_data = Vec::new();
+                decoded.read_to_end(&mut decoded_data).unwrap();
+                flate_lzw_filter(
+                    decoded_data,
+                    &buf.get_location(),
+                    predictor as usize,
+                    colors as usize,
+                    columns as usize,
+                    bitspercolumn as usize,
+                )
+            },
         }
     }
 }
