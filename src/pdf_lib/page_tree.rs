@@ -60,9 +60,9 @@ pub fn root_page_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
         opt: DictKeySpec::Required,
     };
     let opts = Rc::new(PDFType::Disjunct(vec![
+        template_type(tctx),
         non_root_page_tree(tctx),
         page_type(tctx),
-        template_type(tctx),
     ]));
     let elem = TypeCheck::new_indirect(tctx, "kid", opts, IndirectSpec::Required);
     let kids = Rc::new(PDFType::Array { elem, size: None });
@@ -95,9 +95,9 @@ pub fn non_root_page_tree(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
         opt: DictKeySpec::Required,
     };
     let opts = Rc::new(PDFType::Disjunct(vec![
+        template_type(tctx),
         page_type(tctx),
         TypeCheck::new_named("root-non-page-tree"),
-        template_type(tctx),
     ]));
     let elem = TypeCheck::new_indirect(tctx, "kid", opts, IndirectSpec::Required);
     let kids = Rc::new(PDFType::Array { elem, size: None });

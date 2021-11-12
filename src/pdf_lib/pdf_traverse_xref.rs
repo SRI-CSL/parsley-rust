@@ -90,7 +90,12 @@ enum ObjInfo {
 }
 
 type RootObjRef = Rc<LocatedVal<PDFObjT>>;
-type XRefSectInfo = (Vec<LocatedVal<XrefEntT>>, Option<RootObjRef>, Option<usize>);
+type XRefSectInfo = (
+    Vec<LocatedVal<XrefEntT>>,
+    Option<RootObjRef>,
+    Option<usize>,
+    Option<RootObjRef>,
+);
 
 // Parse a single xref stream.  It assumes that the parse cursor is
 // positioned at the stream object location, either via a startxref, a
@@ -100,6 +105,7 @@ fn parse_xref_stream(
 ) -> Option<XRefSectInfo> {
     let mut xrefs = Vec::new();
     let mut root = None;
+    let mut info = None;
     let mut prev = None;
 
     let mut sp = IndirectP::new(ctxt);
@@ -179,9 +185,13 @@ fn parse_xref_stream(
             Some(rt) => Some(Rc::clone(rt)),
             None => None,
         };
+        info = match xref_stm.val().dict().get(b"Info") {
+            Some(rt) => Some(Rc::clone(rt)),
+            None => None,
+        };
         prev = xref_stm.val().dict().get_usize(b"Prev");
     }
-    Some((xrefs, root, prev))
+    Some((xrefs, root, prev, info))
 }
 
 // Parses a single xref section.  This section could be (a) an xref
@@ -232,7 +242,7 @@ fn parse_xref_section(
                 "No trailer found: {}",
                 e.val()
             );
-            return Some((xrefs, None, None))
+            return Some((xrefs, None, None, None))
         },
     }
     let mut p = TrailerP::new(ctxt);
@@ -245,7 +255,7 @@ fn parse_xref_section(
             "Cannot parse trailer: {}",
             e.val()
         );
-        return Some((xrefs, None, None))
+        return Some((xrefs, None, None, None))
     }
     let t = t.unwrap();
 
@@ -253,6 +263,11 @@ fn parse_xref_section(
     let prev = t.val().dict().get_usize(b"Prev");
     let root = t.val().dict().get(b"Root");
     let root = match root {
+        Some(rt) => Some(Rc::clone(rt)),
+        None => None,
+    };
+    let info = t.val().dict().get(b"Info");
+    let info = match info {
         Some(rt) => Some(Rc::clone(rt)),
         None => None,
     };
@@ -276,7 +291,7 @@ fn parse_xref_section(
         match pb.set_cursor(xrstart) {
             Ok(()) => {
                 let xref_stm = parse_xref_stream(fi, ctxt, pb);
-                if let Some((xrents, _root, _prev)) = xref_stm {
+                if let Some((xrents, _root, _prev, _info)) = xref_stm {
                     // Ignore the /Root and /Prev specifiers coming from
                     // the XRefStm.  (This seems to be implicit in the
                     // spec.)
@@ -298,7 +313,7 @@ fn parse_xref_section(
             ),
         }
     }
-    Some((xrefs, root, prev))
+    Some((xrefs, root, prev, info))
 }
 
 // This assumes that the parse cursor is set at the startxref
@@ -306,10 +321,11 @@ fn parse_xref_section(
 // hybrid) or xref streams to return the xref entries and a root.
 fn get_xref_info(
     fi: &FileInfo, ctxt: &mut PDFObjContext, pb: &mut dyn ParseBufferT,
-) -> (Vec<LocatedVal<XrefEntT>>, RootObjRef) {
+) -> (Vec<LocatedVal<XrefEntT>>, RootObjRef, Option<RootObjRef>) {
     // Collect all xref tables or streams, following the /Prev chain.
     let mut xrefs = Vec::new();
     let mut root = None;
+    let mut info = None;
 
     let mut cursorset = BTreeSet::new(); // to prevent infinite loops
     let mut idset = BTreeSet::new(); // to keep newest entries
@@ -343,7 +359,7 @@ fn get_xref_info(
                 next,
             );
         }
-        let (ents, rt, prev) = xinfo.unwrap();
+        let (ents, rt, prev, inf) = xinfo.unwrap();
         // update root
         if root.is_none() {
             if rt.is_some() {
@@ -352,6 +368,18 @@ fn get_xref_info(
                 exit_log!(
                     fi.file_offset(next),
                     "No Root specified in xref at {}!",
+                    next,
+                );
+            }
+        }
+        if info.is_none() {
+            if inf.is_some() {
+                info = inf;
+            } else {
+                ta3_log!(
+                    Level::Warn,
+                    fi.file_offset(next),
+                    "No Info specified in xref at {}!",
                     next,
                 );
             }
@@ -373,7 +401,7 @@ fn get_xref_info(
     if root.is_none() {
         exit_log!(fi.file_offset(next), "No root object found!!",);
     }
-    (xrefs, root.unwrap())
+    (xrefs, root.unwrap(), info)
 }
 
 // Get the in-use object locations from the xref entries.
@@ -697,7 +725,7 @@ fn parse_objects(
     }
 }
 
-pub fn parse_file(test_file: &str) -> (FileInfo, PDFObjContext, ObjectId) {
+pub fn parse_file(test_file: &str) -> (FileInfo, PDFObjContext, ObjectId, Option<ObjectId>) {
     // Print current path
     let path = env::current_dir();
     if path.is_err() {
@@ -723,7 +751,9 @@ pub fn parse_file(test_file: &str) -> (FileInfo, PDFObjContext, ObjectId) {
     parse_data(&path, &v)
 }
 
-pub fn parse_data(path: &std::path::PathBuf, data: &[u8]) -> (FileInfo, PDFObjContext, ObjectId) {
+pub fn parse_data(
+    path: &std::path::PathBuf, data: &[u8],
+) -> (FileInfo, PDFObjContext, ObjectId, Option<ObjectId>) {
     let mut pb = ParseBuffer::new(data.to_vec());
 
     // Handle leading garbage.
@@ -857,7 +887,7 @@ pub fn parse_data(path: &std::path::PathBuf, data: &[u8]) -> (FileInfo, PDFObjCo
         );
     }
     pb.set_cursor_unsafe(sxref_offset);
-    let (xref_ents, root_ref) = get_xref_info(&fi, &mut ctxt, &mut pb);
+    let (xref_ents, root_ref, info_ref) = get_xref_info(&fi, &mut ctxt, &mut pb);
     /*
     ta3_log!(
         Level::Info,
@@ -882,6 +912,17 @@ pub fn parse_data(path: &std::path::PathBuf, data: &[u8]) -> (FileInfo, PDFObjCo
             "Root object is not a reference!"
         );
     };
+    let mut info_id: Option<ObjectId> = None;
+    match info_ref {
+        Some(i_ref) => {
+            info_id = if let PDFObjT::Reference(r) = i_ref.val() {
+                Some(r.id())
+            } else {
+                None
+            };
+        },
+        None => {},
+    }
 
-    (fi, ctxt, root_id)
+    (fi, ctxt, root_id, info_id)
 }

@@ -33,6 +33,7 @@ use std::io::Write;
 use std::path::Path;
 use std::process;
 use std::rc::Rc;
+use std::str;
 
 use env_logger::Builder;
 use log::{debug, error, log, Level, LevelFilter};
@@ -41,9 +42,9 @@ use clap::{App, Arg};
 use serde_json::Value;
 
 use parsley_rust::pcore::parsebuffer::{
-    LocatedVal, Location, ParseBuffer, ParseResult, ParsleyParser, StreamBufferT,
+    ErrorKind, LocatedVal, Location, ParseBuffer, ParseResult, ParsleyParser, StreamBufferT,
 };
-use parsley_rust::pdf_lib::catalog::catalog_type;
+use parsley_rust::pdf_lib::catalog::{catalog_type, info_type};
 use parsley_rust::pdf_lib::pdf_content_streams::{TextExtractor, TextToken};
 use parsley_rust::pdf_lib::pdf_obj::{ObjectId, PDFObjContext, PDFObjT};
 use parsley_rust::pdf_lib::pdf_page_dom::Resources;
@@ -243,10 +244,56 @@ fn dump_file(fi: &FileInfo, ctxt: &mut PDFObjContext, root_id: ObjectId) {
     dump_root(fi, ctxt, root_obj);
 }
 
-fn type_check_file(fi: &FileInfo, ctxt: &mut PDFObjContext, root_id: ObjectId) {
+fn type_check_file(
+    fi: &FileInfo, ctxt: &mut PDFObjContext, root_id: ObjectId, info_id: Option<ObjectId>,
+) {
     let root_obj: &Rc<LocatedVal<PDFObjT>> = match ctxt.lookup_obj(root_id) {
         Some(obj) => obj,
         None => exit_log!(0, "Root object {:?} not found!", root_id),
+    };
+    let mut producer: Option<String> = None;
+    match info_id {
+        Some(i_id) => {
+            match ctxt.lookup_obj(i_id) {
+                Some(obj) => {
+                    let o1 = Rc::clone(obj);
+                    match o1.val() {
+                        PDFObjT::Dict(d) => {
+                            match d.get("Producer".as_bytes()) {
+                                Some(a) => {
+                                    match a.val() {
+                                        PDFObjT::String(string) => {
+                                            match str::from_utf8(string) {
+                                                Ok(prod) => {
+                                                    producer = Some(prod.to_string());
+                                                },
+                                                _ => {},
+                                            };
+                                        },
+                                        _ => {},
+                                    };
+                                },
+                                _ => {},
+                            };
+                        },
+                        _ => {},
+                    };
+                    let mut tctx = TypeCheckContext::new();
+                    let typ = info_type(&mut tctx);
+                    if let Some(err) = check_type(&ctxt, &tctx, Rc::clone(obj), typ) {
+                        ta3_log!(
+                            Level::Warn,
+                            fi.file_offset(err.loc_start()),
+                            "Info Type Check Error: {:?}, Producer: {:?}",
+                            err.val(),
+                            producer,
+                        );
+                    }
+                },
+                None => ta3_log!(Level::Warn, 0, "Info object {:?} not found!", info_id),
+            };
+        },
+        None => {},
     };
 
     let mut tctx = TypeCheckContext::new();
@@ -254,8 +301,9 @@ fn type_check_file(fi: &FileInfo, ctxt: &mut PDFObjContext, root_id: ObjectId) {
     if let Some(err) = check_type(&ctxt, &tctx, Rc::clone(root_obj), typ) {
         exit_log!(
             fi.file_offset(err.loc_start()),
-            "Type Check Error: {:?}",
-            err.val()
+            "Type Check Error: {:?}, Producer: {:?}",
+            err.val(),
+            producer,
         );
     }
 }
@@ -265,7 +313,9 @@ fn file_extract_text(
 ) {
     let root_obj: &Rc<LocatedVal<PDFObjT>> = match ctxt.lookup_obj(root_id) {
         Some(obj) => obj,
-        None => exit_log!(0, "Root object {:?} not found!", root_id),
+        None => {
+            exit_log!(0, "Root object {:?} not found!", root_id)
+        },
     };
 
     let page_dom = match to_page_dom(&ctxt, &root_obj) {
@@ -273,7 +323,10 @@ fn file_extract_text(
             println!("Page DOM built with {} page nodes.", dom.pages().len());
             dom
         },
-        Err(e) => exit_log!(e.loc_start(), "Page DOM error: {:?}", e.val()),
+        Err(e) => {
+            ta3_log!(Level::Warn, e.loc_start(), "Page DOM error: {:?}", e.val());
+            process::exit(1);
+        },
     };
     // We will consider a file as having text if it has a non-symbolic
     // font that is embedded.
@@ -326,15 +379,22 @@ fn file_extract_text(
                 }
                 match extract_text(ctxt, pid, l.resources(), &mut buf, text_dump_file) {
                     Ok(_) => (),
-                    Err(e) => exit_log!(0, " error parsing content in page {:?}: {:?}", pid, e),
-                    /*
-                    ta3_log!(
-                        Level::Warn,
-                        0,
-                        " error parsing content in page {:?}: {:?}",
-                        pid,
-                        e
-                    ),*/
+                    Err(e) => match e.val() {
+                        ErrorKind::GuardError(s) => {
+                            if s.contains("EndOfBuffer") {
+                                ta3_log!(
+                                    Level::Warn,
+                                    0,
+                                    " error parsing content in page {:?}: {:?}",
+                                    pid,
+                                    e
+                                );
+                            }
+                        },
+                        _ => {
+                            exit_log!(0, " error parsing content in page {:?}: {:?}", pid, e);
+                        },
+                    },
                 }
             },
             PageKid::Node(_n) => {
@@ -345,11 +405,11 @@ fn file_extract_text(
 }
 
 fn process_file(
-    fi: &FileInfo, ctxt: &mut PDFObjContext, root_id: ObjectId,
+    fi: &FileInfo, ctxt: &mut PDFObjContext, root_id: ObjectId, info_id: Option<ObjectId>,
     text_dump_file: &mut Option<fs::File>,
 ) {
     dump_file(fi, ctxt, root_id);
-    type_check_file(fi, ctxt, root_id);
+    type_check_file(fi, ctxt, root_id, info_id);
     file_extract_text(ctxt, root_id, text_dump_file);
 }
 
@@ -464,8 +524,8 @@ fn main() {
     };
 
     let test_file = matches.value_of("pdf_file").unwrap();
-    let (fi, mut ctxt, root_id) = parse_file(test_file);
-    process_file(&fi, &mut ctxt, root_id, &mut output_text_file);
+    let (fi, mut ctxt, root_id, info_id) = parse_file(test_file);
+    process_file(&fi, &mut ctxt, root_id, info_id, &mut output_text_file);
 }
 
 #[cfg(feature = "kuduafl")]

@@ -18,7 +18,7 @@
 
 use super::pdf_obj::PDFObjT;
 use crate::pdf_lib::common_data_structures::{
-    mk_array_of_dict_typchk, mk_generic_array_typchk, mk_generic_dict_typchk,
+    mk_array_of_dict_typchk, mk_date_typchk, mk_generic_array_typchk, mk_generic_dict_typchk,
     mk_generic_indirect_dict_typchk, mk_generic_indirect_stream_typchk, mk_name_check,
     name_dictionary,
 };
@@ -68,6 +68,90 @@ fn mk_pagelayout_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
         Rc::new(pred),
     )
 }
+
+fn mk_trapped_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+    let pred = ChoicePred(
+        String::from("Invalid Trapped value in info"),
+        vec![
+            PDFObjT::Name(NameT::new(Vec::from("True"))),
+            PDFObjT::Name(NameT::new(Vec::from("False"))),
+            PDFObjT::Name(NameT::new(Vec::from("Unknown"))),
+        ],
+    );
+    TypeCheck::new_refined(
+        tctx,
+        "",
+        Rc::new(PDFType::PrimType(PDFPrimType::Name)),
+        Rc::new(pred),
+    )
+}
+
+pub fn info_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+    let title = DictEntry {
+        key: Vec::from("Title"),
+        chk: TypeCheck::new(tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::String))),
+        opt: DictKeySpec::Optional,
+    };
+    let author = DictEntry {
+        key: Vec::from("Author"),
+        chk: TypeCheck::new(tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::String))),
+        opt: DictKeySpec::Optional,
+    };
+    let subject = DictEntry {
+        key: Vec::from("Subject"),
+        chk: TypeCheck::new(tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::String))),
+        opt: DictKeySpec::Optional,
+    };
+    let keywords = DictEntry {
+        key: Vec::from("Keywords"),
+        chk: TypeCheck::new(tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::String))),
+        opt: DictKeySpec::Optional,
+    };
+    let creator = DictEntry {
+        key: Vec::from("Creator"),
+        chk: TypeCheck::new(tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::String))),
+        opt: DictKeySpec::Optional,
+    };
+    let producer = DictEntry {
+        key: Vec::from("Producer"),
+        chk: TypeCheck::new(tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::String))),
+        opt: DictKeySpec::Optional,
+    };
+    let creationdate = DictEntry {
+        key: Vec::from("CreationDate"),
+        chk: mk_date_typchk(tctx),
+        opt: DictKeySpec::Optional,
+    };
+    let moddate = DictEntry {
+        key: Vec::from("ModDate"),
+        chk: mk_date_typchk(tctx),
+        opt: DictKeySpec::Optional,
+    };
+    let trapped = DictEntry {
+        key: Vec::from("Trapped"),
+        chk: mk_trapped_typchk(tctx),
+        opt: DictKeySpec::Optional,
+    };
+    TypeCheck::new(
+        tctx,
+        "template",
+        Rc::new(PDFType::Dict(
+            vec![
+                title,
+                author,
+                subject,
+                keywords,
+                creator,
+                producer,
+                creationdate,
+                moddate,
+                trapped,
+            ],
+            None,
+        )),
+    )
+}
+
 // Errata: extensions, af, dpartroot, dss
 
 pub fn catalog_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
@@ -104,9 +188,15 @@ pub fn catalog_type(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
         chk: name_dictionary(tctx),
         opt: DictKeySpec::Optional,
     };
+    let dests_option_1 = mk_generic_dict_typchk(tctx);
+    let dests_option_2 = mk_generic_indirect_dict_typchk(tctx);
     let dests = DictEntry {
         key: Vec::from("Dests"),
-        chk: mk_generic_indirect_dict_typchk(tctx), // FIXME: indirect dict of names
+        chk: TypeCheck::new(
+            tctx,
+            "",
+            Rc::new(PDFType::Disjunct(vec![dests_option_1, dests_option_2])),
+        ),
         opt: DictKeySpec::Optional,
     };
     let viewerpreferences = DictEntry {
