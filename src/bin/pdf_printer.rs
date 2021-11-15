@@ -281,7 +281,8 @@ fn type_check_file(
                     let mut tctx = TypeCheckContext::new();
                     let typ = info_type(&mut tctx);
                     if let Some(err) = check_type(&ctxt, &tctx, Rc::clone(obj), typ) {
-                        exit_log!(
+                        ta3_log!(
+                            Level::Warn,
                             fi.file_offset(err.loc_start()),
                             "Info Type Check Error: {:?}, Producer: {:?}",
                             err.val(),

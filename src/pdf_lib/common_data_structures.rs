@@ -312,16 +312,14 @@ impl Predicate for DateStringPredicate {
             // relaxed regex that allows a trailing ' at the end.
             let re = regex::Regex::new(r"^D:\d{4}(([0][1-9]|[1][0-2])(([0][1-9]|[1-2][0-9]|[3][0-1])(([0-1][0-9]|[2][0-3])(([0-5][0-9])(([0-5][0-9])([+\-Z](([0-1][0-9]'|[2][0-3]')([0-5][0-9](')?)?)?)?)?)?)?)?)?$").unwrap();
             let date_string = std::str::from_utf8(s).unwrap_or("");
+            let error_string = format!("Not a Date string {:?}", date_string);
             if !re.is_match(date_string) {
-                return Some(obj.place(TypeCheckError::PredicateError(
-                    "Not a Date string.".to_string(),
-                )))
+                return Some(obj.place(TypeCheckError::PredicateError(error_string.to_string())))
             }
             None
         } else {
-            Some(obj.place(TypeCheckError::PredicateError(
-                "Not an Date string.".to_string(),
-            )))
+            let error_string = format!("Not a Date string {:?}", obj.val());
+            Some(obj.place(TypeCheckError::PredicateError(error_string.to_string())))
         }
     }
 }
