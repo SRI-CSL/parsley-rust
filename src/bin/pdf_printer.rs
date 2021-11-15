@@ -272,11 +272,9 @@ fn type_check_file(
                                         },
                                         _ => {},
                                     };
-                                    //println!("{:?}", a.val());
                                 },
                                 _ => {},
                             };
-                            //println!("{:?}", d.get("Producer".as_bytes()));
                         },
                         _ => {},
                     };
