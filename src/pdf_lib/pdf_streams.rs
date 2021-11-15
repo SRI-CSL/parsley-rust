@@ -710,6 +710,7 @@ mod test_object_stream {
     use crate::pcore::parsebuffer::{
         locate_value, ErrorKind, LocatedVal, ParseBuffer, ParsleyParser,
     };
+    use crate::pcore::transforms::{BufferTransformT, RestrictView};
     use crate::pdf_lib::pdf_obj::{
         ArrayT, DictP, DictT, IndirectP, IndirectT, PDFObjContext, PDFObjT, StreamT,
     };
@@ -938,7 +939,8 @@ endobj");
         let io = io.val();
         if let PDFObjT::Stream(ref s) = io.obj().val() {
             let content = s.stream().val();
-            let mut stream_buf = ParseBuffer::new_view(&pb, content.start(), content.size());
+            let mut vxf = RestrictView::new(content.start(), content.size());
+            let mut stream_buf = vxf.transform(&pb).unwrap();
             let mut osp = ObjStreamP::new(&mut ctxt, s);
             let ost = osp.parse(&mut stream_buf);
             let ost = ost.unwrap();
@@ -971,7 +973,8 @@ endobj");
         let io = io.val();
         if let PDFObjT::Stream(ref s) = io.obj().val() {
             let content = s.stream().val();
-            let mut xref_buf = ParseBuffer::new_view(&pb, content.start(), content.size());
+            let mut vxf = RestrictView::new(content.start(), content.size());
+            let mut xref_buf = vxf.transform(&pb).unwrap();
             let mut xrsp = XrefStreamP::new(false, s);
             let xrt = xrsp.parse(&mut xref_buf).unwrap();
             let ents = xrt.val().ents();
@@ -1012,7 +1015,8 @@ endobj");
         let io = io.val();
         if let PDFObjT::Stream(ref s) = io.obj().val() {
             let content = s.stream().val();
-            let mut xref_buf = ParseBuffer::new_view(&pb, content.start(), content.size());
+            let mut vxf = RestrictView::new(content.start(), content.size());
+            let mut xref_buf = vxf.transform(&pb).unwrap();
             let mut xrsp = XrefStreamP::new(false, s);
             let xrt = xrsp.parse(&mut xref_buf).unwrap();
             let ents = xrt.val().ents();

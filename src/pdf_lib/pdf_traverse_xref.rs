@@ -129,7 +129,22 @@ fn parse_xref_stream(
         );
         */
         let content = s.stream().val();
-        let mut xref_buf = ParseBuffer::new_view(pb, content.start(), content.size());
+        let mut vxf = RestrictView::new(content.start(), content.size());
+        let xref_buf = vxf.transform(pb);
+        if let Err(e) = xref_buf {
+            ta3_log!(
+                Level::Info,
+                fi.file_offset(pb.get_cursor()),
+                "Cannot create view for xref stream (offset:{}, size {}) in {} at file-offset {}: {:?}",
+                content.start(),
+                content.size(),
+                fi.path().display(),
+                fi.file_offset(e.start()),
+                e.val()
+            );
+            return None
+        }
+        let mut xref_buf = xref_buf.unwrap();
         let mut xp = XrefStreamP::new(ctxt.is_encrypted(), s);
         let xref_stm = xp.parse(&mut xref_buf);
         if let Err(e) = xref_stm {
@@ -630,7 +645,22 @@ fn parse_objects(
 
         if let PDFObjT::Stream(ref s) = obj.val() {
             let content = s.stream().val();
-            let mut obj_buf = ParseBuffer::new_view(pb, content.start(), content.size());
+            let mut vxf = RestrictView::new(content.start(), content.size());
+            let obj_buf = vxf.transform(pb);
+            if let Err(e) = obj_buf {
+                ta3_log!(
+                    Level::Info,
+                    fi.file_offset(pb.get_cursor()),
+                    "Cannot create view for xref stream (offset:{}, size {}) in {} at file-offset {}: {:?}",
+                    content.start(),
+                    content.size(),
+                    fi.path().display(),
+                    fi.file_offset(e.start()),
+                    e.val()
+                );
+                continue
+            }
+            let mut obj_buf = obj_buf.unwrap();
             let mut op = ObjStreamP::new(ctxt, s);
             let obj_stm = op.parse(&mut obj_buf);
             if let Err(e) = obj_stm {

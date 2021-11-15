@@ -350,7 +350,7 @@ impl ParseBuffer {
     // Creates a subset view of the specified size from the specified
     // offset.  The cursor is set to point to the beginning of the
     // view.
-    pub fn new_view(buf: &dyn ParseBufferT, start: usize, size: usize) -> ParseBuffer {
+    pub(super) fn new_view(buf: &dyn ParseBufferT, start: usize, size: usize) -> ParseBuffer {
         assert!(start + size <= buf.size());
         ParseBuffer {
             buf:   buf.rc_buf(),
