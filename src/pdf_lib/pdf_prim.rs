@@ -20,6 +20,7 @@
 
 use std::collections::HashSet;
 use std::convert::TryFrom;
+use std::str;
 
 use super::super::pcore::parsebuffer::{
     locate_value, ErrorKind, LocatedVal, ParseBufferT, ParseResult, ParsleyParser,
@@ -455,7 +456,23 @@ impl ParsleyParser for RawLiteralString {
         let mut depth = 1;
 
         let mut v = Vec::new();
+        let mut digit: Vec<u8> = vec![];
+        /*
+        Allowed escape sequences are the following:
+        1. \n
+        2. \r
+        3. \t
+        4. \b
+        5. \f
+        6. \(
+        7. \)
+        8. \\
+        9. \ddd - octal digits
+        If a \ appears, one of these patterns need to match
+        */
+        //println!("{:?}", str::from_utf8(buf.buf()));
         loop {
+            //let bytes = buf.parse_bytes_until(b"()\\")?;
             let bytes = buf.parse_bytes_until(b"()\\")?;
             match buf.peek() {
                 Some(40) => {
@@ -1399,17 +1416,17 @@ mod test_pdf_prim {
     fn raw_lit_string_escaped_escapes() {
         let mut lit = RawLiteralString;
 
-        let v = Vec::from("(1a\\\\\\(90\\\\) ".as_bytes());
+        let v = Vec::from("(\t1a\\\\\\(90\\\\) ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         assert_eq!(
             lit.parse(&mut pb),
             Ok(LocatedVal::new(
-                Vec::from("1a\\\\\\(90\\\\".as_bytes()),
+                Vec::from("\t1a\\\\\\(90\\\\".as_bytes()),
                 0,
                 10
             ))
         );
-        assert_eq!(pb.get_cursor(), 12);
+        assert_eq!(pb.get_cursor(), 13);
 
         let v = Vec::from("(1a90\\\\) ".as_bytes());
         let mut pb = ParseBuffer::new(v);
@@ -1430,6 +1447,35 @@ mod test_pdf_prim {
             ))
         );
         assert_eq!(pb.get_cursor(), 12);
+    }
+
+    #[test]
+    fn raw_lit_string_date() {
+        let mut lit = RawLiteralString;
+
+        let v = Vec::from("(D\\07220140821101054)".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(
+            lit.parse(&mut pb),
+            Ok(LocatedVal::new(
+                Vec::from("D\\07220140821101054".as_bytes()),
+                0,
+                10
+            ))
+        );
+        assert_eq!(pb.get_cursor(), 21);
+
+        let v = Vec::from("(D\\07220141021133240\\05505\\04700\\047)".as_bytes());
+        let mut pb = ParseBuffer::new(v);
+        assert_eq!(
+            lit.parse(&mut pb),
+            Ok(LocatedVal::new(
+                Vec::from("D\\07220141021133240\\05505\\04700\\047".as_bytes()),
+                0,
+                10
+            ))
+        );
+        assert_eq!(pb.get_cursor(), 37);
     }
 
     #[test]
