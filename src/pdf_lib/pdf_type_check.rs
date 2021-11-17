@@ -681,7 +681,7 @@ pub fn check_type(
         // reset for the next check.
         result = None;
 
-        //println!("\n\n {:?}\n\n against {:?}\n\n", o.val(), c);
+        // println!("\n\n {:?}\n\n against {:?}\n\n", o.val(), c);
 
         match (o.val(), c.typ(), c.indirect()) {
             // Indirects are best handled first.

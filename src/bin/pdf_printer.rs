@@ -301,8 +301,9 @@ fn type_check_file(
     if let Some(err) = check_type(&ctxt, &tctx, Rc::clone(root_obj), typ) {
         exit_log!(
             fi.file_offset(err.loc_start()),
-            "Type Check Error: {:?}",
-            err.val()
+            "Type Check Error: {:?}, Producer: {:?}",
+            err.val(),
+            producer,
         );
     }
 }
@@ -323,7 +324,6 @@ fn file_extract_text(
             dom
         },
         Err(e) => {
-            //exit_log!(e.loc_start(), "Page DOM error: {:?}", e.val()),
             ta3_log!(Level::Warn, e.loc_start(), "Page DOM error: {:?}", e.val());
             process::exit(1);
         },
@@ -394,14 +394,7 @@ fn file_extract_text(
                         _ => {
                             exit_log!(0, " error parsing content in page {:?}: {:?}", pid, e);
                         },
-                    }, /*
-                       ta3_log!(
-                           Level::Warn,
-                           0,
-                           " error parsing content in page {:?}: {:?}",
-                           pid,
-                           e
-                       ),*/
+                    },
                 }
             },
             PageKid::Node(_n) => {

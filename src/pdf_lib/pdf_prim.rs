@@ -457,16 +457,7 @@ impl ParsleyParser for RawLiteralString {
 
         let mut v = Vec::new();
         /*
-        Allowed escape sequences are the following:
-        1. \n
-        2. \r
-        3. \t
-        4. \b
-        5. \f
-        6. \(
-        7. \)
-        8. \\
-        9. \ddd - octal digits
+        \ddd - octal digits
         If a \ appears, one of these patterns need to match
         */
         loop {
