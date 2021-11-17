@@ -18,10 +18,13 @@
 
 use binascii::hex2bin;
 use flate2::write::ZlibDecoder;
+use libflate::zlib;
 use lzw::{Decoder, DecoderEarlyChange, LsbReader};
 use std::io::Write;
+use std::io::{Cursor, Read};
 use std::num::Wrapping;
 use std::panic;
+use std::str;
 
 use super::super::pcore::parsebuffer::{
     locate_value, ErrorKind, Location, ParseBuffer, ParseBufferT,
@@ -82,7 +85,7 @@ impl BufferTransformT for FlateDecode<'_> {
             })
             .unwrap_or(1);
 
-        let mut decoder = ZlibDecoder::new(Vec::new());
+        //let mut decoder = ZlibDecoder::new(Vec::new());
 
         // PDF streams can have bytes trailing the filter content, so
         // write_all() could cause spurious errors due to the trailing
@@ -90,27 +93,36 @@ impl BufferTransformT for FlateDecode<'_> {
         // an internal consuming loop, we could rely on it to consume
         // all relevant bytes in a single call.
 
-        if let Err(e) = decoder.write(buf.buf()) {
-            let err = ErrorKind::TransformError(format!("flatedecode write error: {}", e));
-            let loc = buf.get_location();
-            return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
-        };
+        //if let Err(e) = decoder.write(buf.buf()) {
+        //let err = ErrorKind::TransformError(format!("flatedecode write error: {}",
+        // e)); let loc = buf.get_location();
+        //return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+        //};
         // otherwise, all bytes were consumed.
 
-        match decoder.finish() {
+        let mut decoder = zlib::Decoder::new(buf.buf());
+
+        //println!("Using deflate {:?} {:?}", decoded_data.len(),
+        // str::from_utf8(&decoded_data));
+        match &mut decoder {
             Err(e) => {
                 let err = ErrorKind::TransformError(format!("flatedecode finish error: {}", e));
                 let loc = buf.get_location();
                 Err(locate_value(err, loc.loc_start(), loc.loc_end()))
             },
-            Ok(decoded) => flate_lzw_filter(
-                decoded,
-                &buf.get_location(),
-                predictor as usize,
-                colors as usize,
-                columns as usize,
-                bitspercolumn as usize,
-            ),
+            Ok(decoded) => {
+                let mut decoded_data = Vec::new();
+                decoded.read_to_end(&mut decoded_data).unwrap();
+                //println!("using flate {:?}", str::from_utf8(&decoded_data));
+                flate_lzw_filter(
+                    decoded_data,
+                    &buf.get_location(),
+                    predictor as usize,
+                    colors as usize,
+                    columns as usize,
+                    bitspercolumn as usize,
+                )
+            },
         }
     }
 }
