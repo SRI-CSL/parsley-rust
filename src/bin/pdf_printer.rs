@@ -244,56 +244,48 @@ fn dump_file(fi: &FileInfo, ctxt: &mut PDFObjContext, root_id: ObjectId) {
     dump_root(fi, ctxt, root_obj);
 }
 
+fn chk_info(fi: &FileInfo, ctxt: &mut PDFObjContext, info_id: ObjectId) -> Option<String> {
+    match ctxt.lookup_obj(info_id) {
+        Some(obj) => {
+            let producer: Option<String> = match obj.val() {
+                PDFObjT::Dict(d) => d
+                    .get("Producer".as_bytes())
+                    .map_or(None, |a| match a.val() {
+                        PDFObjT::String(string) => {
+                            str::from_utf8(string).map_or(None, |prod| Some(prod.to_string()))
+                        },
+                        _ => None,
+                    }),
+                _ => None,
+            };
+            let mut tctx = TypeCheckContext::new();
+            let typ = info_type(&mut tctx);
+            if let Some(err) = check_type(&ctxt, &tctx, Rc::clone(obj), typ) {
+                ta3_log!(
+                    Level::Warn,
+                    fi.file_offset(err.loc_start()),
+                    "Info Type Check Error: {:?}, Producer: {:?}",
+                    err.val(),
+                    producer,
+                );
+            }
+            producer
+        },
+        None => {
+            ta3_log!(Level::Warn, 0, "Info object {:?} not found!", info_id);
+            None
+        },
+    }
+}
+
 fn type_check_file(
     fi: &FileInfo, ctxt: &mut PDFObjContext, root_id: ObjectId, info_id: Option<ObjectId>,
 ) {
+    let producer = info_id.map_or(None, |id| chk_info(fi, ctxt, id));
+
     let root_obj: &Rc<LocatedVal<PDFObjT>> = match ctxt.lookup_obj(root_id) {
         Some(obj) => obj,
         None => exit_log!(0, "Root object {:?} not found!", root_id),
-    };
-    let mut producer: Option<String> = None;
-    match info_id {
-        Some(i_id) => {
-            match ctxt.lookup_obj(i_id) {
-                Some(obj) => {
-                    let o1 = Rc::clone(obj);
-                    match o1.val() {
-                        PDFObjT::Dict(d) => {
-                            match d.get("Producer".as_bytes()) {
-                                Some(a) => {
-                                    match a.val() {
-                                        PDFObjT::String(string) => {
-                                            match str::from_utf8(string) {
-                                                Ok(prod) => {
-                                                    producer = Some(prod.to_string());
-                                                },
-                                                _ => {},
-                                            };
-                                        },
-                                        _ => {},
-                                    };
-                                },
-                                _ => {},
-                            };
-                        },
-                        _ => {},
-                    };
-                    let mut tctx = TypeCheckContext::new();
-                    let typ = info_type(&mut tctx);
-                    if let Some(err) = check_type(&ctxt, &tctx, Rc::clone(obj), typ) {
-                        ta3_log!(
-                            Level::Warn,
-                            fi.file_offset(err.loc_start()),
-                            "Info Type Check Error: {:?}, Producer: {:?}",
-                            err.val(),
-                            producer,
-                        );
-                    }
-                },
-                None => ta3_log!(Level::Warn, 0, "Info object {:?} not found!", info_id),
-            };
-        },
-        None => {},
     };
 
     let mut tctx = TypeCheckContext::new();
