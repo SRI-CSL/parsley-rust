@@ -525,7 +525,7 @@ fn main() {
     let path = std::env::current_dir();
     let path = path.unwrap();
     afl::fuzz!(|data: &[u8]| {
-        let (fi, mut ctxt, root_id) = parse_data(&path, data);
-        process_file(&fi, &mut ctxt, root_id, &mut None);
+        let (fi, mut ctxt, root_id, info_id) = parse_data(&path, data);
+        process_file(&fi, &mut ctxt, root_id, info_id, &mut None);
     });
 }
