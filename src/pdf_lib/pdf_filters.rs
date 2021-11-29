@@ -92,15 +92,31 @@ impl BufferTransformT for FlateDecode<'_> {
             },
             Ok(decoded) => {
                 let mut decoded_data = Vec::new();
-                decoded.read_to_end(&mut decoded_data).unwrap();
-                flate_lzw_filter(
-                    decoded_data,
-                    &buf.get_location(),
-                    predictor as usize,
-                    colors as usize,
-                    columns as usize,
-                    bitspercolumn as usize,
-                )
+                let decoded1 = decoded.read_to_end(&mut decoded_data);
+                if decoded1.is_ok() {
+                    flate_lzw_filter(
+                        decoded_data,
+                        &buf.get_location(),
+                        predictor as usize,
+                        colors as usize,
+                        columns as usize,
+                        bitspercolumn as usize,
+                    )
+                } else if decoded1.is_err() {
+                    let err = ErrorKind::TransformError(format!(
+                        "flatedecode finish error: {:?}",
+                        decoded1
+                    ));
+                    let loc = buf.get_location();
+                    Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+                } else {
+                    let err = ErrorKind::TransformError(format!(
+                        "flatedecode finish error: {:?}",
+                        decoded1
+                    ));
+                    let loc = buf.get_location();
+                    Err(locate_value(err, loc.loc_start(), loc.loc_end()))
+                }
             },
         }
     }
