@@ -100,11 +100,7 @@ impl BufferTransformT for FlateDecode<'_> {
             Ok(decoded) => {
                 let prev_hook = panic::take_hook();
                 panic::set_hook(Box::new(|_info| {
-                    ta3_log!(
-                        Level::Error,
-                        0,
-                        "flatedecode huffman error: {:?}", _info
-                    );
+                    ta3_log!(Level::Error, 0, "flatedecode huffman error: {:?}", _info);
                     ()
                 }));
 
