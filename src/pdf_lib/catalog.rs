@@ -429,13 +429,6 @@ mod test_name_tree {
         /CS1 172 0 R
         >>
         /Font <<
-        /TT0 180 0 R
-        /TT1 184 0 R
-        /TT2 188 0 R
-        /TT3 1884 0 R
-        /TT4 192 0 R
-        /C2_0 207 0 R
-        /C2_1 2021 0 R
         >>
         /ProcSet [ /PDF /Text /ImageC ]
         /ExtGState <<

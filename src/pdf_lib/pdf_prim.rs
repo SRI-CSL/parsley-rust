@@ -1496,7 +1496,7 @@ mod test_pdf_prim {
         assert_eq!(
             lit.parse(&mut pb),
             Ok(LocatedVal::new(
-                Vec::from("D\\07220140821101054".as_bytes()),
+                Vec::from("D:20140821101054".as_bytes()),
                 0,
                 10
             ))
@@ -1508,7 +1508,7 @@ mod test_pdf_prim {
         assert_eq!(
             lit.parse(&mut pb),
             Ok(LocatedVal::new(
-                Vec::from("D\\07220141021133240\\05505\\04700\\047".as_bytes()),
+                Vec::from("D:20141021133240-05'00'".as_bytes()),
                 0,
                 10
             ))

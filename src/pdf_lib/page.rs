@@ -331,7 +331,7 @@ mod test_page {
         let _content = parse_pdf_indirect_obj(&mut ctxt, &mut pb).unwrap();
 
         // parse page object
-        let v = Vec::from("<</Type /Page /Parent 4 0 R /MediaBox [0 0 612 792] /Resources  <</Font <</F3 7 0 R /F5 9 0 R /F7 11 0 R >> >>  /Contents 12 0 R /Annots [23 0 R 24 0 R ]>> ".as_bytes());
+        let v = Vec::from("<</Type /Page /Parent 4 0 R /MediaBox [0 0 612 792] /Resources  <</Font << >> >>  /Contents 12 0 R /Annots [23 0 R 24 0 R ]>> ".as_bytes());
         let mut pb = ParseBuffer::new(v);
         let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
 
@@ -445,13 +445,6 @@ mod test_page {
         /CS1 172 0 R
         >>
         /Font <<
-        /TT0 180 0 R
-        /TT1 184 0 R
-        /TT2 188 0 R
-        /TT3 1884 0 R
-        /TT4 192 0 R
-        /C2_0 207 0 R
-        /C2_1 2021 0 R
         >>
         /ProcSet [ /PDF /Text /ImageC ]
         /ExtGState <<

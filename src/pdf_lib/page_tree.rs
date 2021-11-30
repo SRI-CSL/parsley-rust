@@ -164,7 +164,6 @@ mod test_page_tree {
         /Annots [7 0 R 8 0 R 9 0 R 10 0 R 11 0 R 12 0 R]
         /Resources <<
         /Font <<
-        /PLSIQB+Arial-BoldMT 13 0 R
         >>
 
         /XObject <<
@@ -228,7 +227,6 @@ mod test_page_tree {
         /Annots [7 0 R 8 0 R 9 0 R 10 0 R 11 0 R 12 0 R]
         /Resources <<
         /Font <<
-        /PLSIQB+Arial-BoldMT 13 0 R
         >>
 
         /XObject <<
@@ -293,7 +291,6 @@ mod test_page_tree {
         /Annots [7 0 R 8 0 R 9 0 R 10 0 R 11 0 R 12 0 R]
         /Resources <<
         /Font <<
-        /PLSIQB+Arial-BoldMT 13 0 R
         >>
 
         /XObject <<

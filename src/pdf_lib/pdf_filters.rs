@@ -29,6 +29,13 @@ use super::super::pcore::parsebuffer::{
 use super::super::pcore::transforms::{BufferTransformT, TransformResult};
 use super::super::pdf_lib::pdf_obj::DictT;
 use super::super::pdf_lib::pdf_obj::PDFObjT;
+use log::{log, Level};
+
+macro_rules! ta3_log {
+    ($lvl:expr, $pos:expr, $($arg:tt)+) => ({
+        log!($lvl, "at {:>10} ({:#x}) - {}", $pos, $pos, format_args!($($arg)+))
+    })
+}
 
 pub struct FlateDecode<'a> {
     options: &'a Option<&'a DictT>,
@@ -91,8 +98,19 @@ impl BufferTransformT for FlateDecode<'_> {
                 Err(locate_value(err, loc.loc_start(), loc.loc_end()))
             },
             Ok(decoded) => {
+                let prev_hook = panic::take_hook();
+                panic::set_hook(Box::new(|_info| {
+                    ta3_log!(
+                        Level::Error,
+                        0,
+                        "flatedecode huffman error: {:?}", _info
+                    );
+                    ()
+                }));
+
                 let mut decoded_data = Vec::new();
                 let decoded1 = decoded.read_to_end(&mut decoded_data);
+                panic::set_hook(prev_hook);
                 if decoded1.is_ok() {
                     flate_lzw_filter(
                         decoded_data,
