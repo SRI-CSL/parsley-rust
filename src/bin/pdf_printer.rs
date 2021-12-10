@@ -317,7 +317,7 @@ fn file_extract_text(
         },
         Err(e) => {
             ta3_log!(Level::Warn, e.loc_start(), "Page DOM error: {:?}", e.val());
-            process::exit(1);
+            process::exit(0);
         },
     };
     // We will consider a file as having text if it has a non-symbolic
