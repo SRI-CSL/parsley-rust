@@ -49,6 +49,7 @@ use parsley_rust::pdf_lib::pdf_content_streams::{TextExtractor, TextToken};
 use parsley_rust::pdf_lib::pdf_obj::{DictKey, DictT, ObjectId, PDFObjContext, PDFObjT};
 use parsley_rust::pdf_lib::pdf_page_dom::Resources;
 use parsley_rust::pdf_lib::pdf_page_dom::{to_page_dom, FeaturePresence, PageKid};
+use parsley_rust::pdf_lib::pdf_prim::NameT;
 use parsley_rust::pdf_lib::pdf_streams::decode_stream;
 use parsley_rust::pdf_lib::pdf_traverse_xref::{parse_file, FileInfo};
 use parsley_rust::pdf_lib::pdf_type_check::{check_type, TypeCheckContext};
@@ -193,6 +194,46 @@ fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFOb
     }
 }
 
+fn reducer_replace_pagemode(
+    mut root_dict: BTreeMap<DictKey, Rc<LocatedVal<PDFObjT>>>,
+) -> BTreeMap<DictKey, Rc<LocatedVal<PDFObjT>>> {
+    // Extract the Lang key
+    let pagemodekey = DictKey::new("PageMode".as_bytes().to_vec());
+    let s = root_dict.remove(&pagemodekey);
+    if s.is_some() {
+        let unwrapped_field = s.unwrap();
+        let val = unwrapped_field.val();
+        let start = unwrapped_field.start();
+        let end = unwrapped_field.end();
+        match val {
+            PDFObjT::Name(v) => {
+                let options = [
+                    "UseNone".as_bytes(),
+                    "UseOutlines".as_bytes(),
+                    "UseThumbs".as_bytes(),
+                    "FullScreen".as_bytes(),
+                    "UseOC".as_bytes(),
+                    "UseAttachments".as_bytes(),
+                ];
+                if options.contains(&v.val()) {
+                    root_dict.insert(pagemodekey, unwrapped_field);
+                } else {
+                    root_dict.insert(
+                        pagemodekey,
+                        Rc::new(LocatedVal::new(
+                            PDFObjT::Name(NameT::new("UseNone".as_bytes().to_vec())),
+                            start,
+                            end,
+                        )),
+                    );
+                }
+            },
+            _ => {},
+        }
+    }
+    root_dict
+}
+
 fn reducer_remove_lang(
     mut root_dict: BTreeMap<DictKey, Rc<LocatedVal<PDFObjT>>>,
 ) -> BTreeMap<DictKey, Rc<LocatedVal<PDFObjT>>> {
@@ -238,6 +279,7 @@ fn reduce(
             let m = d.clone();
             let map = m.map().clone();
             new_root_map = reducer_remove_lang(map);
+            new_root_map = reducer_replace_pagemode(new_root_map);
             // Add another reducers on the Catalog here
         },
         _ => {},
