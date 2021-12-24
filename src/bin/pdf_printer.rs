@@ -27,7 +27,7 @@ extern crate serde_json;
 #[cfg(feature = "kuduafl")]
 extern crate afl;
 
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fs;
 use std::io::Write;
 use std::path::Path;
@@ -46,7 +46,7 @@ use parsley_rust::pcore::parsebuffer::{
 };
 use parsley_rust::pdf_lib::catalog::{catalog_type, info_type};
 use parsley_rust::pdf_lib::pdf_content_streams::{TextExtractor, TextToken};
-use parsley_rust::pdf_lib::pdf_obj::{ObjectId, PDFObjContext, PDFObjT};
+use parsley_rust::pdf_lib::pdf_obj::{DictKey, DictT, ObjectId, PDFObjContext, PDFObjT};
 use parsley_rust::pdf_lib::pdf_page_dom::Resources;
 use parsley_rust::pdf_lib::pdf_page_dom::{to_page_dom, FeaturePresence, PageKid};
 use parsley_rust::pdf_lib::pdf_streams::decode_stream;
@@ -193,6 +193,63 @@ fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFOb
     }
 }
 
+fn reducer_remove_lang(
+    mut root_dict: BTreeMap<DictKey, Rc<LocatedVal<PDFObjT>>>,
+) -> BTreeMap<DictKey, Rc<LocatedVal<PDFObjT>>> {
+    // Extract the Lang key
+    let langkey = DictKey::new("Lang".as_bytes().to_vec());
+    let s = root_dict.remove(&langkey);
+    if s.is_some() {
+        let unwrapped_field = s.unwrap();
+        let val = unwrapped_field.val();
+        match val {
+            PDFObjT::String(_) => {
+                root_dict.insert(langkey, unwrapped_field);
+            },
+            _ => {},
+        }
+    }
+    root_dict
+}
+
+/* Reduce a root_obj: convert certain objects to the correct types if incorrect
+   List of transformations
+   1. If Lang key is a name object, convert it to a string
+   2. If type key is missing in an object, and subtype is in a list, then add type key
+   3. If PageMode or PageLayout not in list, change to the default value
+   4. Only return the object ids and objects that have changed, including the root
+*/
+
+fn reduce(
+    root_obj: &Rc<LocatedVal<PDFObjT>>, object_ids: Vec<ObjectId>,
+    objects: Vec<Rc<LocatedVal<PDFObjT>>>,
+) -> (
+    Rc<LocatedVal<PDFObjT>>,
+    Vec<ObjectId>,
+    Vec<Rc<LocatedVal<PDFObjT>>>,
+) {
+    let start = root_obj.start();
+    let end = root_obj.end();
+    let unwrapped_root = root_obj.val().clone();
+    let mut new_root_map: BTreeMap<DictKey, Rc<LocatedVal<PDFObjT>>> = BTreeMap::new();
+    // Extract the BTreeMap from the root_obj and apply the transformations
+    match unwrapped_root {
+        PDFObjT::Dict(d) => {
+            let m = d.clone();
+            let map = m.map().clone();
+            new_root_map = reducer_remove_lang(map);
+            // Add another reducers on the Catalog here
+        },
+        _ => {},
+    }
+    let root_obj = Rc::new(LocatedVal::new(
+        PDFObjT::Dict(DictT::new(new_root_map)),
+        start,
+        end,
+    ));
+    (root_obj, object_ids, objects)
+}
+
 fn extract_text(
     ctxt: &mut PDFObjContext, pid: &ObjectId, _r: &Resources, buf: &mut ParseBuffer,
     dump: &mut Option<fs::File>,
@@ -288,15 +345,17 @@ fn type_check_file(
         None => exit_log!(0, "Root object {:?} not found!", root_id),
     };
 
+    let (object_ids, objects) = ctxt.defns();
+    let (root_obj, object_ids, objects) = reduce(root_obj, object_ids, objects);
     let mut tctx = TypeCheckContext::new();
     let typ = catalog_type(&mut tctx);
-    if let Some(err) = check_type(&ctxt, &tctx, Rc::clone(root_obj), typ) {
+    if let Some(err) = check_type(&ctxt, &tctx, Rc::clone(&root_obj), typ) {
         exit_log!(
             fi.file_offset(err.loc_start()),
             "Type Check Error: {:?}, Producer: {:?}",
             err.val(),
             producer,
-        );
+        )
     }
 }
 

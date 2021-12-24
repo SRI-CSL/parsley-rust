@@ -91,6 +91,16 @@ impl PDFObjContext {
         self.cur_depth -= 1;
     }
     pub fn depth(&self) -> usize { self.cur_depth }
+    pub fn defns(&self) -> (Vec<ObjectId>, Vec<Rc<LocatedVal<PDFObjT>>>) {
+        let mut keys: Vec<ObjectId> = vec![];
+        let mut values: Vec<Rc<LocatedVal<PDFObjT>>> = vec![];
+        for (key, value) in &self.defns {
+            let c = Rc::clone(value);
+            keys.push(*key);
+            values.push(c);
+        }
+        (keys, values)
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
