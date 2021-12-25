@@ -69,6 +69,10 @@ impl PDFObjContext {
             eol_after_stream_content: false, // not strict
         }
     }
+    pub fn insert(&mut self, obj_id: ObjectId, obj: Rc<LocatedVal<PDFObjT>>) {
+        self.defns.remove(&obj_id);
+        self.defns.insert(obj_id, obj);
+    }
     pub fn register_obj(&mut self, p: &LocatedVal<IndirectT>) -> Option<Rc<LocatedVal<PDFObjT>>> {
         self.defns
             .insert((p.val().num(), p.val().gen()), Rc::clone(p.val().obj()))

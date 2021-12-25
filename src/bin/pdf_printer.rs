@@ -46,10 +46,10 @@ use parsley_rust::pcore::parsebuffer::{
 };
 use parsley_rust::pdf_lib::catalog::{catalog_type, info_type};
 use parsley_rust::pdf_lib::pdf_content_streams::{TextExtractor, TextToken};
-use parsley_rust::pdf_lib::pdf_obj::{DictKey, DictT, ObjectId, PDFObjContext, PDFObjT};
+use parsley_rust::pdf_lib::pdf_obj::{ArrayT, DictKey, DictT, ObjectId, PDFObjContext, PDFObjT};
 use parsley_rust::pdf_lib::pdf_page_dom::Resources;
 use parsley_rust::pdf_lib::pdf_page_dom::{to_page_dom, FeaturePresence, PageKid};
-use parsley_rust::pdf_lib::pdf_prim::NameT;
+use parsley_rust::pdf_lib::pdf_prim::{IntegerT, NameT};
 use parsley_rust::pdf_lib::pdf_streams::decode_stream;
 use parsley_rust::pdf_lib::pdf_traverse_xref::{parse_file, FileInfo};
 use parsley_rust::pdf_lib::pdf_type_check::{check_type, TypeCheckContext};
@@ -253,6 +253,187 @@ fn reducer_remove_lang(
     root_dict
 }
 
+fn reducer_pages(
+    object_ids: Vec<ObjectId>, objects: Vec<Rc<LocatedVal<PDFObjT>>>,
+) -> (Vec<ObjectId>, Vec<Rc<LocatedVal<PDFObjT>>>) {
+    let mut robject_ids: Vec<ObjectId> = vec![];
+    let mut robjects: Vec<Rc<LocatedVal<PDFObjT>>> = vec![];
+    for id in 0 .. object_ids.len() {
+        let curpage = objects[id].val().clone();
+        let start = objects[id].start();
+        let end = objects[id].end();
+        match curpage {
+            PDFObjT::Dict(d) => {
+                let pagekey = DictKey::new("Type".as_bytes().to_vec());
+                let countkey = DictKey::new("Count".as_bytes().to_vec());
+                let countkeycopy = DictKey::new("Count".as_bytes().to_vec());
+                let kidskey = DictKey::new("Kids".as_bytes().to_vec());
+                let m = d.clone();
+                let mut map = m.map().clone();
+                if map.get(&pagekey).is_some() {
+                    match map.get(&pagekey).unwrap().val() {
+                        PDFObjT::Name(n) => {
+                            if n.val() == "Pages".as_bytes() {
+                                let count = map.remove(&countkey);
+                                let kids = map.remove(&kidskey);
+                                // If kids is absent, we must rewrite the count key anyway
+                                if kids.is_none() {
+                                    map.insert(
+                                        countkey,
+                                        Rc::new(LocatedVal::new(
+                                            PDFObjT::Integer(IntegerT::new(0)),
+                                            start,
+                                            end,
+                                        )),
+                                    );
+                                    map.insert(
+                                        kidskey,
+                                        Rc::new(LocatedVal::new(
+                                            PDFObjT::Array(ArrayT::new([].to_vec())),
+                                            start,
+                                            end,
+                                        )),
+                                    );
+                                    robject_ids.push(object_ids[id]);
+                                    robjects.push(Rc::new(LocatedVal::new(
+                                        PDFObjT::Dict(DictT::new(map)),
+                                        start,
+                                        end,
+                                    )));
+                                }
+                                // If count is absent and kids is there, check the length of the
+                                // array and insert TODO: Maybe we
+                                // should make this a corrective method? Make sure both match?
+                                else if kids.is_some() && count.is_none() {
+                                    let ukidsarray = kids.unwrap();
+                                    let kidsarray = ukidsarray.val();
+                                    match kidsarray {
+                                        PDFObjT::Array(d) => {
+                                            map.insert(
+                                                countkeycopy,
+                                                Rc::new(LocatedVal::new(
+                                                    PDFObjT::Integer(IntegerT::new(
+                                                        d.objs().len() as i64
+                                                    )),
+                                                    start,
+                                                    end,
+                                                )),
+                                            );
+                                            map.insert(kidskey, ukidsarray);
+                                        },
+                                        _ => {},
+                                    }
+                                    robject_ids.push(object_ids[id]);
+                                    robjects.push(Rc::new(LocatedVal::new(
+                                        PDFObjT::Dict(DictT::new(map)),
+                                        start,
+                                        end,
+                                    )));
+                                }
+                            }
+                        },
+                        _ => {},
+                    }
+                // /Types key is missing, lets add it
+                } else if map.get(&countkey).is_some() || map.get(&kidskey).is_some() {
+                    map.insert(
+                        pagekey,
+                        Rc::new(LocatedVal::new(
+                            PDFObjT::Name(NameT::new("Pages".as_bytes().to_vec())),
+                            start,
+                            end,
+                        )),
+                    );
+                    let count = map.remove(&countkey);
+                    let kids = map.remove(&kidskey);
+                    if kids.is_none() {
+                        map.insert(
+                            countkey,
+                            Rc::new(LocatedVal::new(
+                                PDFObjT::Integer(IntegerT::new(0)),
+                                start,
+                                end,
+                            )),
+                        );
+                        map.insert(
+                            kidskey,
+                            Rc::new(LocatedVal::new(
+                                PDFObjT::Array(ArrayT::new([].to_vec())),
+                                start,
+                                end,
+                            )),
+                        );
+                    }
+                    // If count is absent and kids is there, check the length of the array and
+                    // insert TODO: Maybe we should make this a corrective
+                    // method? Make sure both match?
+                    else if kids.is_some() && count.is_none() {
+                        let ukidsarray = kids.unwrap();
+                        let kidsarray = ukidsarray.val();
+                        match kidsarray {
+                            PDFObjT::Array(d) => {
+                                map.insert(
+                                    countkeycopy,
+                                    Rc::new(LocatedVal::new(
+                                        PDFObjT::Integer(IntegerT::new(d.objs().len() as i64)),
+                                        start,
+                                        end,
+                                    )),
+                                );
+                                map.insert(kidskey, ukidsarray);
+                            },
+                            _ => {},
+                        }
+                    } else {
+                        map.insert(kidskey, kids.clone().unwrap());
+                        map.insert(countkey, count.clone().unwrap());
+                    }
+                    robject_ids.push(object_ids[id]);
+                    robjects.push(Rc::new(LocatedVal::new(
+                        PDFObjT::Dict(DictT::new(map)),
+                        start,
+                        end,
+                    )));
+                } else if map.get(&countkey).is_none() && map.get(&kidskey).is_none() {
+                    // Not sure about removing this && d.get_keys().len() == 0 {
+                    map.insert(
+                        pagekey,
+                        Rc::new(LocatedVal::new(
+                            PDFObjT::Name(NameT::new("Pages".as_bytes().to_vec())),
+                            start,
+                            end,
+                        )),
+                    );
+                    map.insert(
+                        kidskey,
+                        Rc::new(LocatedVal::new(
+                            PDFObjT::Array(ArrayT::new([].to_vec())),
+                            start,
+                            end,
+                        )),
+                    );
+                    map.insert(
+                        countkey,
+                        Rc::new(LocatedVal::new(
+                            PDFObjT::Integer(IntegerT::new(0)),
+                            start,
+                            end,
+                        )),
+                    );
+                    robject_ids.push(object_ids[id]);
+                    robjects.push(Rc::new(LocatedVal::new(
+                        PDFObjT::Dict(DictT::new(map)),
+                        start,
+                        end,
+                    )));
+                }
+            },
+            _ => {},
+        }
+    }
+    (robject_ids, robjects)
+}
+
 /* Reduce a root_obj: convert certain objects to the correct types if incorrect
    List of transformations
    1. If Lang key is a name object, convert it to a string
@@ -272,6 +453,8 @@ fn reduce(
     let start = root_obj.start();
     let end = root_obj.end();
     let unwrapped_root = root_obj.val().clone();
+    let mut return_objects: Vec<Rc<LocatedVal<PDFObjT>>> = vec![];
+    let mut return_object_ids: Vec<ObjectId> = vec![];
     let mut new_root_map: BTreeMap<DictKey, Rc<LocatedVal<PDFObjT>>> = BTreeMap::new();
     // Extract the BTreeMap from the root_obj and apply the transformations
     match unwrapped_root {
@@ -280,6 +463,9 @@ fn reduce(
             let map = m.map().clone();
             new_root_map = reducer_remove_lang(map);
             new_root_map = reducer_replace_pagemode(new_root_map);
+            let (mut robject_ids, mut robjects) = reducer_pages(object_ids, objects);
+            return_object_ids.append(&mut robject_ids);
+            return_objects.append(&mut robjects);
             // Add another reducers on the Catalog here
         },
         _ => {},
@@ -289,7 +475,7 @@ fn reduce(
         start,
         end,
     ));
-    (root_obj, object_ids, objects)
+    (root_obj, return_object_ids, return_objects)
 }
 
 fn extract_text(
@@ -389,6 +575,9 @@ fn type_check_file(
 
     let (object_ids, objects) = ctxt.defns();
     let (root_obj, object_ids, objects) = reduce(root_obj, object_ids, objects);
+    for id in 0 .. object_ids.len() {
+        ctxt.insert(object_ids[id], objects[id].clone());
+    }
     let mut tctx = TypeCheckContext::new();
     let typ = catalog_type(&mut tctx);
     if let Some(err) = check_type(&ctxt, &tctx, Rc::clone(&root_obj), typ) {
