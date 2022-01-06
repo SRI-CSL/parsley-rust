@@ -40,6 +40,7 @@ use log::{debug, error, log, Level, LevelFilter};
 
 use clap::{App, Arg};
 use serde_json::Value;
+use utf16string::{WStr, LE};
 
 use parsley_rust::pcore::parsebuffer::{
     ErrorKind, LocatedVal, Location, ParseBuffer, ParseResult, ParsleyParser, StreamBufferT,
@@ -563,6 +564,28 @@ fn chk_info(fi: &FileInfo, ctxt: &mut PDFObjContext, info_id: ObjectId) -> Optio
     }
 }
 
+fn serialize_dict(map: &BTreeMap<DictKey, Rc<LocatedVal<PDFObjT>>>) -> Vec<u8> {
+    let mut result: Vec<u8> = vec![];
+    let mut start = "<<".as_bytes().to_vec();
+    let mut end = ">>".as_bytes().to_vec();
+    let mut res: Vec<u8> = vec![];
+    result.append(&mut start);
+    for (key, value) in map {
+        let mut slash = "/".as_bytes().to_vec();
+        res.append(&mut slash);
+        res.append(&mut key.as_slice().to_vec());
+        let mut whitespace = " ".as_bytes().to_vec();
+        res.append(&mut whitespace);
+        let mut value_result = evaluate(value.val());
+        res.append(&mut value_result);
+        let mut whitespace = " ".as_bytes().to_vec();
+        res.append(&mut whitespace);
+        result.append(&mut res);
+    }
+    result.append(&mut end);
+    return result
+}
+
 fn serializer(object_ids: Vec<ObjectId>, objects: Vec<Rc<LocatedVal<PDFObjT>>>) {
     let mut ofile = fs::File::create("output.pdf");
     let mut filehandler = ofile.unwrap();
@@ -585,45 +608,43 @@ fn evaluate(obj: &PDFObjT) -> Vec<u8> {
     match obj {
         PDFObjT::Array(d) => {
             let mut start = "[".as_bytes().to_vec();
-            let mut end = "]".as_bytes().to_vec();
+            let mut end = " ]".as_bytes().to_vec();
             result.append(&mut start);
             for obj in d.objs() {
                 let mut whitespace = " ".as_bytes().to_vec();
                 let mut res = evaluate(obj.val());
-                result.append(&mut res);
                 result.append(&mut whitespace);
+                result.append(&mut res);
             }
             result.append(&mut end);
         },
         PDFObjT::Dict(d) => {
             let map = d.map();
-            let mut start = "<<".as_bytes().to_vec();
-            let mut end = ">>".as_bytes().to_vec();
-            let mut res: Vec<u8> = vec![];
-            result.append(&mut start);
-            for (key, value) in map {
-                let mut slash = "/".as_bytes().to_vec();
-                res.append(&mut slash);
-                res.append(&mut key.as_slice().to_vec());
-                let mut whitespace = " ".as_bytes().to_vec();
-                res.append(&mut whitespace);
-                let mut value_result = evaluate(value.val());
-                res.append(&mut value_result);
-                let mut whitespace = " ".as_bytes().to_vec();
-                res.append(&mut whitespace);
-                result.append(&mut res);
-            }
-            result.append(&mut end);
+            let mut res = serialize_dict(&map);
+            result.append(&mut res);
         },
         PDFObjT::Stream(d) => {
+            let mut start = "\x0astream\x0a".as_bytes().to_vec();
+            let mut end = "\x0aendstream".as_bytes().to_vec();
+            let stream_dict = d.dict().val().map();
+            let mut stream_result = serialize_dict(stream_dict);
+            result.append(&mut start);
+            result.append(&mut stream_result);
             println!("Stream {:?}", d);
+            result.append(&mut end);
         },
         PDFObjT::Reference(d) => {
             let mut res = format!("{:?} {:?} R", d.num(), d.gen()).as_bytes().to_vec();
             result.append(&mut res);
         },
         PDFObjT::Boolean(d) => {
-            println!("{:?}", d);
+            if *d {
+                let mut res = "true".as_bytes().to_vec();
+                result.append(&mut res);
+            } else {
+                let mut res = "false".as_bytes().to_vec();
+                result.append(&mut res);
+            }
         },
         PDFObjT::String(d) => match str::from_utf8(d) {
             Ok(x) => {
@@ -634,7 +655,16 @@ fn evaluate(obj: &PDFObjT) -> Vec<u8> {
                 result.append(&mut d1);
                 result.append(&mut end);
             },
-            Err(_) => {},
+            Err(_) => {
+                let mut s = "<".to_string();
+                for character in d {
+                    let f = format!("{:02X}", character);
+                    s.push_str(&f);
+                }
+                s.push_str(">");
+                let mut vec_s = s.as_bytes().to_vec();
+                result.append(&mut vec_s);
+            },
         },
         PDFObjT::Name(d) => {
             let mut res = "/".as_bytes().to_vec();
@@ -642,17 +672,18 @@ fn evaluate(obj: &PDFObjT) -> Vec<u8> {
             result.append(&mut res);
         },
         PDFObjT::Null(d) => {
-            println!("{:?}", d);
+            let mut res = "null".as_bytes().to_vec();
+            result.append(&mut res);
         },
         PDFObjT::Comment(d) => {
             println!("{:?}", d);
         },
         PDFObjT::Integer(d) => {
-            let mut res = format!("{:?} ", d.int_val()).as_bytes().to_vec();
+            let mut res = format!("{:?}", d.int_val()).as_bytes().to_vec();
             result.append(&mut res);
         },
         PDFObjT::Real(d) => {
-            let mut res = format!("{:?} ", d.val()).as_bytes().to_vec();
+            let mut res = format!("{:?}", d.val()).as_bytes().to_vec();
             result.append(&mut res);
         },
     }
