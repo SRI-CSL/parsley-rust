@@ -563,6 +563,104 @@ fn chk_info(fi: &FileInfo, ctxt: &mut PDFObjContext, info_id: ObjectId) -> Optio
     }
 }
 
+fn serializer(object_ids: Vec<ObjectId>, objects: Vec<Rc<LocatedVal<PDFObjT>>>) {
+    let mut ofile = fs::File::create("output.pdf");
+    let mut filehandler = ofile.unwrap();
+    filehandler.write("%PDF-2.0 ".as_bytes());
+    for id in 0 .. object_ids.len() {
+        let curobject = objects[id].clone();
+        let cur = curobject.val();
+        let objname = format!("{} {} obj\x0a", object_ids[id].0, object_ids[id].1);
+        filehandler.write(objname.as_bytes());
+        let g = generate(cur);
+        filehandler.write(&g);
+        //println!("{:?}", str::from_utf8(&g));
+        filehandler.write("\x0aendobj\x0a".as_bytes());
+    }
+    filehandler.write("\x0a%%EOF".as_bytes());
+}
+
+fn evaluate(obj: &PDFObjT) -> Vec<u8> {
+    let mut result: Vec<u8> = vec![];
+    match obj {
+        PDFObjT::Array(d) => {
+            let mut start = "[".as_bytes().to_vec();
+            let mut end = "]".as_bytes().to_vec();
+            result.append(&mut start);
+            for obj in d.objs() {
+                let mut whitespace = " ".as_bytes().to_vec();
+                let mut res = evaluate(obj.val());
+                result.append(&mut res);
+                result.append(&mut whitespace);
+            }
+            result.append(&mut end);
+        },
+        PDFObjT::Dict(d) => {
+            let map = d.map();
+            let mut start = "<<".as_bytes().to_vec();
+            let mut end = ">>".as_bytes().to_vec();
+            let mut res: Vec<u8> = vec![];
+            result.append(&mut start);
+            for (key, value) in map {
+                let mut slash = "/".as_bytes().to_vec();
+                res.append(&mut slash);
+                res.append(&mut key.as_slice().to_vec());
+                let mut whitespace = " ".as_bytes().to_vec();
+                res.append(&mut whitespace);
+                let mut value_result = evaluate(value.val());
+                res.append(&mut value_result);
+                let mut whitespace = " ".as_bytes().to_vec();
+                res.append(&mut whitespace);
+                result.append(&mut res);
+            }
+            result.append(&mut end);
+        },
+        PDFObjT::Stream(d) => {
+            println!("Stream {:?}", d);
+        },
+        PDFObjT::Reference(d) => {
+            let mut res = format!("{:?} {:?} R", d.num(), d.gen()).as_bytes().to_vec();
+            result.append(&mut res);
+        },
+        PDFObjT::Boolean(d) => {
+            println!("{:?}", d);
+        },
+        PDFObjT::String(d) => match str::from_utf8(d) {
+            Ok(x) => {
+                let mut start = "(".as_bytes().to_vec();
+                let mut end = ")".as_bytes().to_vec();
+                let mut d1 = x.as_bytes().to_vec();
+                result.append(&mut start);
+                result.append(&mut d1);
+                result.append(&mut end);
+            },
+            Err(_) => {},
+        },
+        PDFObjT::Name(d) => {
+            let mut res = "/".as_bytes().to_vec();
+            res.append(&mut d.normalize());
+            result.append(&mut res);
+        },
+        PDFObjT::Null(d) => {
+            println!("{:?}", d);
+        },
+        PDFObjT::Comment(d) => {
+            println!("{:?}", d);
+        },
+        PDFObjT::Integer(d) => {
+            let mut res = format!("{:?} ", d.int_val()).as_bytes().to_vec();
+            result.append(&mut res);
+        },
+        PDFObjT::Real(d) => {
+            let mut res = format!("{:?} ", d.val()).as_bytes().to_vec();
+            result.append(&mut res);
+        },
+    }
+    return result
+}
+
+fn generate(obj: &PDFObjT) -> Vec<u8> { return evaluate(obj) }
+
 fn type_check_file(
     fi: &FileInfo, ctxt: &mut PDFObjContext, root_id: ObjectId, info_id: Option<ObjectId>,
 ) {
@@ -575,6 +673,13 @@ fn type_check_file(
 
     let (object_ids, objects) = ctxt.defns();
     let (root_obj, object_ids, objects) = reduce(root_obj, object_ids, objects);
+    // Serialize output
+    let s_root_obj = Rc::clone(&root_obj);
+    let mut sobject_ids = object_ids.clone();
+    let mut sobjects = objects.clone();
+    sobject_ids.push(root_id);
+    sobjects.push(s_root_obj);
+    serializer(sobject_ids, sobjects);
     for id in 0 .. object_ids.len() {
         ctxt.insert(object_ids[id], objects[id].clone());
     }
