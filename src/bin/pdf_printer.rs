@@ -40,7 +40,6 @@ use log::{debug, error, log, Level, LevelFilter};
 
 use clap::{App, Arg};
 use serde_json::Value;
-use utf16string::{WStr, LE};
 
 use parsley_rust::pcore::parsebuffer::{
     ErrorKind, LocatedVal, Location, ParseBuffer, ParseResult, ParsleyParser, StreamBufferT,
@@ -428,8 +427,15 @@ fn reducer_pages(
                         end,
                     )));
                 }
+                if robject_ids.len() == 0 || robject_ids[robject_ids.len() - 1] != object_ids[id] {
+                    robject_ids.push(object_ids[id]);
+                    robjects.push(Rc::clone(&objects[id]))
+                }
             },
-            _ => {},
+            _ => {
+                robject_ids.push(object_ids[id]);
+                robjects.push(Rc::clone(&objects[id]));
+            },
         }
     }
     (robject_ids, robjects)
@@ -586,21 +592,61 @@ fn serialize_dict(map: &BTreeMap<DictKey, Rc<LocatedVal<PDFObjT>>>) -> Vec<u8> {
     return result
 }
 
-fn serializer(object_ids: Vec<ObjectId>, objects: Vec<Rc<LocatedVal<PDFObjT>>>) {
-    let mut ofile = fs::File::create("output.pdf");
+fn serializer(object_ids: Vec<ObjectId>, objects: Vec<Rc<LocatedVal<PDFObjT>>>, root_id: ObjectId) {
+    let ofile = fs::File::create("output.pdf");
+    let mut offset_list: Vec<u32> = vec![];
+    let mut offset_counter = 0;
+    let mut xrefs: Vec<u128> = vec![];
     let mut filehandler = ofile.unwrap();
-    filehandler.write("%PDF-2.0 ".as_bytes());
+    let mut xref_output: Vec<u8> = vec![];
+    match filehandler.write("%PDF-2.0\x0a".as_bytes()) {
+        Ok(d) => {
+            offset_counter = offset_counter + d;
+        },
+        Err(_) => {},
+    };
     for id in 0 .. object_ids.len() {
         let curobject = objects[id].clone();
+        offset_list.push(object_ids[id].0 as u32);
+        xrefs.push(offset_counter as u128);
         let cur = curobject.val();
+        let x_1 = format!("{} 1\x0a", object_ids[id].0);
+        let mut x_a1 = x_1.as_bytes().to_vec();
+        let x_2 = format!("{:010} {:05} n \x0a", offset_counter, object_ids[id].1);
+        let mut x_a2 = x_2.as_bytes().to_vec();
+        xref_output.append(&mut x_a1);
+        xref_output.append(&mut x_a2);
         let objname = format!("{} {} obj\x0a", object_ids[id].0, object_ids[id].1);
-        filehandler.write(objname.as_bytes());
+        match filehandler.write(objname.as_bytes()) {
+            Ok(d) => {
+                offset_counter = offset_counter + d;
+            },
+            Err(_) => {},
+        };
         let g = generate(cur);
-        filehandler.write(&g);
+        match filehandler.write(&g) {
+            Ok(d) => {
+                offset_counter = offset_counter + d;
+            },
+            Err(_) => {},
+        };
         //println!("{:?}", str::from_utf8(&g));
-        filehandler.write("\x0aendobj\x0a".as_bytes());
+        match filehandler.write("\x0aendobj\x0a".as_bytes()) {
+            Ok(d) => {
+                offset_counter = offset_counter + d;
+            },
+            Err(_) => {},
+        };
+        //println!("{:?} {:?}", xrefs, offset_list);
     }
-    filehandler.write("\x0a%%EOF".as_bytes());
+    filehandler.write("xref\x0a".as_bytes());
+    filehandler.write(&xref_output);
+    // Need to put trailer here
+    let trailer = format!("trailer << /Root {} {} R >> \x0a", root_id.0, root_id.1);
+    filehandler.write(trailer.as_bytes());
+    let startxref = format!("startxref\x0a{}\x0a", offset_counter);
+    filehandler.write(startxref.as_bytes());
+    filehandler.write("%%EOF\x0a".as_bytes());
 }
 
 fn evaluate(obj: &PDFObjT) -> Vec<u8> {
@@ -628,9 +674,10 @@ fn evaluate(obj: &PDFObjT) -> Vec<u8> {
             let mut end = "\x0aendstream".as_bytes().to_vec();
             let stream_dict = d.dict().val().map();
             let mut stream_result = serialize_dict(stream_dict);
-            result.append(&mut start);
             result.append(&mut stream_result);
-            println!("Stream {:?}", d);
+            result.append(&mut start);
+            let mut content = d.content().to_vec();
+            result.append(&mut content);
             result.append(&mut end);
         },
         PDFObjT::Reference(d) => {
@@ -671,12 +718,12 @@ fn evaluate(obj: &PDFObjT) -> Vec<u8> {
             res.append(&mut d.normalize());
             result.append(&mut res);
         },
-        PDFObjT::Null(d) => {
+        PDFObjT::Null(_) => {
             let mut res = "null".as_bytes().to_vec();
             result.append(&mut res);
         },
-        PDFObjT::Comment(d) => {
-            println!("{:?}", d);
+        PDFObjT::Comment(_) => {
+            //println!("{:?}", d);
         },
         PDFObjT::Integer(d) => {
             let mut res = format!("{:?}", d.int_val()).as_bytes().to_vec();
@@ -705,12 +752,10 @@ fn type_check_file(
     let (object_ids, objects) = ctxt.defns();
     let (root_obj, object_ids, objects) = reduce(root_obj, object_ids, objects);
     // Serialize output
-    let s_root_obj = Rc::clone(&root_obj);
-    let mut sobject_ids = object_ids.clone();
-    let mut sobjects = objects.clone();
-    sobject_ids.push(root_id);
-    sobjects.push(s_root_obj);
-    serializer(sobject_ids, sobjects);
+    // Made copies so we can copy it into another function
+    let sobject_ids = object_ids.clone();
+    let sobjects = objects.clone();
+    serializer(sobject_ids, sobjects, root_id);
     for id in 0 .. object_ids.len() {
         ctxt.insert(object_ids[id], objects[id].clone());
     }
