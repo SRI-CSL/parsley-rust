@@ -28,6 +28,7 @@ extern crate serde_json;
 extern crate afl;
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::env;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
@@ -39,6 +40,7 @@ use env_logger::Builder;
 use log::{debug, error, log, Level, LevelFilter};
 
 use clap::{App, Arg};
+use format_num::NumberFormat;
 use serde_json::Value;
 
 use parsley_rust::pcore::parsebuffer::{
@@ -385,8 +387,8 @@ fn reducer_pages(
                             _ => {},
                         }
                     } else {
-                        map.insert(kidskey, kids.clone().unwrap());
-                        map.insert(countkey, count.clone().unwrap());
+                        //map.insert(kidskey, kids.clone().unwrap());
+                        //map.insert(countkey, count.clone().unwrap());
                     }
                     robject_ids.push(object_ids[id]);
                     robjects.push(Rc::new(LocatedVal::new(
@@ -394,39 +396,40 @@ fn reducer_pages(
                         start,
                         end,
                     )));
-                } else if map.get(&countkey).is_none() && map.get(&kidskey).is_none() {
-                    // Not sure about removing this && d.get_keys().len() == 0 {
-                    map.insert(
-                        pagekey,
-                        Rc::new(LocatedVal::new(
-                            PDFObjT::Name(NameT::new("Pages".as_bytes().to_vec())),
-                            start,
-                            end,
-                        )),
-                    );
-                    map.insert(
-                        kidskey,
-                        Rc::new(LocatedVal::new(
-                            PDFObjT::Array(ArrayT::new([].to_vec())),
-                            start,
-                            end,
-                        )),
-                    );
-                    map.insert(
-                        countkey,
-                        Rc::new(LocatedVal::new(
-                            PDFObjT::Integer(IntegerT::new(0)),
-                            start,
-                            end,
-                        )),
-                    );
-                    robject_ids.push(object_ids[id]);
-                    robjects.push(Rc::new(LocatedVal::new(
-                        PDFObjT::Dict(DictT::new(map)),
-                        start,
-                        end,
-                    )));
                 }
+                //else if map.get(&countkey).is_none() && map.get(&kidskey).is_none() {
+                //// Not sure about removing this && d.get_keys().len() == 0 {
+                //map.insert(
+                //pagekey,
+                //Rc::new(LocatedVal::new(
+                //PDFObjT::Name(NameT::new("Pages".as_bytes().to_vec())),
+                //start,
+                //end,
+                //)),
+                //);
+                //map.insert(
+                //kidskey,
+                //Rc::new(LocatedVal::new(
+                //PDFObjT::Array(ArrayT::new([].to_vec())),
+                //start,
+                //end,
+                //)),
+                //);
+                //map.insert(
+                //countkey,
+                //Rc::new(LocatedVal::new(
+                //PDFObjT::Integer(IntegerT::new(0)),
+                //start,
+                //end,
+                //)),
+                //);
+                //robject_ids.push(object_ids[id]);
+                //robjects.push(Rc::new(LocatedVal::new(
+                //PDFObjT::Dict(DictT::new(map)),
+                //start,
+                //end,
+                //)));
+                //}
                 if robject_ids.len() == 0 || robject_ids[robject_ids.len() - 1] != object_ids[id] {
                     robject_ids.push(object_ids[id]);
                     robjects.push(Rc::clone(&objects[id]))
@@ -579,7 +582,30 @@ fn serialize_dict(map: &BTreeMap<DictKey, Rc<LocatedVal<PDFObjT>>>) -> Vec<u8> {
     for (key, value) in map {
         let mut slash = "/".as_bytes().to_vec();
         res.append(&mut slash);
-        res.append(&mut key.as_slice().to_vec());
+        let n = key.as_slice().to_vec();
+        for i in n {
+            if i <= 33
+                || i >= 126
+                || i == 40
+                || i == 41
+                || i == 47
+                || i == 60
+                || i == 62
+                || i == 14
+                || i == 37
+                || i == 123
+                || i == 125
+                || i == 91
+                || i == 93
+            {
+                let escaped = format!("#{:02X}", i);
+                let mut x = escaped.to_ascii_uppercase().as_bytes().to_vec();
+                res.append(&mut x);
+            } else {
+                res.push(i);
+            }
+        }
+        //res.append(&mut key.as_slice().to_vec());
         let mut whitespace = " ".as_bytes().to_vec();
         res.append(&mut whitespace);
         let mut value_result = evaluate(value.val());
@@ -593,7 +619,14 @@ fn serialize_dict(map: &BTreeMap<DictKey, Rc<LocatedVal<PDFObjT>>>) -> Vec<u8> {
 }
 
 fn serializer(object_ids: Vec<ObjectId>, objects: Vec<Rc<LocatedVal<PDFObjT>>>, root_id: ObjectId) {
-    let ofile = fs::File::create("output.pdf");
+    let args: Vec<String> = env::args().collect();
+    let first: Vec<&str> = args[1].split("/").collect();
+    let f = first.last().unwrap();
+    let modified = "_parsley";
+    let mut filename = "parsley_reduced/".to_string();
+    filename.push_str(f);
+    filename.push_str(modified);
+    let ofile = fs::File::create(&filename);
     let mut offset_list: Vec<u32> = vec![];
     let mut offset_counter = 0;
     let mut xrefs: Vec<u128> = vec![];
@@ -605,6 +638,7 @@ fn serializer(object_ids: Vec<ObjectId>, objects: Vec<Rc<LocatedVal<PDFObjT>>>, 
         },
         Err(_) => {},
     };
+    let mut max = 0;
     for id in 0 .. object_ids.len() {
         let curobject = objects[id].clone();
         offset_list.push(object_ids[id].0 as u32);
@@ -637,12 +671,20 @@ fn serializer(object_ids: Vec<ObjectId>, objects: Vec<Rc<LocatedVal<PDFObjT>>>, 
             },
             Err(_) => {},
         };
+        if object_ids[id].0 > max {
+            max = object_ids[id].0;
+        }
         //println!("{:?} {:?}", xrefs, offset_list);
     }
     filehandler.write("xref\x0a".as_bytes());
     filehandler.write(&xref_output);
     // Need to put trailer here
-    let trailer = format!("trailer << /Root {} {} R >> \x0a", root_id.0, root_id.1);
+    let trailer = format!(
+        "trailer << /Root {} {} R /Size {} >> \x0a",
+        root_id.0,
+        root_id.1,
+        max + 1
+    );
     filehandler.write(trailer.as_bytes());
     let startxref = format!("startxref\x0a{}\x0a", offset_counter);
     filehandler.write(startxref.as_bytes());
@@ -697,9 +739,16 @@ fn evaluate(obj: &PDFObjT) -> Vec<u8> {
             Ok(x) => {
                 let mut start = "(".as_bytes().to_vec();
                 let mut end = ")".as_bytes().to_vec();
-                let mut d1 = x.as_bytes().to_vec();
+                let mut d2: Vec<u8> = vec![];
+                let d1 = x.as_bytes().to_vec();
+                for d in d1 {
+                    let num = NumberFormat::new();
+                    let x = num.format("o", d);
+                    let mut x1 = format!("\\{}", x).as_bytes().to_vec();
+                    d2.append(&mut x1)
+                }
                 result.append(&mut start);
-                result.append(&mut d1);
+                result.append(&mut d2);
                 result.append(&mut end);
             },
             Err(_) => {
@@ -715,7 +764,30 @@ fn evaluate(obj: &PDFObjT) -> Vec<u8> {
         },
         PDFObjT::Name(d) => {
             let mut res = "/".as_bytes().to_vec();
-            res.append(&mut d.normalize());
+            let n = d.normalize();
+            for i in n {
+                if i <= 33
+                    || i >= 126
+                    || i == 40
+                    || i == 41
+                    || i == 47
+                    || i == 14
+                    || i == 60
+                    || i == 62
+                    || i == 37
+                    || i == 123
+                    || i == 125
+                    || i == 91
+                    || i == 93
+                {
+                    let escaped = format!("#{:02X}", i);
+                    let mut x = escaped.to_ascii_uppercase().as_bytes().to_vec();
+                    res.append(&mut x);
+                } else {
+                    res.push(i);
+                }
+            }
+            //res.append(&mut d.normalize());
             result.append(&mut res);
         },
         PDFObjT::Null(_) => {
@@ -755,7 +827,6 @@ fn type_check_file(
     // Made copies so we can copy it into another function
     let sobject_ids = object_ids.clone();
     let sobjects = objects.clone();
-    serializer(sobject_ids, sobjects, root_id);
     for id in 0 .. object_ids.len() {
         ctxt.insert(object_ids[id], objects[id].clone());
     }
@@ -874,6 +945,8 @@ fn process_file(
     dump_file(fi, ctxt, root_id);
     type_check_file(fi, ctxt, root_id, info_id);
     file_extract_text(ctxt, root_id, text_dump_file);
+    let (object_ids, objects) = ctxt.defns();
+    serializer(object_ids, objects, root_id);
 }
 
 #[cfg(not(feature = "kuduafl"))]
