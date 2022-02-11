@@ -32,10 +32,10 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::process;
 use std::rc::Rc;
+use std::borrow::Borrow;
 
 use env_logger::Builder;
 use log::{debug, error, log, Level, LevelFilter};
-
 use clap::{App, Arg};
 
 //use serde::{Deserialize, Serialize};
@@ -48,14 +48,14 @@ use parsley_rust::pcore::transforms::{BufferTransformT, RestrictView};
 use parsley_rust::pdf_lib::catalog::catalog_type;
 use parsley_rust::pdf_lib::pdf_file::{HeaderP, StartXrefP, TrailerP, XrefSectP};
 use parsley_rust::pdf_lib::pdf_obj::{
-    IndirectP, IndirectT, PDFObjContext, PDFObjT, StreamT
+    IndirectP, IndirectT, PDFObjContext, PDFObjT, StreamT, ArrayT
 };
 use parsley_rust::pdf_lib::pdf_streams::{
     decode_stream, ObjStreamP, XrefEntStatus, XrefEntT, XrefStreamP,
 };
 use parsley_rust::pdf_lib::pdf_type_check::{check_type, TypeCheckContext};
 
-use parsley_rust::pdf_lib::pdf_encryption::{PDFEncryptionDict, decrypt_stream};
+use parsley_rust::pdf_lib::pdf_encryption::{PDFEncryptionDict, decrypt_stream, decrypt_root_stream};
 
 /* from: https://osr.jpl.nasa.gov/wiki/pages/viewpage.action?spaceKey=SD&title=TA2+PDF+Safe+Parser+Evaluation
 
@@ -149,8 +149,8 @@ fn parse_xref_stream(
 
         if ctxt.is_encrypted() {
             // decrypt the stream
-            ta3_log!(Level::Info, fi.file_offset(0), "parse_xref_stream:: ctxt.is_encrypted is true. calling decryption fuinction\n");
-            println!("inside: parse_xref_stream calling ");
+            ta3_log!(Level::Info, fi.file_offset(0), "parse_xref_stream:: ctxt.is_encrypted is true. calling decryption function\n");
+            println!("inside: parse_xref_stream calling decrypt_stream");
             decrypt_stream(ctxt, &xref_obj, s)
         }
 
@@ -238,7 +238,7 @@ fn parse_enc_obj(
                         },
                     };
                     let io = lobj.unwrap();
-                    println!("lobj unwarp: {:?}", io);
+                    debug!("lobj unwarp: {:?}", io);
                     return io;
                 } else {
                     exit_log!(
@@ -418,8 +418,23 @@ fn parse_xref_section(
                 "The Encryption object is not a dictionary.");
         }
 
-        let enc_dict = PDFEncryptionDict::new(enc_obj, enc_v, enc_len);
-        ctxt.set_encryption_dict(enc_dict);
+        match &(*(**t.val().dict().get(b"ID").unwrap()).val()) {
+            PDFObjT::Array(x)=> {
+                let enc_dict = PDFEncryptionDict::new(enc_obj,
+                    enc_v, enc_len,
+                    (*x.objs()).to_vec());
+                ctxt.set_encryption_dict(enc_dict);
+            },
+            _ => {
+                panic!("pdf_printer:: ID obj is not an array!");
+            }
+        };
+
+        // if t.val().dict().get(b"ID").is_some() {
+        // } else {
+        //     panic!("parse_xref_section:: ID not found")
+        // }
+
     }
 
 
@@ -886,7 +901,9 @@ fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFOb
 
                 if ctxt.is_encrypted() {
                     // decrypt stream inplace
-                    ta3_log!(Level::Info, fi.file_offset(o.start()), "stream is encrypted. Decrypting now..");
+                    ta3_log!(Level::Info, fi.file_offset(o.start()), "inside dump_root:: stream is encrypted. TODO this part.");
+                    // TODO: FIXME: ASDASD
+                    let x = decrypt_root_stream(ctxt, &root_obj, s);
                 } else {
                     ta3_log!(Level::Info, fi.file_offset(o.start()), "ctxt.is_encrypted() is fasle...\n");
                 }
