@@ -25,6 +25,7 @@ use super::pdf_type_check::{
 use crate::pcore::parsebuffer::LocatedVal;
 use crate::pdf_lib::pdf_prim::NameT;
 use std::rc::Rc;
+use utf16string::WStr;
 
 pub fn resources(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
     let extgstate = DictEntry {
@@ -88,12 +89,14 @@ pub fn mk_generic_dict_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
 // A generic dictionary that is required to be an indirect reference,
 // typically used for out-of-scope dictionary values.
 pub fn mk_generic_indirect_dict_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
-    TypeCheck::new_indirect(
+    let dir = TypeCheck::new(tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Null)));
+    let ind = TypeCheck::new_indirect(
         tctx,
         "",
         Rc::new(PDFType::Dict(vec![], None)),
         IndirectSpec::Required,
-    )
+    );
+    TypeCheck::new(tctx, "", Rc::new(PDFType::Disjunct(vec![dir, ind])))
 }
 
 // A generic stream, typically used for out-of-scope
@@ -105,12 +108,14 @@ pub fn mk_generic_stream_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
 // A generic stream that is required to be an indirect reference,
 // typically used for out-of-scope dictionary values.
 pub fn mk_generic_indirect_stream_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
-    TypeCheck::new_indirect(
+    let dir = TypeCheck::new(tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Null)));
+    let ind = TypeCheck::new_indirect(
         tctx,
         "",
         Rc::new(PDFType::Stream(vec![])),
         IndirectSpec::Required,
-    )
+    );
+    TypeCheck::new(tctx, "", Rc::new(PDFType::Disjunct(vec![dir, ind])))
 }
 
 // A generic array, typically used for out-of-scope
@@ -123,13 +128,15 @@ pub fn mk_generic_array_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
 // A generic array that is required to be an indirect reference,
 // typically used for out-of-scope array values.
 pub fn mk_generic_indirect_array_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
+    let dir = TypeCheck::new(tctx, "", Rc::new(PDFType::PrimType(PDFPrimType::Null)));
     let elem = TypeCheck::new(tctx, "", Rc::new(PDFType::Any));
-    TypeCheck::new_indirect(
+    let ind = TypeCheck::new_indirect(
         tctx,
         "",
         Rc::new(PDFType::Array { elem, size: None }),
         IndirectSpec::Required,
-    )
+    );
+    TypeCheck::new(tctx, "", Rc::new(PDFType::Disjunct(vec![dir, ind])))
 }
 
 pub fn mk_array_of_dict_typchk(tctx: &mut TypeCheckContext) -> Rc<TypeCheck> {
@@ -312,8 +319,24 @@ impl Predicate for DateStringPredicate {
             // relaxed regex that allows a trailing ' at the end.
             let re = regex::Regex::new(r"^D:\d{4}(([0][1-9]|[1][0-2])(([0][1-9]|[1-2][0-9]|[3][0-1])(([0-1][0-9]|[2][0-3])(([0-5][0-9])(([0-5][0-9])([+\-Z](([0-1][0-9]'|[2][0-3]')([0-5][0-9](')?)?)?)?)?)?)?)?)?$").unwrap();
             let date_string = std::str::from_utf8(s).unwrap_or("");
+            let date_chars: Vec<char> = WStr::from_utf16be(s)
+                .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+                .chars()
+                .collect();
             let error_string = format!("Not a Date string {:?}", date_string);
             if !re.is_match(date_string) {
+                if date_chars.len() > 1 {
+                    let date_string2: String = date_chars[1 ..].into_iter().collect();
+                    let error_string2 = format!("Not a Date string {:?}", date_string2);
+                    if !re.is_match(&date_string2) {
+                        return Some(
+                            obj.place(TypeCheckError::PredicateError(error_string2.to_string())),
+                        )
+                    } else {
+                        return None
+                    }
+                }
+
                 return Some(obj.place(TypeCheckError::PredicateError(error_string.to_string())))
             }
             None

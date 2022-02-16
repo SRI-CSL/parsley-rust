@@ -36,7 +36,7 @@ use crate::pcore::parsebuffer::{
 };
 use crate::pcore::transforms::{BufferTransformT, RestrictView};
 use crate::pdf_lib::pdf_file::{HeaderP, StartXrefP, TrailerP, XrefSectP};
-use crate::pdf_lib::pdf_obj::{IndirectP, ObjectId, PDFObjContext, PDFObjT};
+use crate::pdf_lib::pdf_obj::{IndirectP, IndirectT, ObjectId, PDFObjContext, PDFObjT};
 use crate::pdf_lib::pdf_streams::{ObjStreamP, XrefEntStatus, XrefEntT, XrefStreamP};
 
 /* from: https://osr.jpl.nasa.gov/wiki/pages/viewpage.action?spaceKey=SD&title=TA2+PDF+Safe+Parser+Evaluation
@@ -550,14 +550,19 @@ fn parse_objects(
                 // Validate that the object is what we expect.
                 // TODO: this constraint should be enforced in the library.
                 if (io.num(), io.gen()) != (*id, *gen) {
-                    exit_log!(
+                    let val = LocatedVal::new(PDFObjT::Null(()), 0, 0);
+                    let indirect = IndirectT::new(*id, *gen, Rc::new(val));
+                    let indirect_loc = LocatedVal::new(indirect, 0, 0);
+                    ctxt.register_obj(&indirect_loc);
+                    ta3_log!(
+                        Level::Warn,
                         fi.file_offset(ofs),
                         "unexpected object ({},{}) found: expected ({},{}) from xref entry",
                         io.num(),
                         io.gen(),
                         id,
                         gen
-                    )
+                    );
                 }
             },
         }
@@ -617,14 +622,19 @@ fn parse_objects(
                                 // Validate that the object is what we expect.
                                 // TODO: this constraint should be enforced in the library.
         if (io.num(), io.gen()) != (*id, *gen) {
-            exit_log!(
+            let val = LocatedVal::new(PDFObjT::Null(()), 0, 0);
+            let indirect = IndirectT::new(*id, *gen, Rc::new(val));
+            let indirect_loc = LocatedVal::new(indirect, 0, 0);
+            ctxt.register_obj(&indirect_loc);
+            ta3_log!(
+                Level::Warn,
                 fi.file_offset(ofs),
                 "unexpected object ({},{}) found: expected ({},{}) from xref entry",
                 io.num(),
                 io.gen(),
                 id,
                 gen
-            )
+            );
         }
     }
 

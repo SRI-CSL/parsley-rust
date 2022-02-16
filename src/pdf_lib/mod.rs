@@ -32,3 +32,4 @@ pub mod pdf_prim;
 pub mod pdf_streams;
 pub mod pdf_traverse_xref;
 pub mod pdf_type_check;
+pub mod reducer;

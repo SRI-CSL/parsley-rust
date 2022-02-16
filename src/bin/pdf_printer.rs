@@ -52,6 +52,7 @@ use parsley_rust::pdf_lib::pdf_page_dom::{to_page_dom, FeaturePresence, PageKid}
 use parsley_rust::pdf_lib::pdf_streams::decode_stream;
 use parsley_rust::pdf_lib::pdf_traverse_xref::{parse_file, FileInfo};
 use parsley_rust::pdf_lib::pdf_type_check::{check_type, TypeCheckContext};
+use parsley_rust::pdf_lib::reducer::reduce;
 
 #[cfg(feature = "kuduafl")]
 use parsley_rust::pdf_lib::pdf_traverse_xref::parse_data;
@@ -288,9 +289,18 @@ fn type_check_file(
         None => exit_log!(0, "Root object {:?} not found!", root_id),
     };
 
+    /*
+     * Add an additional pass to fix minor malformations
+     * We are not invoking the serializer just yet, but it exists
+     */
+    let (object_ids, objects) = ctxt.defns();
+    let (root_obj, object_ids, objects) = reduce(root_obj, object_ids, objects, root_id);
+    for id in 0 .. object_ids.len() {
+        ctxt.insert(object_ids[id], objects[id].clone());
+    }
     let mut tctx = TypeCheckContext::new();
     let typ = catalog_type(&mut tctx);
-    if let Some(err) = check_type(&ctxt, &tctx, Rc::clone(root_obj), typ) {
+    if let Some(err) = check_type(&ctxt, &tctx, Rc::clone(&root_obj), typ) {
         exit_log!(
             fi.file_offset(err.loc_start()),
             "Type Check Error: {:?}, Producer: {:?}",

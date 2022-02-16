@@ -274,6 +274,8 @@ impl RealT {
         }
     }
 
+    pub fn val(&self) -> f64 { (self.0 as f64) / (self.1 as f64) }
+
     pub fn numerator(&self) -> i64 {
         let conv = <i64 as TryFrom<i128>>::try_from(self.0);
         conv.unwrap()

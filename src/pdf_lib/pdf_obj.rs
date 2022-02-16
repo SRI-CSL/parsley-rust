@@ -69,6 +69,10 @@ impl PDFObjContext {
             eol_after_stream_content: false, // not strict
         }
     }
+    pub fn insert(&mut self, obj_id: ObjectId, obj: Rc<LocatedVal<PDFObjT>>) {
+        self.defns.remove(&obj_id);
+        self.defns.insert(obj_id, obj);
+    }
     pub fn register_obj(&mut self, p: &LocatedVal<IndirectT>) -> Option<Rc<LocatedVal<PDFObjT>>> {
         self.defns
             .insert((p.val().num(), p.val().gen()), Rc::clone(p.val().obj()))
@@ -91,6 +95,16 @@ impl PDFObjContext {
         self.cur_depth -= 1;
     }
     pub fn depth(&self) -> usize { self.cur_depth }
+    pub fn defns(&self) -> (Vec<ObjectId>, Vec<Rc<LocatedVal<PDFObjT>>>) {
+        let mut keys: Vec<ObjectId> = vec![];
+        let mut values: Vec<Rc<LocatedVal<PDFObjT>>> = vec![];
+        for (key, value) in &self.defns {
+            let c = Rc::clone(value);
+            keys.push(*key);
+            values.push(c);
+        }
+        (keys, values)
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -826,19 +840,24 @@ impl IndirectP<'_> {
         let ind = LocatedVal::new(ind, start, end);
         match self.ctxt.register_obj(&ind) {
             None => Ok(ind),
-            Some(old) => {
+            Some(_old) => {
+                /*
+                 We do not really register this object, instead we just return the new object
+                 we constructed
+                */
                 // Note that this location is inside any 'n g obj' prefix for the indirect
                 // object.
-                let loc = old.start();
-                let msg = format!(
-                    "non-unique object id ({}, {}), first found near offset {}",
-                    num.val().int_val(),
-                    gen.val().int_val(),
-                    loc
-                );
-                let err = ErrorKind::GuardError(msg);
-                let end = buf.get_cursor();
-                Err(locate_value(err, start, end))
+                //let loc = old.start();
+                //let msg = format!(
+                //"non-unique object id ({}, {}), first found near offset {}",
+                //num.val().int_val(),
+                //gen.val().int_val(),
+                //loc
+                //);
+                //let err = ErrorKind::GuardError(msg);
+                //let end = buf.get_cursor();
+                //Err(locate_value(err, start, end))
+                Ok(ind)
             },
         }
     }

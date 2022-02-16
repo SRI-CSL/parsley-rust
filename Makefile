@@ -57,7 +57,7 @@ ifndef DOCKER
 	@exit 1
 endif
 
-docker: deps release etc/docker/Dockerfile
+docker: release etc/docker/Dockerfile
 	docker build --build-arg=COMMIT=$(COMMIT) --build-arg=BRANCH=$(BRANCH)  -t 'pdf_printer' -f etc/docker/Dockerfile .
 	docker tag pdf_printer safedocs-ta2-docker.cse.sri.com/pdf_printer:latest
 

@@ -1,0 +1,25 @@
+image: rustlang/rust:nightly
+
+before_script:
+    - rustup component add rustfmt
+stages:
+
+    - lint
+    - tests
+    - build
+
+lint:
+    stage: lint
+    script:
+        - make clean
+        - cargo fmt -- --check
+
+tests:
+    stage: tests
+    script:
+        - make tests
+
+build:
+    stage: build
+    script:
+        - make
