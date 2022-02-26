@@ -22,7 +22,6 @@ use super::pdf_prim::{IntegerT, NameT};
 use format_num::NumberFormat;
 use log::{log, Level};
 use std::collections::BTreeMap;
-use std::env;
 use std::fs;
 use std::io::Write;
 use std::process;
@@ -83,20 +82,13 @@ fn serialize_dict(map: &BTreeMap<DictKey, Rc<LocatedVal<PDFObjT>>>) -> Vec<u8> {
 
 pub fn serializer(
     object_ids: Vec<ObjectId>, objects: Vec<Rc<LocatedVal<PDFObjT>>>, root_id: ObjectId,
+    ofile: &mut fs::File, info_id: Option<ObjectId>,
 ) {
-    let args: Vec<String> = env::args().collect();
-    let first: Vec<&str> = args[1].split("/").collect();
-    let f = first.last().unwrap();
-    let modified = "_parsley";
-    let mut filename = "parsley_reduced_adv/".to_string();
-    filename.push_str(f);
-    filename.push_str(modified);
-    let ofile = fs::File::create(&filename);
     let mut offset_list: Vec<u32> = vec![];
     let mut offset_counter = 0; // Tracks the offset of each object
                                 // offset_counter is used to create the xref table entries
     let mut xrefs: Vec<u128> = vec![];
-    let mut filehandler = ofile.unwrap();
+    let filehandler = ofile;
     let mut xref_output: Vec<u8> = vec![];
     match filehandler.write("%PDF-2.0\x0a".as_bytes()) {
         Ok(d) => {
@@ -148,32 +140,40 @@ pub fn serializer(
         }
     }
     match filehandler.write("xref\x0a".as_bytes()) {
-        Ok(d) => {
-            offset_counter = offset_counter + d;
-        },
+        Ok(_) => {},
         Err(_) => {
             exit_log!(offset_counter, "Error writing xref table");
         },
     }
     match filehandler.write(&xref_output) {
-        Ok(d) => {
-            offset_counter = offset_counter + d;
-        },
+        Ok(_) => {},
         Err(_) => {
             exit_log!(offset_counter, "Error writing xref table");
         },
     }
     // Need to put trailer here
-    let trailer = format!(
-        "trailer << /Root {} {} R /Size {} >> \x0a",
-        root_id.0,
-        root_id.1,
-        max + 1
-    );
-    match filehandler.write(trailer.as_bytes()) {
-        Ok(d) => {
-            offset_counter = offset_counter + d;
+    let trailer = match info_id {
+        Some(info) => {
+            format!(
+                "trailer << /Root {} {} R /Size {} /Info {} {} R >> \x0a",
+                root_id.0,
+                root_id.1,
+                max + 1,
+                info.0,
+                info.1,
+            )
         },
+        None => {
+            format!(
+                "trailer << /Root {} {} R /Size {} >> \x0a",
+                root_id.0,
+                root_id.1,
+                max + 1,
+            )
+        },
+    };
+    match filehandler.write(trailer.as_bytes()) {
+        Ok(_) => {},
         Err(_) => {
             exit_log!(offset_counter, "Error writing trailer");
         },
@@ -543,9 +543,9 @@ fn reducer_pages(
 */
 pub fn reduce(
     root_obj: &Rc<LocatedVal<PDFObjT>>, object_ids: Vec<ObjectId>,
-    objects: Vec<Rc<LocatedVal<PDFObjT>>>, _root_id: ObjectId,
+    objects: Vec<Rc<LocatedVal<PDFObjT>>>, root_id: ObjectId,
 ) -> (
-    Rc<LocatedVal<PDFObjT>>,
+    //Rc<LocatedVal<PDFObjT>>,
     Vec<ObjectId>,
     Vec<Rc<LocatedVal<PDFObjT>>>,
 ) {
@@ -572,10 +572,16 @@ pub fn reduce(
         },
         _ => {},
     }
-    let root_obj = Rc::new(LocatedVal::new(
-        PDFObjT::Dict(DictT::new(new_root_map)),
-        start,
-        end,
-    ));
-    (root_obj, return_object_ids, return_objects)
+    for id in 0 .. return_object_ids.len() {
+        if return_object_ids[id] == root_id {
+            let nroot_map = new_root_map.clone();
+            let root_obj = Rc::new(LocatedVal::new(
+                PDFObjT::Dict(DictT::new(nroot_map)),
+                start,
+                end,
+            ));
+            return_objects[id] = root_obj;
+        }
+    }
+    (return_object_ids, return_objects)
 }

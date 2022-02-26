@@ -52,7 +52,7 @@ use parsley_rust::pdf_lib::pdf_page_dom::{to_page_dom, FeaturePresence, PageKid}
 use parsley_rust::pdf_lib::pdf_streams::decode_stream;
 use parsley_rust::pdf_lib::pdf_traverse_xref::{parse_file, FileInfo};
 use parsley_rust::pdf_lib::pdf_type_check::{check_type, TypeCheckContext};
-use parsley_rust::pdf_lib::reducer::reduce;
+use parsley_rust::pdf_lib::reducer::{reduce, serializer};
 
 #[cfg(feature = "kuduafl")]
 use parsley_rust::pdf_lib::pdf_traverse_xref::parse_data;
@@ -289,15 +289,6 @@ fn type_check_file(
         None => exit_log!(0, "Root object {:?} not found!", root_id),
     };
 
-    /*
-     * Add an additional pass to fix minor malformations
-     * We are not invoking the serializer just yet, but it exists
-     */
-    let (object_ids, objects) = ctxt.defns();
-    let (root_obj, object_ids, objects) = reduce(root_obj, object_ids, objects, root_id);
-    for id in 0 .. object_ids.len() {
-        ctxt.insert(object_ids[id], objects[id].clone());
-    }
     let mut tctx = TypeCheckContext::new();
     let typ = catalog_type(&mut tctx);
     if let Some(err) = check_type(&ctxt, &tctx, Rc::clone(&root_obj), typ) {
@@ -408,11 +399,34 @@ fn file_extract_text(
 
 fn process_file(
     fi: &FileInfo, ctxt: &mut PDFObjContext, root_id: ObjectId, info_id: Option<ObjectId>,
-    text_dump_file: &mut Option<fs::File>,
+    text_dump_file: &mut Option<fs::File>, cleaned_file: &mut Option<fs::File>, reducer_flag: bool,
 ) {
     dump_file(fi, ctxt, root_id);
+    let (mut object_ids, mut objects) = ctxt.defns();
+    if reducer_flag {
+        /*
+         * Add an additional pass to fix minor malformations
+         * We are not invoking the serializer just yet, but it exists
+         */
+        let root_obj: &Rc<LocatedVal<PDFObjT>> = match ctxt.lookup_obj(root_id) {
+            Some(obj) => obj,
+            None => exit_log!(0, "Root object {:?} not found!", root_id),
+        };
+        let (tmp_object_ids, tmp_objects) = reduce(root_obj, object_ids, objects, root_id);
+        for id in 0 .. tmp_object_ids.len() {
+            ctxt.insert(tmp_object_ids[id], tmp_objects[id].clone());
+        }
+        object_ids = tmp_object_ids;
+        objects = tmp_objects;
+    }
     type_check_file(fi, ctxt, root_id, info_id);
     file_extract_text(ctxt, root_id, text_dump_file);
+    match cleaned_file {
+        Some(f) => {
+            serializer(object_ids, objects, root_id, f, info_id);
+        },
+        None => {},
+    }
 }
 
 #[cfg(not(feature = "kuduafl"))]
@@ -429,6 +443,30 @@ fn main() {
                 .help("the PDF file to parse")
                 .required(true)
                 .index(1),
+        )
+        .arg(
+            Arg::with_name("strict type checking")
+                .long("strict")
+                .short("s")
+                .value_name("STRICT")
+                .takes_value(false)
+                .help("apply a strict, version-specific type checker on the PDF file"),
+        )
+        .arg(
+            Arg::with_name("apply fixups")
+                .short("f")
+                .long("fix")
+                .value_name("FIX")
+                .takes_value(false)
+                .help("apply fixup transformations to remove common type malformations"),
+        )
+        .arg(
+            Arg::with_name("output_cleanup")
+                .short("r")
+                .long("rewrite")
+                .value_name("OUTPUT_PDF_FILE")
+                .takes_value(true)
+                .help("produce a canonical PDF file from the Parsley intermediate representation"),
         )
         .arg(
             Arg::with_name("output_json")
@@ -515,6 +553,20 @@ fn main() {
                                                          // parse_file()?
         }
     }
+    let mut output_cleanup_file = if matches.is_present("output_cleanup") {
+        let fname = matches.value_of("output_cleanup").unwrap();
+        match fs::File::create(fname) {
+            Ok(f) => Some(f),
+            Err(e) => exit_log!(0, "Could not create output file at {}: {}", fname, e),
+        }
+    } else {
+        None
+    };
+    let reducer_flag = if matches.is_present("apply fixups") {
+        true
+    } else {
+        false
+    };
     let mut output_text_file = if matches.is_present("output_text_extract") {
         let fname = matches.value_of("output_text_extract").unwrap();
         match fs::File::create(fname) {
@@ -527,7 +579,15 @@ fn main() {
 
     let test_file = matches.value_of("pdf_file").unwrap();
     let (fi, mut ctxt, root_id, info_id) = parse_file(test_file);
-    process_file(&fi, &mut ctxt, root_id, info_id, &mut output_text_file);
+    process_file(
+        &fi,
+        &mut ctxt,
+        root_id,
+        info_id,
+        &mut output_text_file,
+        &mut output_cleanup_file,
+        reducer_flag,
+    );
 }
 
 #[cfg(feature = "kuduafl")]
@@ -536,6 +596,6 @@ fn main() {
     let path = path.unwrap();
     afl::fuzz!(|data: &[u8]| {
         let (fi, mut ctxt, root_id, info_id) = parse_data(&path, data);
-        process_file(&fi, &mut ctxt, root_id, info_id, &mut None);
+        process_file(&fi, &mut ctxt, root_id, info_id, &mut None, &mut None);
     });
 }
