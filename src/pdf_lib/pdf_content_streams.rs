@@ -502,6 +502,15 @@ impl<'a> TextExtractor<'a> {
             // loop with new state
             self.state = next_state;
         }
+        // We may have put things in texts and not dealt with it yet
+        // Append them to texts_all as well
+        match tmp_name {
+            Some(d) => {
+                let tmp = DataFontTuple::new(texts.clone(), d.clone());
+                texts_all.push(tmp);
+            },
+            None => {},
+        }
         Ok(texts_all)
     }
 }
