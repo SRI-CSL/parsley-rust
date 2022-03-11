@@ -27,6 +27,24 @@ use super::pdf_prim::{
 };
 use std::collections::BTreeMap;
 
+// Store different tuple object with Font name
+// Create new object every time font changes
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub struct DataFontTuple {
+    string:    Vec<TextToken>,
+    font_name: NameT,
+}
+
+impl DataFontTuple {
+    pub fn new(string: Vec<TextToken>, font_name: NameT) -> DataFontTuple {
+        DataFontTuple { string, font_name }
+    }
+
+    pub fn string(&self) -> Vec<TextToken> { self.string.clone() }
+    pub fn font_name(&self) -> NameT { self.font_name.clone() }
+}
+
 // Individual objects in content stream, and their parser.
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -166,6 +184,15 @@ pub enum TextToken {
     RawText(Vec<u8>),
 }
 
+impl Clone for TextToken {
+    fn clone(&self) -> TextToken {
+        match self {
+            TextToken::Space => TextToken::Space,
+            TextToken::RawText(d) => TextToken::RawText(d.clone()),
+        }
+    }
+}
+
 // Raw text extractor for the content stream.  It does not handle any font
 // processing.
 
@@ -209,9 +236,12 @@ impl<'a> TextExtractor<'a> {
     // concatenated first (with inserted whitespace at their join
     // points) before calling this parser.
 
-    pub fn parse_internal(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Vec<TextToken>> {
+    pub fn parse_internal(
+        &mut self, buf: &mut dyn ParseBufferT,
+    ) -> ParseResult<Vec<DataFontTuple>> {
         // the collected text objects
         let mut texts: Vec<TextToken> = Vec::new();
+        let mut texts_all: Vec<DataFontTuple> = Vec::new();
 
         // the internal parsers
         let mut op = CSObjP::new(self.ctxt);
@@ -219,6 +249,7 @@ impl<'a> TextExtractor<'a> {
 
         // collected arguments for an operator
         let mut args = Vec::new();
+        let mut tmp_name: Option<NameT> = None;
         loop {
             // First, consume possibly empty whitespace.
             ws.parse(buf)?;
@@ -334,6 +365,33 @@ impl<'a> TextExtractor<'a> {
 
             // some basic sanity checking.  TODO: actually check argument types.
             match (op_type, op_name.as_str()) {
+                (OpType::TextState, "Tf") => {
+                    if args.len() != op_args.len() {
+                        let msg = format!(
+                            "content stream {:?}: unexpected number {} of args for {}, {} expected",
+                            self.objectid,
+                            args.len(),
+                            op_name,
+                            op_args.len()
+                        );
+                        let err = ErrorKind::GuardError(msg);
+                        let end = buf.get_cursor();
+                        return Err(LocatedVal::new(err, start, end))
+                    }
+                    if let CSObjT::Name(d) = args[0].val() {
+                        match tmp_name {
+                            Some(x) => {
+                                if x != d.clone() {
+                                    let tmp = DataFontTuple::new(texts.clone(), d.clone());
+                                    texts_all.push(tmp);
+                                    texts = Vec::new();
+                                }
+                            },
+                            None => {},
+                        }
+                        tmp_name = Some(d.clone());
+                    }
+                },
                 (OpType::TextShow, "Tj" | "'" | "\"") => {
                     if args.len() != op_args.len() {
                         let msg = format!(
@@ -444,13 +502,12 @@ impl<'a> TextExtractor<'a> {
             // loop with new state
             self.state = next_state;
         }
-
-        Ok(texts)
+        Ok(texts_all)
     }
 }
 
 impl ParsleyParser for TextExtractor<'_> {
-    type T = LocatedVal<Vec<TextToken>>;
+    type T = LocatedVal<Vec<DataFontTuple>>;
 
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         // First, consume possibly empty whitespace.

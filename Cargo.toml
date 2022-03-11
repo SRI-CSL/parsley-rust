@@ -38,7 +38,8 @@ serde = "1.0.119"
 serde_json = "1.0.59"
 afl = { version = "*", optional = true }
 utf16string = "0.2.0"
-format_num="0.1.0"
+format_num = "0.1.0"
+adobe-cmap-parser = "0.3.3"
 
 [features]
 kuduafl = ["afl"]

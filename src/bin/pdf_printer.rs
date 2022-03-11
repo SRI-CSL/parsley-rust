@@ -16,6 +16,7 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+extern crate adobe_cmap_parser;
 /// A very basic PDF parser.
 extern crate clap;
 extern crate env_logger;
@@ -23,6 +24,7 @@ extern crate log;
 extern crate log_panics;
 extern crate serde;
 extern crate serde_json;
+use utf16string::WStr;
 
 #[cfg(feature = "kuduafl")]
 extern crate afl;
@@ -46,7 +48,7 @@ use parsley_rust::pcore::parsebuffer::{
 };
 use parsley_rust::pdf_lib::catalog::{catalog_type, info_type};
 use parsley_rust::pdf_lib::pdf_content_streams::{TextExtractor, TextToken};
-use parsley_rust::pdf_lib::pdf_obj::{ObjectId, PDFObjContext, PDFObjT};
+use parsley_rust::pdf_lib::pdf_obj::{DictKey, ObjectId, PDFObjContext, PDFObjT};
 use parsley_rust::pdf_lib::pdf_page_dom::Resources;
 use parsley_rust::pdf_lib::pdf_page_dom::{to_page_dom, FeaturePresence, PageKid};
 use parsley_rust::pdf_lib::pdf_streams::decode_stream;
@@ -195,40 +197,133 @@ fn dump_root(fi: &FileInfo, ctxt: &PDFObjContext, root_obj: &Rc<LocatedVal<PDFOb
 }
 
 fn extract_text(
-    ctxt: &mut PDFObjContext, pid: &ObjectId, _r: &Resources, buf: &mut ParseBuffer,
+    ctxt: &mut PDFObjContext, pid: &ObjectId, r: &Resources, buf: &mut ParseBuffer,
     dump: &mut Option<fs::File>,
 ) -> ParseResult<()> {
     let mut te = TextExtractor::new(ctxt, pid);
     let tokens = te.parse(buf)?;
     // condense multiple spaces into a single one.
     let mut spaced = false;
-    for t in tokens.val().iter() {
-        match t {
-            TextToken::Space => {
-                if !spaced {
-                    match dump {
-                        None => print!(" "),
-                        Some(f) => {
-                            let _ = write!(f, " ");
+    let tokens_all_vec = tokens.val();
+    for to in tokens_all_vec {
+        let font_name = to.font_name();
+        let tokens_all = to.string();
+        for t in tokens_all.iter() {
+            match t {
+                TextToken::Space => {
+                    if !spaced {
+                        match dump {
+                            None => print!(" "),
+                            Some(f) => {
+                                let _ = write!(f, " ");
+                            },
+                        };
+                        spaced = true;
+                    }
+                },
+                TextToken::RawText(s) => {
+                    // If ToUnicode field present, then we traverse the
+                    // cmap object to find the UTF16BE mappings of chars
+                    let fonts_dict = r.fonts();
+                    let font_dict_key = DictKey::new(font_name.val().to_vec());
+                    let cmap_obj = match fonts_dict.get(&font_dict_key) {
+                        Some(a) => {
+                            let unicode_dict = a.to_unicode();
+                            let ret = match unicode_dict {
+                                Some(uni) => ctxt.lookup_obj(*uni),
+                                None => None,
+                            };
+                            ret
                         },
+                        None => None,
                     };
-                    spaced = true;
-                }
-            },
-            TextToken::RawText(s) => {
-                // TODO: font conversion.  For now, just try blind
-                // unicode conversion.
-                match std::str::from_utf8(s) {
-                    Ok(v) => match dump {
-                        None => println!("{}", v),
-                        Some(f) => {
-                            let _ = write!(f, "{}", v);
+                    let mut cmap_flag = false;
+                    // Stores the entire UTF16BE string from cmap mapping
+                    // Only read if cmap_flag is true
+                    let mut var: String = "".to_string();
+                    match cmap_obj {
+                        Some(cmap) => {
+                            if let PDFObjT::Stream(s1) = cmap.val() {
+                                let decoded_cmap_buf = decode_stream(s1);
+
+                                // If we are unable to decode the cmap stream, we treat the buffer
+                                // as if the cmap stream was absent.
+                                match decoded_cmap_buf {
+                                    Ok(v) => {
+                                        let cmap_buf = v.stream().val().content();
+                                        // Rely on this library to give us the mappings
+                                        // It gives a blank hashmap if the parsing failed
+                                        // Hence it is safe to unwrap()
+                                        let mapping =
+                                            adobe_cmap_parser::get_unicode_map(&cmap_buf).unwrap();
+                                        // If mapping is present cmap_flag is set
+                                        // Not all cmap streams contain the mappings
+                                        if mapping.keys().len() > 0 {
+                                            cmap_flag = true;
+                                            // Mappings are of the form {48: [00, 40]}
+                                            // [00 40] is the UTF16BE encoding for char 48
+                                            for ch in s {
+                                                match mapping.get(&(*ch as u32)) {
+                                                    Some(map_char) => {
+                                                        let s_chars: Vec<char> =
+                                                            WStr::from_utf16be(map_char)
+                                                                .unwrap_or(
+                                                                    WStr::from_utf16be(&[])
+                                                                        .unwrap(),
+                                                                )
+                                                                .chars()
+                                                                .collect();
+                                                        let var_1: String =
+                                                            s_chars[0 ..].into_iter().collect();
+                                                        var = format!("{}{}", var, var_1);
+                                                        // unconventional way of
+                                                        // appending to string
+                                                    },
+                                                    None => {
+                                                        // No mapping for a certain character.
+                                                        // Convert decimal to ascii
+                                                        var = format!("{}{}", var, *ch as char);
+                                                    },
+                                                }
+                                            }
+                                        }
+                                    },
+                                    Err(e) => {
+                                        // Just throw a warning if we can't decode the cmap stream
+                                        ta3_log!(
+                                            Level::Warn,
+                                            0,
+                                            " error decoding cmap stream {:?}",
+                                            e
+                                        );
+                                    },
+                                }
+                            }
                         },
-                    },
-                    Err(_) => (), // println!("not UTF8"),
-                };
-                spaced = false
-            },
+                        None => {},
+                    };
+                    if cmap_flag == false {
+                        match std::str::from_utf8(s) {
+                            Ok(v) => match dump {
+                                None => println!("{}", v),
+                                Some(f) => {
+                                    let _ = write!(f, "{}", v);
+                                },
+                            },
+                            Err(_) => (), // println!("not UTF8"),
+                        };
+                    } else {
+                        // cmap was present, so read var instead of s directly
+                        match dump {
+                            None => println!("{}", var),
+                            Some(f) => {
+                                let _ = write!(f, "{}", var);
+                            },
+                        }
+                    }
+                    spaced = false
+                },
+            }
         }
     }
     return Ok(())

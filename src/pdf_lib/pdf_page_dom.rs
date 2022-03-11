@@ -133,6 +133,7 @@ pub struct Resources {
 impl Resources {
     pub fn new(fonts: BTreeMap<DictKey, Rc<FontDictionary>>) -> Self { Self { fonts } }
     pub fn fonts(&self) -> &BTreeMap<DictKey, Rc<FontDictionary>> { &self.fonts }
+
     /*
     pub fn has_nonembedded_fonts(&self, ctxt: &PDFObjContext) -> bool {
         let mut has = false;
@@ -249,11 +250,13 @@ pub struct FontDictionary {
     basefont:       Vec<u8>,
     fontdescriptor: Option<Rc<FontDescriptor>>,
     encoding:       Option<FontEncoding>,
+    to_unicode:     Option<(usize, usize)>,
     // ToUnicode
 }
 impl FontDictionary {
     pub fn basefont(&self) -> &[u8] { &self.basefont }
     pub fn encoding(&self) -> &Option<FontEncoding> { &self.encoding }
+    pub fn to_unicode(&self) -> &Option<(usize, usize)> { &self.to_unicode }
     pub fn is_embedded(&self) -> FeaturePresence {
         if self.is_base_font() {
             FeaturePresence::from(Some(true))
@@ -740,11 +743,23 @@ fn to_font_dict(
         },
         None => None,
     };
+    let to_unicode = match d.get(b"ToUnicode") {
+        Some(o) => {
+            let o1 = o.val();
+            if let PDFObjT::Reference(r) = o1 {
+                Some((r.num(), r.gen()))
+            } else {
+                None
+            }
+        },
+        None => None,
+    };
     Ok(FontDictionary {
         subtype,
         basefont,
         fontdescriptor,
         encoding,
+        to_unicode,
     })
 }
 
