@@ -29,9 +29,11 @@ use utf16string::WStr;
 #[cfg(feature = "kuduafl")]
 extern crate afl;
 
+use std::collections::HashMap;
 use std::collections::{BTreeSet, VecDeque};
 use std::fs;
 use std::io::Write;
+use std::panic;
 use std::path::Path;
 use std::process;
 use std::rc::Rc;
@@ -253,11 +255,26 @@ fn extract_text(
                                         let cmap_buf = v.stream().val().content();
                                         // Rely on this library to give us the mappings
                                         // It gives a blank hashmap if the parsing failed
-                                        // Hence it is safe to unwrap()
-                                        let mapping =
-                                            adobe_cmap_parser::get_unicode_map(&cmap_buf).unwrap();
+                                        // The library can panic
+                                        // Catch the panic and check the output
+                                        let prev_hook = panic::take_hook();
+                                        panic::set_hook(Box::new(|_info| {}));
+                                        let mapping1 = panic::catch_unwind(|| {
+                                            match adobe_cmap_parser::get_unicode_map(&cmap_buf) {
+                                                Ok(r) => r,
+                                                Err(_) => HashMap::new(),
+                                            }
+                                        });
+
+                                        let mapping = match mapping1 {
+                                            Ok(r) => r,
+                                            Err(_) => HashMap::new(),
+                                        };
+
+                                        panic::set_hook(prev_hook);
                                         // If mapping is present cmap_flag is set
                                         // Not all cmap streams contain the mappings
+                                        // If library panicked also we set the mapping to {}
                                         if mapping.keys().len() > 0 {
                                             cmap_flag = true;
                                             // Mappings are of the form {48: [00, 40]}
