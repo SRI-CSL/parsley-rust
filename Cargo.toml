@@ -40,6 +40,7 @@ afl = { version = "*", optional = true }
 utf16string = "0.2.0"
 format_num = "0.1.0"
 adobe-cmap-parser = "0.3.3"
+encoding = "0.2"
 
 [features]
 kuduafl = ["afl"]

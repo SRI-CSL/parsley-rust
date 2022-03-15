@@ -24,6 +24,8 @@ extern crate log;
 extern crate log_panics;
 extern crate serde;
 extern crate serde_json;
+use encoding::all::{MAC_ROMAN, WINDOWS_1252};
+use encoding::{DecoderTrap, Encoding};
 use utf16string::WStr;
 
 #[cfg(feature = "kuduafl")]
@@ -52,7 +54,7 @@ use parsley_rust::pdf_lib::catalog::{catalog_type, info_type};
 use parsley_rust::pdf_lib::pdf_content_streams::{TextExtractor, TextToken};
 use parsley_rust::pdf_lib::pdf_obj::{DictKey, ObjectId, PDFObjContext, PDFObjT};
 use parsley_rust::pdf_lib::pdf_page_dom::Resources;
-use parsley_rust::pdf_lib::pdf_page_dom::{to_page_dom, FeaturePresence, PageKid};
+use parsley_rust::pdf_lib::pdf_page_dom::{to_page_dom, FeaturePresence, FontEncoding, PageKid};
 use parsley_rust::pdf_lib::pdf_streams::decode_stream;
 use parsley_rust::pdf_lib::pdf_traverse_xref::{parse_file, FileInfo};
 use parsley_rust::pdf_lib::pdf_type_check::{check_type, TypeCheckContext};
@@ -94,6 +96,1331 @@ macro_rules! exit_log {
         log!(Level::Error, "at {:>10} ({:#x}) - {}", $pos, $pos, format_args!($($arg)+));
         process::exit(1)
     })
+}
+
+fn mac_expert_encoding() -> HashMap<u32, String> {
+    let mut hash = HashMap::new();
+    let map_char = [247, 230];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(190, var_1);
+    let map_char = [247, 225];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(135, var_1);
+    let map_char = [247, 226];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(137, var_1);
+    let map_char = [247, 180];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(39, var_1);
+    let map_char = [247, 228];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(138, var_1);
+    let map_char = [247, 224];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(136, var_1);
+    let map_char = [247, 229];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(140, var_1);
+    let map_char = [247, 97];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(97, var_1);
+    let map_char = [247, 227];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(139, var_1);
+    let map_char = [246, 244];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(243, var_1);
+    let map_char = [247, 98];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(98, var_1);
+    let map_char = [246, 245];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(174, var_1);
+    let map_char = [247, 231];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(141, var_1);
+    let map_char = [247, 184];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(201, var_1);
+    let map_char = [246, 246];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(94, var_1);
+    let map_char = [247, 99];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(99, var_1);
+    let map_char = [247, 168];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(172, var_1);
+    let map_char = [246, 247];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(250, var_1);
+    let map_char = [247, 100];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(100, var_1);
+    let map_char = [247, 233];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(142, var_1);
+    let map_char = [247, 234];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(144, var_1);
+    let map_char = [247, 235];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(145, var_1);
+    let map_char = [247, 232];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(143, var_1);
+    let map_char = [247, 101];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(101, var_1);
+    let map_char = [247, 240];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(68, var_1);
+    let map_char = [247, 102];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(102, var_1);
+    let map_char = [247, 96];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(96, var_1);
+    let map_char = [247, 103];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(103, var_1);
+    let map_char = [247, 104];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(104, var_1);
+    let map_char = [246, 248];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(34, var_1);
+    let map_char = [247, 237];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(146, var_1);
+    let map_char = [247, 238];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(148, var_1);
+    let map_char = [247, 239];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(149, var_1);
+    let map_char = [247, 236];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(147, var_1);
+    let map_char = [247, 105];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(105, var_1);
+    let map_char = [247, 106];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(106, var_1);
+    let map_char = [247, 107];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(107, var_1);
+    let map_char = [246, 249];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(194, var_1);
+    let map_char = [247, 108];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(108, var_1);
+    let map_char = [247, 175];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(244, var_1);
+    let map_char = [247, 109];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(109, var_1);
+    let map_char = [247, 110];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(110, var_1);
+    let map_char = [247, 241];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(150, var_1);
+    let map_char = [246, 250];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(207, var_1);
+    let map_char = [247, 243];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(151, var_1);
+    let map_char = [247, 244];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(153, var_1);
+    let map_char = [247, 246];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(154, var_1);
+    let map_char = [246, 251];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(242, var_1);
+    let map_char = [247, 242];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(152, var_1);
+    let map_char = [247, 248];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(191, var_1);
+    let map_char = [247, 111];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(111, var_1);
+    let map_char = [247, 245];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(155, var_1);
+    let map_char = [247, 112];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(112, var_1);
+    let map_char = [247, 113];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(113, var_1);
+    let map_char = [246, 252];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(251, var_1);
+    let map_char = [247, 114];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(114, var_1);
+    let map_char = [246, 253];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(167, var_1);
+    let map_char = [247, 115];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(115, var_1);
+    let map_char = [247, 254];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(185, var_1);
+    let map_char = [246, 254];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(126, var_1);
+    let map_char = [247, 116];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(116, var_1);
+    let map_char = [247, 250];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(156, var_1);
+    let map_char = [247, 251];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(158, var_1);
+    let map_char = [247, 252];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(159, var_1);
+    let map_char = [247, 249];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(157, var_1);
+    let map_char = [247, 117];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(117, var_1);
+    let map_char = [247, 118];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(118, var_1);
+    let map_char = [247, 119];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(119, var_1);
+    let map_char = [247, 120];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(120, var_1);
+    let map_char = [247, 253];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(180, var_1);
+    let map_char = [247, 255];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(216, var_1);
+    let map_char = [247, 121];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(121, var_1);
+    let map_char = [246, 255];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(189, var_1);
+    let map_char = [247, 122];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(122, var_1);
+    let map_char = [247, 38];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(38, var_1);
+    let map_char = [246, 233];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(129, var_1);
+    let map_char = [246, 234];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(245, var_1);
+    let map_char = [246, 223];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(169, var_1);
+    let map_char = [247, 162];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(35, var_1);
+    let map_char = [246, 224];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(130, var_1);
+    let map_char = [0, 58];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(58, var_1);
+    let map_char = [32, 161];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(123, var_1);
+    let map_char = [0, 44];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(44, var_1);
+    let map_char = [246, 225];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(178, var_1);
+    let map_char = [246, 226];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(248, var_1);
+    let map_char = [246, 227];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(182, var_1);
+    let map_char = [247, 36];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(36, var_1);
+    let map_char = [246, 228];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(37, var_1);
+    let map_char = [246, 235];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(235, var_1);
+    let map_char = [32, 136];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(165, var_1);
+    let map_char = [247, 56];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(56, var_1);
+    let map_char = [32, 120];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(161, var_1);
+    let map_char = [246, 236];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(228, var_1);
+    let map_char = [247, 161];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(214, var_1);
+    let map_char = [247, 33];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(33, var_1);
+    let map_char = [251, 0];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(86, var_1);
+    let map_char = [251, 3];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(89, var_1);
+    let map_char = [251, 4];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(90, var_1);
+    let map_char = [251, 1];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(87, var_1);
+    let map_char = [32, 18];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(208, var_1);
+    let map_char = [33, 93];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(76, var_1);
+    let map_char = [32, 133];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(176, var_1);
+    let map_char = [247, 53];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(53, var_1);
+    let map_char = [32, 117];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(222, var_1);
+    let map_char = [251, 2];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(88, var_1);
+    let map_char = [32, 132];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(162, var_1);
+    let map_char = [247, 52];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(52, var_1);
+    let map_char = [32, 116];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(221, var_1);
+    let map_char = [32, 68];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(47, var_1);
+    let map_char = [0, 45];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(45, var_1);
+    let map_char = [246, 229];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(95, var_1);
+    let map_char = [246, 230];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(209, var_1);
+    let map_char = [246, 237];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(233, var_1);
+    let map_char = [246, 238];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(241, var_1);
+    let map_char = [246, 239];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(247, var_1);
+    let map_char = [32, 137];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(187, var_1);
+    let map_char = [247, 57];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(57, var_1);
+    let map_char = [32, 121];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(225, var_1);
+    let map_char = [32, 127];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(246, var_1);
+    let map_char = [32, 36];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(43, var_1);
+    let map_char = [33, 91];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(74, var_1);
+    let map_char = [246, 220];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(124, var_1);
+    let map_char = [0, 189];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(72, var_1);
+    let map_char = [32, 129];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(193, var_1);
+    let map_char = [247, 49];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(49, var_1);
+    let map_char = [0, 188];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(71, var_1);
+    let map_char = [0, 185];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(218, var_1);
+    let map_char = [33, 83];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(78, var_1);
+    let map_char = [246, 240];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(175, var_1);
+    let map_char = [32, 141];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(91, var_1);
+    let map_char = [32, 125];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(40, var_1);
+    let map_char = [32, 142];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(93, var_1);
+    let map_char = [32, 126];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(41, var_1);
+    let map_char = [0, 46];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(46, var_1);
+    let map_char = [246, 231];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(179, var_1);
+    let map_char = [246, 232];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(249, var_1);
+    let map_char = [247, 191];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(192, var_1);
+    let map_char = [247, 63];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(63, var_1);
+    let map_char = [246, 241];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(229, var_1);
+    let map_char = [246, 221];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(125, var_1);
+    let map_char = [0, 59];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(59, var_1);
+    let map_char = [33, 94];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(77, var_1);
+    let map_char = [32, 135];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(166, var_1);
+    let map_char = [247, 55];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(55, var_1);
+    let map_char = [32, 119];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(224, var_1);
+    let map_char = [32, 134];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(164, var_1);
+    let map_char = [247, 54];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(54, var_1);
+    let map_char = [32, 118];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(223, var_1);
+    let map_char = [0, 32];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(32, var_1);
+    let map_char = [246, 242];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(234, var_1);
+    let map_char = [33, 92];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(75, var_1);
+    let map_char = [32, 131];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(163, var_1);
+    let map_char = [247, 51];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(51, var_1);
+    let map_char = [0, 190];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(73, var_1);
+    let map_char = [246, 222];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(61, var_1);
+    let map_char = [0, 179];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(220, var_1);
+    let map_char = [246, 243];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(230, var_1);
+    let map_char = [32, 37];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(42, var_1);
+    let map_char = [32, 130];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(170, var_1);
+    let map_char = [247, 50];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(50, var_1);
+    let map_char = [0, 178];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(219, var_1);
+    let map_char = [33, 84];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(79, var_1);
+    let map_char = [32, 128];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(188, var_1);
+    let map_char = [247, 48];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(48, var_1);
+    let map_char = [32, 112];
+
+    let s_chars: Vec<char> = WStr::from_utf16be(&map_char)
+        .unwrap_or(WStr::from_utf16be(&[]).unwrap())
+        .chars()
+        .collect();
+    let var_1: String = s_chars[0 ..].into_iter().collect();
+    hash.insert(226, var_1);
+    hash
 }
 
 // Perform a breadth-first traversal of the root object, logging
@@ -224,16 +1551,42 @@ fn extract_text(
                     }
                 },
                 TextToken::RawText(s) => {
+                    /* There are three ways to extract unicode mapping:
+                     * 1. ToUnicode cmap
+                     * 2. If the simple font uses a predefined glyph name,
+                     * we can lookup the name on Adobe Flyph List for New fonts
+                     * and extract the corresponding unicode value.
+                     * 3. If it is a composite font that uses predefined cmap,
+                     * then map the character code to a CID according to cmap.
+                     * -- obtain registry and ordering from CIDSystemInfo dictionary
+                     * -- obtain the cmap from the name constructed
+                     * -- map CIDs to unicode, not character codes
+                     */
                     // If ToUnicode field present, then we traverse the
                     // cmap object to find the UTF16BE mappings of chars
+
                     let fonts_dict = r.fonts();
                     let font_dict_key = DictKey::new(font_name.val().to_vec());
+                    let mut otherencoding_flag: Option<&FontEncoding> = None;
                     let cmap_obj = match fonts_dict.get(&font_dict_key) {
                         Some(a) => {
                             let unicode_dict = a.to_unicode();
                             let ret = match unicode_dict {
                                 Some(uni) => ctxt.lookup_obj(*uni),
-                                None => None,
+                                None => {
+                                    match a.encoding().as_ref() {
+                                        Some(a_encoding) => {
+                                            if &FontEncoding::MacRoman == a_encoding
+                                                || &FontEncoding::MacExpert == a_encoding
+                                                || &FontEncoding::WinAnsi == a_encoding
+                                            {
+                                                otherencoding_flag = Some(a_encoding);
+                                            }
+                                        },
+                                        None => {},
+                                    }
+                                    None
+                                },
                             };
                             ret
                         },
@@ -320,15 +1673,107 @@ fn extract_text(
                         None => {},
                     };
                     if cmap_flag == false {
-                        match std::str::from_utf8(s) {
-                            Ok(v) => match dump {
-                                None => println!("{}", v),
-                                Some(f) => {
-                                    let _ = write!(f, "{}", v);
+                        // CMAP file was absent
+                        // First check encoding: if set, try deciphering
+                        // If not, then just use utf8
+                        let mut already_printed = false;
+                        // This flag is set if decoding successful
+                        // We leave it as false to try UTF8
+                        if let Some(encoding) = otherencoding_flag {
+                            match encoding {
+                                FontEncoding::MacRoman => {
+                                    match MAC_ROMAN.decode(s, DecoderTrap::Replace) {
+                                        Ok(res) => {
+                                            match dump {
+                                                None => println!("{}", res),
+                                                Some(f) => {
+                                                    let _ = write!(f, "{}", res);
+                                                },
+                                            };
+                                            already_printed = true;
+                                        },
+                                        Err(e) => {
+                                            ta3_log!(
+                                                Level::Warn,
+                                                0,
+                                                " error decoding WINDOWS 1252 stream: {:?}",
+                                                e
+                                            );
+                                        },
+                                    };
                                 },
-                            },
-                            Err(_) => (), // println!("not UTF8"),
-                        };
+                                FontEncoding::MacExpert => {
+                                    // This is a special encoding, we wrote
+                                    // a function for that
+                                    let mac_expert = mac_expert_encoding();
+                                    for ch in s {
+                                        match mac_expert.get(&(*ch as u32)) {
+                                            Some(map_char) => {
+                                                var = format!("{}{}", var, map_char);
+                                                // unconventional way of
+                                                // appending to string
+                                            },
+                                            None => {
+                                                // No mapping for a certain character.
+                                                // Convert decimal to ascii
+                                                var = format!("{}{}", var, *ch as char);
+                                            },
+                                        }
+                                    }
+                                    match dump {
+                                        None => println!("{}", var),
+                                        Some(f) => {
+                                            let _ = write!(f, "{}", var);
+                                        },
+                                    };
+                                    already_printed = true;
+                                },
+                                FontEncoding::WinAnsi => {
+                                    match WINDOWS_1252.decode(s, DecoderTrap::Replace) {
+                                        Ok(res) => {
+                                            match dump {
+                                                None => println!("{}", res),
+                                                Some(f) => {
+                                                    let _ = write!(f, "{}", res);
+                                                },
+                                            };
+                                            already_printed = true;
+                                        },
+                                        Err(e) => {
+                                            ta3_log!(
+                                                Level::Warn,
+                                                0,
+                                                " error decoding WINDOWS 1252 stream: {:?}",
+                                                e
+                                            );
+                                        },
+                                    };
+                                },
+                                _ => {},
+                            }
+                            if already_printed == false {
+                                // Unsuccessful at decoding
+                                match std::str::from_utf8(s) {
+                                    Ok(v) => match dump {
+                                        None => println!("{}", v),
+                                        Some(f) => {
+                                            let _ = write!(f, "{}", v);
+                                        },
+                                    },
+                                    Err(_) => (), // println!("not UTF8"),
+                                };
+                            }
+                        } else {
+                            match std::str::from_utf8(s) {
+                                Ok(v) => match dump {
+                                    None => println!("{}", v),
+                                    Some(f) => {
+                                        let _ = write!(f, "{}", v);
+                                    },
+                                },
+                                Err(_) => (), // println!("not UTF8"),
+                            };
+                        }
                     } else {
                         // cmap was present, so read var instead of s directly
                         match dump {
