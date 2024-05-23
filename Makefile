@@ -45,7 +45,7 @@ fmt:
 	cargo +nightly fmt
 
 clippy:
-	cargo +nightly clippy
+	cargo clippy
 
 clean:
 	cargo clean

@@ -127,7 +127,7 @@ impl ArrayP<'_> {
             let mut ws = WhitespaceEOL::new(true);
             ws.parse(buf)?;
             if buf.exact(b"]").is_err() {
-                let o = parse_pdf_obj(&mut self.ctxt, buf)?;
+                let o = parse_pdf_obj(self.ctxt, buf)?;
                 objs.push(Rc::new(o));
             } else {
                 end = true;
@@ -287,7 +287,7 @@ impl DictP<'_> {
                 let mut ws = WhitespaceEOL::new(true);
                 ws.parse(buf)?;
 
-                let o = parse_pdf_obj(&mut self.ctxt, buf)?;
+                let o = parse_pdf_obj(self.ctxt, buf)?;
 
                 // Entries with 'null' values are treated as though
                 // the entry does not exist.
@@ -311,7 +311,7 @@ pub struct StreamT {
     stream: LocatedVal<StreamContentT>,
 }
 impl StreamT {
-    pub fn content(&self) -> &[u8] { &self.stream.val().content() }
+    pub fn content(&self) -> &[u8] { self.stream.val().content() }
 }
 
 pub struct Filter<'a> {
@@ -536,7 +536,7 @@ impl PDFObjP<'_> {
             },
             Some(91) => {
                 // '['
-                let mut ap = ArrayP::new(&mut self.ctxt);
+                let mut ap = ArrayP::new(self.ctxt);
                 let a = ap.parse(buf)?;
                 Ok(PDFObjT::Array(a.unwrap()))
             },
@@ -551,7 +551,7 @@ impl PDFObjP<'_> {
 
                 match next {
                     Some(60) => {
-                        let mut dp = DictP::new(&mut self.ctxt);
+                        let mut dp = DictP::new(self.ctxt);
                         let d = dp.parse(buf)?;
                         Ok(PDFObjT::Dict(d))
                     },
@@ -749,7 +749,7 @@ impl IndirectP<'_> {
         }
         ws.parse(buf)?;
 
-        let o = parse_pdf_obj(&mut self.ctxt, buf)?;
+        let o = parse_pdf_obj(self.ctxt, buf)?;
 
         // If we parsed a dictionary, check whether this could be a
         // stream object.

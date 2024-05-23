@@ -52,7 +52,7 @@ pub enum ArgType {
 }
 
 // operator summary, Table A.1, page 844
-pub const OPERATORS: &'static [(&str, (OpType, &[ArgType]))] = &[
+pub const OPERATORS: &[(&str, (OpType, &[ArgType]))] = &[
     // compatibility, Table 33, page 112
     ("BX", (OpType::Compat, &[])),
     ("EX", (OpType::Compat, &[])),

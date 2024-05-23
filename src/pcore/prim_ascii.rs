@@ -16,8 +16,6 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::convert::TryFrom;
-
 use super::parsebuffer::{parse_guarded, parse_prim};
 use super::parsebuffer::{
     ErrorKind, LocatedVal, ParseBufferT, ParseError, ParseResult, ParsleyParser, ParsleyPrimitive,
@@ -34,14 +32,7 @@ impl ParsleyPrimitive for AsciiCharPrimitive {
         if buf.is_empty() {
             return Err(LocatedVal::new(ErrorKind::EndOfBuffer, 0, 0))
         }
-        let c = char::try_from(buf[0]);
-        // check this: we should never get the below error from
-        // non-empty buffers, as all u8 should be convertible to char.
-        if c.is_err() {
-            let err = ErrorKind::PrimitiveError(ParseError::new("ascii-prim: invalid character"));
-            return Err(LocatedVal::new(err, 0, 0))
-        }
-        let c = c.unwrap();
+        let c: char = From::from(buf[0]); // u8 to char conversion is infallible
         if !c.is_ascii() {
             let err =
                 ErrorKind::PrimitiveError(ParseError::new("ascii-prim: invalid ascii character"));
@@ -54,8 +45,9 @@ impl ParsleyPrimitive for AsciiCharPrimitive {
 // Convenience wrappers around the primitive interfaces, that allow
 // use with the primitive combinators.
 
+type CharPred = Box<dyn FnMut(&char) -> bool>;
 pub struct AsciiChar {
-    guard: Option<Box<dyn FnMut(&char) -> bool>>,
+    guard: Option<CharPred>,
 }
 
 impl AsciiChar {

@@ -94,7 +94,7 @@ impl ParsleyParser for XrefEntP {
             let end = buf.get_cursor();
             return Err(locate_value(err, start, end))
         }
-        let info = usize::from_str_radix(&infs, 10);
+        let info = infs.parse::<usize>();
         if let Err(e) = info {
             let msg = format!("bad xref offset conversion: {}", e);
             let err = ErrorKind::GuardError(msg);
@@ -121,7 +121,7 @@ impl ParsleyParser for XrefEntP {
             let end = buf.get_cursor();
             return Err(locate_value(err, start, end))
         }
-        let gen = usize::from_str_radix(&gens, 10);
+        let gen = gens.parse::<usize>();
         if let Err(e) = gen {
             let msg = format!("bad xref generation: {}", e);
             let err = ErrorKind::GuardError(msg);
@@ -439,7 +439,7 @@ impl ParsleyParser for BodyP<'_> {
     fn parse(&mut self, buf: &mut dyn ParseBufferT) -> ParseResult<Self::T> {
         let start = buf.get_cursor();
         // We can only find indirect objects at the top-level.
-        let mut op = IndirectP::new(&mut self.ctxt);
+        let mut op = IndirectP::new(self.ctxt);
         let mut objs = Vec::new();
         // In the simplest case, we just terminate when we can't parse
         // any more objects.
@@ -488,7 +488,7 @@ impl ParsleyParser for TrailerP<'_> {
         let mut ws = WhitespaceEOL::new(true); // optional whitespace
         ws.parse(buf)?;
 
-        let mut dp = DictP::new(&mut self.ctxt);
+        let mut dp = DictP::new(self.ctxt);
         let dict = dp.parse(buf);
         if let Err(e) = dict {
             let msg = format!("error parsing trailer dictionary: {}", e.val());

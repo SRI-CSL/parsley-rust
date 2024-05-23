@@ -180,7 +180,7 @@ impl ObjStreamP<'_> {
             ws.parse(buf)?;
 
             let start = buf.get_cursor();
-            let o = parse_pdf_obj(&mut self.ctxt, buf)?;
+            let o = parse_pdf_obj(self.ctxt, buf)?;
             let end = buf.get_cursor();
             let obj = Rc::new(o);
             let ind = IndirectT::new(*onum, 0, Rc::clone(&obj));
@@ -219,7 +219,7 @@ impl ParsleyParser for ObjStreamP<'_> {
         let mut views: Vec<ParseBuffer> = Vec::new();
         // Selects the input for the iteration from the view stack.
         fn get_input<'a>(
-            inp: &'a mut dyn ParseBufferT, views: &'a mut Vec<ParseBuffer>,
+            inp: &'a mut dyn ParseBufferT, views: &'a mut [ParseBuffer],
         ) -> &'a mut dyn ParseBufferT {
             if views.is_empty() {
                 inp
@@ -286,7 +286,7 @@ impl ParsleyParser for ObjStreamP<'_> {
         let objs = self.parse_stream(&mut objs_buf, &meta)?;
         let end = buf.get_cursor();
         Ok(LocatedVal::new(
-            ObjStreamT::new(Rc::clone(&self.stream.dict()), objs),
+            ObjStreamT::new(Rc::clone(self.stream.dict()), objs),
             start,
             end,
         ))
@@ -591,7 +591,7 @@ impl ParsleyParser for XrefStreamP<'_> {
 
         // Selects the input for the iteration from the view stack.
         fn get_input<'a>(
-            inp: &'a mut dyn ParseBufferT, views: &'a mut Vec<ParseBuffer>,
+            inp: &'a mut dyn ParseBufferT, views: &'a mut [ParseBuffer],
         ) -> &'a mut dyn ParseBufferT {
             if views.is_empty() {
                 inp
@@ -624,7 +624,7 @@ impl ParsleyParser for XrefStreamP<'_> {
         }
         let input = get_input(input, &mut views);
         let ents = self.parse_stream(input, &meta)?;
-        let xref = XrefStreamT::new(Rc::clone(&self.stream.dict()), ents);
+        let xref = XrefStreamT::new(Rc::clone(self.stream.dict()), ents);
         let end = input.get_cursor();
         Ok(LocatedVal::new(xref, start, end))
     }
@@ -649,7 +649,7 @@ pub fn decode_stream(strm: &StreamT) -> ParseResult<StreamT> {
     let mut views: Vec<ParseBuffer> = Vec::new();
     // Selects the input for the iteration from the view stack.
     fn get_input<'a>(
-        inp: &'a mut ParseBuffer, views: &'a mut Vec<ParseBuffer>,
+        inp: &'a mut ParseBuffer, views: &'a mut [ParseBuffer],
     ) -> &'a mut dyn ParseBufferT {
         if views.is_empty() {
             inp

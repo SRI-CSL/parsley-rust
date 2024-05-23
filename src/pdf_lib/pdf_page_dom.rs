@@ -126,7 +126,7 @@ impl Page {
     pub fn resources(&self) -> &Resources { &self.resources }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Default)]
 pub struct Resources {
     fonts: BTreeMap<DictKey, Rc<FontDictionary>>,
 }
@@ -142,13 +142,6 @@ impl Resources {
         }
     }
      */
-}
-impl Default for Resources {
-    fn default() -> Self {
-        Self {
-            fonts: BTreeMap::new(),
-        }
-    }
 }
 
 // ternary value for feature presence
@@ -226,7 +219,7 @@ impl FontDescriptor {
     pub fn is_symbolic(&self) -> bool { self.flags.contains(&FontFlag::Symbolic) }
 }
 
-pub const STANDARD_FONTS: &'static [&str] = &[
+pub const STANDARD_FONTS: &[&str] = &[
     "Times-Roman",
     "Times-Bold",
     "Times-Italic",
@@ -261,7 +254,7 @@ impl FontDictionary {
             FeaturePresence::from(
                 self.fontdescriptor
                     .as_ref()
-                    .and_then(|fd| Some(fd.is_embedded())),
+                    .map(|fd| fd.is_embedded()),
             )
         }
     }
@@ -269,7 +262,7 @@ impl FontDictionary {
         FeaturePresence::from(
             self.fontdescriptor
                 .as_ref()
-                .and_then(|fd| Some(fd.is_symbolic())),
+                .map(|fd| fd.is_symbolic()),
         )
     }
     pub fn is_base_font(&self) -> bool {
@@ -305,8 +298,9 @@ impl FontDictionary {
 // queue.  These in-scope attributes are provided to the converters.
 // The leaf objects retain a copy of these attributes if they need to.
 
+type QEntry = (ObjectId, Option<Rc<Resources>>, Rc<LocatedVal<PDFObjT>>);
 pub struct ConversionQ {
-    page_nodes: VecDeque<(ObjectId, Option<Rc<Resources>>, Rc<LocatedVal<PDFObjT>>)>,
+    page_nodes: VecDeque<QEntry>,
     examined:   BTreeSet<ObjectId>,
 }
 impl ConversionQ {
@@ -328,7 +322,7 @@ impl ConversionQ {
         }
     }
 
-    fn next(&mut self) -> Option<(ObjectId, Option<Rc<Resources>>, Rc<LocatedVal<PDFObjT>>)> {
+    fn next(&mut self) -> Option<QEntry> {
         self.page_nodes.pop_front()
     }
 
@@ -346,11 +340,11 @@ pub fn to_catalog(
                     let root = to_root_page_tree_node(ctxt, q, dom, o)?;
                     Ok(Catalog::new(Rc::new(root)))
                 },
-                None => return Err(o.place(PageDOMError::CatalogConversionPagesIdNotFound)),
+                None => Err(o.place(PageDOMError::CatalogConversionPagesIdNotFound)),
             },
-            None => return Err(o.place(PageDOMError::CatalogConversionNoPages)),
+            None => Err(o.place(PageDOMError::CatalogConversionNoPages)),
         },
-        _ => return Err(o.place(PageDOMError::CatalogConversionBadCatalog)),
+        _ => Err(o.place(PageDOMError::CatalogConversionBadCatalog)),
     }
 }
 
@@ -369,12 +363,11 @@ fn to_page_kids(
             for o in a.objs() {
                 match o.val() {
                     PDFObjT::Reference(rf) => {
-                        match ctxt.lookup_obj(rf.id()) {
-                            Some(o) => match r {
+                        if let Some(o) = ctxt.lookup_obj(rf.id()) {
+                            match r {
                                 None => q.add(rf.id(), None, Rc::clone(o)),
                                 Some(r) => q.add(rf.id(), Some(Rc::clone(r)), Rc::clone(o)),
-                            },
-                            None => (),
+                            }
                         };
                         // kids is updated for completeness, even
                         // though the object may not exist in the ctxt.
@@ -633,9 +626,9 @@ fn to_font_descriptor(d: &DictT) -> Result<FontDescriptor, PageDOMError> {
         },
         None => return Err(PageDOMError::FontDescrConversionNoFlags),
     };
-    let fontfile = d.get_ref(b"FontFile").and_then(|r| Some(r.id()));
-    let fontfile2 = d.get_ref(b"FontFile2").and_then(|r| Some(r.id()));
-    let fontfile3 = d.get_ref(b"FontFile3").and_then(|r| Some(r.id()));
+    let fontfile = d.get_ref(b"FontFile").map(|r| r.id());
+    let fontfile2 = d.get_ref(b"FontFile2").map(|r| r.id());
+    let fontfile3 = d.get_ref(b"FontFile3").map(|r| r.id());
     Ok(FontDescriptor {
         fontname,
         flags,
@@ -660,7 +653,7 @@ fn to_encoding(
         PDFObjT::Dict(_) => Ok(FontEncoding::Dict(Rc::clone(o))),
         PDFObjT::Reference(r) => match ctxt.lookup_obj(r.id()) {
             Some(o) => to_encoding(ctxt, o),
-            None => return Err(o.place(PageDOMError::FontDictConversionBadEncoding)),
+            None => Err(o.place(PageDOMError::FontDictConversionBadEncoding)),
         },
         _ => Err(o.place(PageDOMError::FontDictConversionBadEncoding)),
     }
@@ -711,7 +704,7 @@ fn to_font_dict(
             // Resolve this if we haven't already.
             {
                 match dom.font_descrs().get(&r.id()) {
-                    Some(fd) => Some(Rc::clone(&fd)),
+                    Some(fd) => Some(Rc::clone(fd)),
                     None => match ctxt.lookup_obj(r.id()) {
                         None => {
                             return Err(PageDOMError::FontDescrConversionUnknownObjectId(r.id()))

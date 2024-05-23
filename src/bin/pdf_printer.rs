@@ -216,20 +216,17 @@ fn extract_text(
             TextToken::RawText(s) => {
                 // TODO: font conversion.  For now, just try blind
                 // unicode conversion.
-                match std::str::from_utf8(s) {
-                    Ok(v) => match dump {
-                        None => println!("{}", v),
-                        Some(f) => {
-                            let _ = write!(f, "{}", v);
-                        },
+                if let Ok(v) = std::str::from_utf8(s) { match dump {
+                    None => println!("{}", v),
+                    Some(f) => {
+                        let _ = write!(f, "{}", v);
                     },
-                    Err(_) => (), // println!("not UTF8"),
-                };
+                } };
                 spaced = false
             },
         }
     }
-    return Ok(())
+    Ok(())
 }
 
 fn dump_file(fi: &FileInfo, ctxt: &mut PDFObjContext, root_id: ObjectId) {
@@ -251,7 +248,7 @@ fn type_check_file(fi: &FileInfo, ctxt: &mut PDFObjContext, root_id: ObjectId) {
 
     let mut tctx = TypeCheckContext::new();
     let typ = catalog_type(&mut tctx);
-    if let Some(err) = check_type(&ctxt, &tctx, Rc::clone(root_obj), typ) {
+    if let Some(err) = check_type(ctxt, &tctx, Rc::clone(root_obj), typ) {
         exit_log!(
             fi.file_offset(err.loc_start()),
             "Type Check Error: {:?}",
@@ -268,7 +265,7 @@ fn file_extract_text(
         None => exit_log!(0, "Root object {:?} not found!", root_id),
     };
 
-    let page_dom = match to_page_dom(&ctxt, &root_obj) {
+    let page_dom = match to_page_dom(ctxt, root_obj) {
         Ok((_cat, dom)) => {
             println!("Page DOM built with {} page nodes.", dom.pages().len());
             dom

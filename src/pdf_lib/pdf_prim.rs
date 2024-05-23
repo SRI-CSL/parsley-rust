@@ -377,9 +377,9 @@ pub struct HexString;
 // assumes input is hex
 fn int_of_hex(b: u8) -> u8 {
     assert!(b.is_ascii_hexdigit());
-    if b'0' <= b && b <= b'9' {
+    if b.is_ascii_digit() {
         b - b'0'
-    } else if b'a' <= b && b <= b'f' {
+    } else if (b'a'..=b'f').contains(&b) {
         b - b'a' + 10
     } else {
         b - b'A' + 10
@@ -605,7 +605,7 @@ impl ParsleyParser for NameP {
 
             while w.is_some() {
                 fn from_hex(b: u8) -> u8 {
-                    if b'0' <= b && b <= b'9' {
+                    if b.is_ascii_digit() {
                         b - b'0'
                     } else {
                         b - b'a' + 10
@@ -699,7 +699,7 @@ impl ParsleyParser for OperatorP {
 
             while w.is_some() {
                 fn from_hex(b: u8) -> u8 {
-                    if b'0' <= b && b <= b'9' {
+                    if b.is_ascii_digit() {
                         b - b'0'
                     } else {
                         b - b'a' + 10
@@ -858,7 +858,7 @@ impl ParsleyParser for StreamContentP {
             let end = buf.get_cursor();
             let msg = match buf.peek() {
                 Some(s) => format!("invalid endstream: {}", s),
-                None => format!("invalid endstream: end-of-buffer"),
+                None => "invalid endstream: end-of-buffer".to_string(),
             };
             let err = ErrorKind::GuardError(msg);
             buf.set_cursor_unsafe(start);

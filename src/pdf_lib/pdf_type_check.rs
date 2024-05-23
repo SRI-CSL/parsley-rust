@@ -133,7 +133,7 @@ impl TypeCheckContext {
         self.map.insert(String::from(chk.name()), Rc::clone(chk));
     }
     pub fn lookup(&self, name: &str) -> Option<Rc<TypeCheckRep>> {
-        self.map.get(name).map(|tc| Rc::clone(&tc))
+        self.map.get(name).cloned()
     }
 }
 
@@ -161,7 +161,7 @@ impl TypeCheckRep {
         Rc::new(TypeCheckRep {
             name:     String::from(chk.name()),
             typ:      Rc::new(typ),
-            pred:     chk.pred.as_ref().map(|p| Rc::clone(&p)),
+            pred:     chk.pred.as_ref().cloned(),
             indirect: chk.indirect,
         })
     }
@@ -177,7 +177,7 @@ impl TypeCheckRep {
         Rc::new(Self {
             name:     String::from(&self.name),
             typ:      Rc::clone(&self.typ),
-            pred:     self.pred.as_ref().map(|p| Rc::clone(&p)),
+            pred:     self.pred.as_ref().cloned(),
             indirect: IndirectSpec::Allowed,
         })
     }
@@ -191,7 +191,7 @@ impl PartialEq for TypeCheckRep {
 }
 
 impl PartialOrd for TypeCheckRep {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> { (*self.typ).partial_cmp(&*other.typ) }
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
 }
 impl Eq for TypeCheckRep {}
 impl Ord for TypeCheckRep {
@@ -569,16 +569,13 @@ pub(super) fn normalize_check(typ: &Rc<TypeCheckRep>) -> Rc<TypeCheckRep> {
                     opt: e.opt,
                 })
             }
-            let s = match star {
-                None => None,
-                Some(e) => Some(DictStarEntry {
-                    chk: match e.chk.as_ref() {
-                        TypeCheck::Rep(r) => Rc::new(TypeCheck::Rep(normalize_check(r))),
-                        _ => Rc::clone(&e.chk),
-                    },
-                    opt: e.opt,
-                }),
-            };
+            let s = star.as_ref().map(|e| DictStarEntry {
+                chk: match e.chk.as_ref() {
+                    TypeCheck::Rep(r) => Rc::new(TypeCheck::Rep(normalize_check(r))),
+                    _ => Rc::clone(&e.chk),
+                },
+                opt: e.opt,
+            });
             TypeCheckRep::new_replace_typ(PDFType::Dict(v, s), typ)
         },
         PDFType::Stream(ents) => {
@@ -758,7 +755,7 @@ pub fn check_type(
                     None => (),
                 };
                 /* optimize PDFType::Any */
-                let elem_rep = match resolve(tctx, &elem) {
+                let elem_rep = match resolve(tctx, elem) {
                     Ok(rep) => rep,
                     Err(err) => return Some(o.place(err)),
                 };

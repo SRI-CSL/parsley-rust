@@ -247,7 +247,7 @@ impl Predicate for SingleReferencePredicate {
         } else {
             return Some(obj.place(TypeCheckError::PredicateError(
                 "Reference expected".to_string(),
-            )))
+            )));
         }
         None
     }
@@ -262,7 +262,7 @@ impl Predicate for ReferencePredicate {
                 } else {
                     return Some(obj.place(TypeCheckError::PredicateError(
                         "Reference expected".to_string(),
-                    )))
+                    )));
                 }
             }
             None
@@ -315,7 +315,7 @@ impl Predicate for DateStringPredicate {
             if !re.is_match(date_string) {
                 return Some(obj.place(TypeCheckError::PredicateError(
                     "Not a Date string.".to_string(),
-                )))
+                )));
             }
             None
         } else {
@@ -345,7 +345,9 @@ mod test {
     use crate::pdf_lib::pdf_type_check::{check_type, TypeCheckContext, TypeCheckError};
     use std::rc::Rc;
 
-    fn mk_new_context() -> PDFObjContext { PDFObjContext::new(10) }
+    fn mk_new_context() -> PDFObjContext {
+        PDFObjContext::new(10)
+    }
 
     #[test]
     fn test_date_string() {
@@ -356,7 +358,7 @@ mod test {
             let mut pb = ParseBuffer::new(v);
             let obj = parse_pdf_obj(&mut ctxt, &mut pb).unwrap();
             let typ_chk = mk_date_typchk(&mut tctx);
-            return check_type(&ctxt, &tctx, Rc::new(obj), typ_chk)
+            check_type(&ctxt, &tctx, Rc::new(obj), typ_chk)
         }
 
         let correct_test_cases = [

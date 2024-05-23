@@ -448,7 +448,7 @@ impl ParseBufferT for ParseBuffer {
         self.ofs = self.start + ofs
     }
     fn incr_cursor_unsafe(&mut self) {
-        assert!(self.ofs + 1 <= self.end);
+        assert!(self.ofs < self.end);
         self.ofs += 1
     }
     fn decr_cursor_unsafe(&mut self) {

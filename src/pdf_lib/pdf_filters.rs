@@ -278,7 +278,7 @@ fn flate_lzw_filter(
             }
         }
         Ok(ParseBuffer::new(out_buffer))
-    } else if predictor >= 10 && predictor <= 15 {
+    } else if (10..=15).contains(&predictor) {
         // PNG
         let row_length = columns * colors + 1;
         let rows = decoded.len() / row_length;
@@ -343,7 +343,7 @@ fn flate_lzw_filter(
                         return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
                     }
                     for j in 1 .. row_length {
-                        row_data[j] = row_data[j] + prev_row[j];
+                        row_data[j] += prev_row[j];
                     }
                 },
                 13 => {
@@ -356,11 +356,11 @@ fn flate_lzw_filter(
                         return Err(locate_value(err, loc.loc_start(), loc.loc_end()))
                     }
                     for j in 1 .. 1 + bytes_per_pixel {
-                        row_data[j] = row_data[j] + (prev_row[j] / Wrapping(2));
+                        row_data[j] += prev_row[j] / Wrapping(2);
                     }
                     for j in bytes_per_pixel .. row_length {
                         let incr = (row_data[j - bytes_per_pixel] + prev_row[j]) / Wrapping(2);
-                        row_data[j] = row_data[j] + incr
+                        row_data[j] += incr
                     }
                 },
                 14 => {

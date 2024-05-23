@@ -28,6 +28,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::process;
 use std::rc::Rc;
+use std::path::Path;
 
 use log::{log, Level};
 
@@ -175,10 +176,7 @@ fn parse_xref_stream(
             xrefs.push(*e)
         }
         // Extract trailer-like entries from the stream dict.
-        root = match xref_stm.val().dict().get(b"Root") {
-            Some(rt) => Some(Rc::clone(rt)),
-            None => None,
-        };
+        root = xref_stm.val().dict().get(b"Root").cloned();
         prev = xref_stm.val().dict().get_usize(b"Prev");
     }
     Some((xrefs, root, prev))
@@ -252,10 +250,7 @@ fn parse_xref_section(
     // extract trailer-derived info: /Root and /Prev
     let prev = t.val().dict().get_usize(b"Prev");
     let root = t.val().dict().get(b"Root");
-    let root = match root {
-        Some(rt) => Some(Rc::clone(rt)),
-        None => None,
-    };
+    let root = root.cloned();
     // check for encryption
     if t.val().dict().get(b"Encrypt").is_some() {
         ctxt.set_encrypted();
@@ -551,7 +546,6 @@ fn parse_objects(
             continue
         }
         let mut p = IndirectP::new(ctxt);
-        let ofs = ofs;
         /*
         ta3_log!(
             Level::Info,
@@ -708,7 +702,7 @@ pub fn parse_file(test_file: &str) -> (FileInfo, PDFObjContext, ObjectId) {
     let display = path.as_path().display();
 
     // Open the path in read-only mode, returns `io::Result<File>`
-    let mut file = match File::open(&path.as_path()) {
+    let mut file = match File::open(path.as_path()) {
         Err(why) => {
             exit_log!(0, "Couldn't open {}: {}", display, why.to_string());
         },
@@ -723,7 +717,7 @@ pub fn parse_file(test_file: &str) -> (FileInfo, PDFObjContext, ObjectId) {
     parse_data(&path, &v)
 }
 
-pub fn parse_data(path: &std::path::PathBuf, data: &[u8]) -> (FileInfo, PDFObjContext, ObjectId) {
+pub fn parse_data(path: &Path, data: &[u8]) -> (FileInfo, PDFObjContext, ObjectId) {
     let mut pb = ParseBuffer::new(data.to_vec());
 
     // Handle leading garbage.

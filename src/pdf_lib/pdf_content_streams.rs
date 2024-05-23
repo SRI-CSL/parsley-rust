@@ -79,7 +79,7 @@ impl CSObjP<'_> {
             },
             Some(91) => {
                 // '['
-                let mut ap = ArrayP::new(&mut self.ctxt);
+                let mut ap = ArrayP::new(self.ctxt);
                 let a = ap.parse(buf)?;
                 Ok(CSObjT::Array(a.unwrap()))
             },
@@ -94,7 +94,7 @@ impl CSObjP<'_> {
 
                 match next {
                     Some(60) => {
-                        let mut dp = DictP::new(&mut self.ctxt);
+                        let mut dp = DictP::new(self.ctxt);
                         let d = dp.parse(buf)?;
                         Ok(CSObjT::Dict(d))
                     },
@@ -375,50 +375,47 @@ impl<'a> TextExtractor<'a> {
                     }
                 },
                 (OpType::TextShow, "TJ") => {
-                    match args.pop() {
-                        Some(o) => match o.val() {
-                            CSObjT::Array(array) => {
-                                for o in array.objs() {
-                                    match o.val() {
-                                        PDFObjT::String(v) => {
-                                            texts.push(TextToken::RawText(v.clone()))
-                                        },
+                    if let Some(o) = args.pop() { match o.val() {
+                        CSObjT::Array(array) => {
+                            for o in array.objs() {
+                                match o.val() {
+                                    PDFObjT::String(v) => {
+                                        texts.push(TextToken::RawText(v.clone()))
+                                    },
 
-                                        // TODO: handle the case when
-                                        // the "TJ" adjustments are
-                                        // actually quite large,
-                                        // effectively equivalent to
-                                        // word-spacing.
-                                        PDFObjT::Integer(_) | PDFObjT::Real(_) => (),
+                                    // TODO: handle the case when
+                                    // the "TJ" adjustments are
+                                    // actually quite large,
+                                    // effectively equivalent to
+                                    // word-spacing.
+                                    PDFObjT::Integer(_) | PDFObjT::Real(_) => (),
 
-                                        _ => {
-                                            let msg = format!(
-                                                "content stream {:?}: unexpected array element type {:?} for {}",
-                                                self.objectid,
-                                                o.val(),
-                                                op_name
-                                            );
-                                            let err = ErrorKind::GuardError(msg);
-                                            let end = buf.get_cursor();
-                                            return Err(LocatedVal::new(err, start, end))
-                                        },
-                                    }
+                                    _ => {
+                                        let msg = format!(
+                                            "content stream {:?}: unexpected array element type {:?} for {}",
+                                            self.objectid,
+                                            o.val(),
+                                            op_name
+                                        );
+                                        let err = ErrorKind::GuardError(msg);
+                                        let end = buf.get_cursor();
+                                        return Err(LocatedVal::new(err, start, end))
+                                    },
                                 }
-                            },
-                            _ => {
-                                let msg = format!(
-                                    "content stream {:?}: unexpected arg type {:?} for {}",
-                                    self.objectid,
-                                    o.val(),
-                                    op_name
-                                );
-                                let err = ErrorKind::GuardError(msg);
-                                let end = buf.get_cursor();
-                                return Err(LocatedVal::new(err, start, end))
-                            },
+                            }
                         },
-                        None => (), // empty array should be valid
-                    }
+                        _ => {
+                            let msg = format!(
+                                "content stream {:?}: unexpected arg type {:?} for {}",
+                                self.objectid,
+                                o.val(),
+                                op_name
+                            );
+                            let err = ErrorKind::GuardError(msg);
+                            let end = buf.get_cursor();
+                            return Err(LocatedVal::new(err, start, end))
+                        },
+                    } }
                 },
                 (OpType::TextPositioning, "Td" | "TD" | "T*") => texts.push(TextToken::Space),
                 // Introduce a space at the start and end of a text object.
